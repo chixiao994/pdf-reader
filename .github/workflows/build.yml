@@ -1,47 +1,33 @@
-name: Build APK
+name: 极简构建
 
-on: [push, workflow_dispatch]
+on: [push]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     
     steps:
-    - name: 检出代码
-      uses: actions/checkout@v4
-      
+    - uses: actions/checkout@v4
+    
     - name: 设置Java
       uses: actions/setup-java@v4
       with:
-        java-version: '17'
+        java-version: '11'  # 使用Java 11，更兼容
         distribution: 'temurin'
         
     - name: 安装Android SDK
       run: |
-        # 安装Android SDK命令行工具
-        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-        unzip -q commandlinetools-linux-*.zip
-        mkdir -p android-sdk/cmdline-tools
-        mv cmdline-tools android-sdk/cmdline-tools/latest
-        
-        # 设置环境变量
-        echo "ANDROID_HOME=$PWD/android-sdk" >> $GITHUB_ENV
-        echo "$PWD/android-sdk/cmdline-tools/latest/bin:$PWD/android-sdk/platform-tools" >> $GITHUB_PATH
-        
         # 安装必要的组件
-        yes | android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
-        android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
+        yes | sdkmanager --licenses || true
+        sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
         
-    - name: 构建APK
+    - name: 直接构建
       run: |
-        cd app
-        # 直接使用gradle命令
-        gradle wrapper --gradle-version 8.1.0
-        chmod +x gradlew
-        ./gradlew assembleDebug
+        # 直接使用gradle命令，不需要gradlew
+        gradle clean assembleDebug
         
     - name: 上传APK
       uses: actions/upload-artifact@v4
       with:
-        name: PDF-Reader-APK
+        name: pdf-reader-apk
         path: app/build/outputs/apk/debug/*.apk
