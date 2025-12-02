@@ -1,9 +1,7 @@
-plugins {
-    id 'com.android.application'
-}
+// app/build.gradle
+apply plugin: 'com.android.application'  // 使用旧语法，更稳定
 
 android {
-    namespace 'com.pdf.reader'
     compileSdk 33
     
     defaultConfig {
@@ -18,6 +16,11 @@ android {
         release {
             minifyEnabled false
         }
+    }
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
 }
 
