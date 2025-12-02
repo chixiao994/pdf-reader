@@ -1,13 +1,14 @@
 // app/build.gradle
-apply plugin: 'com.android.application'  // 使用旧语法，更稳定
+apply plugin: 'com.android.application'
 
 android {
-    compileSdk 33
+    compileSdkVersion 33
+    buildToolsVersion "33.0.0"
     
     defaultConfig {
         applicationId "com.pdf.reader"
-        minSdk 21
-        targetSdk 33
+        minSdkVersion 21
+        targetSdkVersion 33
         versionCode 1
         versionName "1.0"
     }
@@ -26,4 +27,5 @@ android {
 
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.9.0'
 }
