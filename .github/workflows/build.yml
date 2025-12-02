@@ -16,79 +16,64 @@ jobs:
         java-version: '11'
         distribution: 'temurin'
         
-    - name: 3. 下载Android命令行工具
+    - name: 3. 使用预配置的Android环境
+      uses: android-actions/setup-android@v3
+      
+    - name: 4. 接受Android SDK许可证
       run: |
-        # 下载最新的命令行工具
-        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
-        unzip -q commandlinetools-linux-*.zip
-        mkdir -p $HOME/android-sdk/cmdline-tools/latest
-        mv cmdline-tools/* $HOME/android-sdk/cmdline-tools/latest/
-        rm commandlinetools-linux-*.zip
+        # 静默接受所有许可证
+        yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+        echo "许可证已接受"
         
-        # 设置环境变量
-        echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-        echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
-        echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
-        
-    - name: 4. 安装Android SDK组件
+    - name: 5. 创建必要文件
       run: |
-        # 接受许可证
-        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses
+        # 创建local.properties
+        echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
         
-        # 安装必要组件
-        $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
-          "platform-tools" \
-          "platforms;android-33" \
-          "build-tools;33.0.0" \
-          "patcher;v4"
-          
-    - name: 5. 创建local.properties文件
-      run: |
-        echo "sdk.dir=$ANDROID_HOME" > local.properties
-        echo "ndk.dir=$ANDROID_HOME/ndk" >> local.properties
-        cat local.properties
+        # 创建gradle.properties
+        cat > gradle.properties << 'EOF'
+        org.gradle.jvmargs=-Xmx2048m
+        android.useAndroidX=true
+        android.enableJetifier=true
+        EOF
         
-    - name: 6. 检查项目结构
-      run: |
-        echo "=== 当前目录结构 ==="
-        ls -la
-        echo ""
-        echo "=== Gradle文件 ==="
-        find . -name "*.gradle*" -type f
-        echo ""
-        echo "=== Java文件 ==="
-        find . -name "*.java" -type f
-        
-    - name: 7. 使用系统Gradle构建
-      run: |
-        # 如果没有gradlew，创建一个简单的
+        # 如果没有gradlew，创建一个
         if [ ! -f "gradlew" ]; then
-          echo "创建简单的gradlew脚本..."
+          echo "创建gradlew包装器..."
           cat > gradlew << 'EOF'
           #!/bin/bash
-          echo "使用系统Gradle..."
-          gradle "$@"
+          exec gradle "$@"
           EOF
           chmod +x gradlew
         fi
         
-        # 尝试构建
-        ./gradlew clean assembleDebug --stacktrace --no-daemon || echo "构建失败"
-        
-    - name: 8. 查找APK文件
-      if: always()
+    - name: 6. 构建APK（使用详细输出）
       run: |
-        echo "=== 查找APK文件 ==="
-        find . -name "*.apk" -type f 2>/dev/null || echo "未找到APK文件"
-        find . -type d -name "build" | head -5
+        echo "=== 开始构建 ==="
         
-    - name: 9. 上传构建产物
+        # 使用简单的gradle命令
+        cd app
+        
+        # 清理并构建
+        ./gradlew clean assembleDebug \
+          --no-daemon \
+          --stacktrace \
+          --info \
+          2>&1 | tee build.log
+        
+        # 检查是否成功
+        if [ -f "build/outputs/apk/debug/*.apk" ]; then
+          echo "✅ APK构建成功！"
+          ls -lh build/outputs/apk/debug/*.apk
+        else
+          echo "❌ 未找到APK文件"
+          echo "=== 最后50行构建日志 ==="
+          tail -50 build.log
+        fi
+        
+    - name: 7. 上传APK
+      if: success()
       uses: actions/upload-artifact@v4
-      if: always()
       with:
-        name: build-artifacts
-        path: |
-          **/build/outputs/apk/**/*.apk
-          **/build/reports/**/*.html
-          build.log
-        retention-days: 7
+        name: pdf-reader-apk
+        path: app/build/outputs/apk/debug/*.apk
