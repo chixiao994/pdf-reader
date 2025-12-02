@@ -1,4 +1,4 @@
-name: 构建APK
+name: Android构建
 
 on: [push, workflow_dispatch]
 
@@ -7,93 +7,17 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: 1. 检出代码
-      uses: actions/checkout@v4
-      
-    - name: 2. 设置Java 17（必须）
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        
-    - name: 3. 手动设置Android SDK（不使用复杂的Action）
+    - uses: actions/checkout@v4
+    
+    - name: 设置Android SDK
+      uses: android-actions/setup-android@v3
+    
+    - name: 构建
       run: |
-        # 下载Android命令行工具
-        wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-        unzip -q commandlinetools-linux-*.zip
-        mkdir -p $HOME/android-sdk/cmdline-tools/latest
-        mv cmdline-tools/* $HOME/android-sdk/cmdline-tools/latest/
-        rm commandlinetools-linux-*.zip
-        
-        # 设置环境变量
-        echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
-        echo "PATH=$HOME/android-sdk/cmdline-tools/latest/bin:$PATH" >> $GITHUB_ENV
-        
-        # 显示版本
-        echo "Java版本:"
-        java -version
-        echo ""
-        echo "Android SDK目录:"
-        ls -la $HOME/android-sdk/
-        
-    - name: 4. 安装Android SDK组件（静默模式）
-      run: |
-        # 接受许可证
-        yes | sdkmanager --licenses > /dev/null 2>&1 || echo "许可证已接受"
-        
-        # 安装必要组件（使用旧版本兼容Java 17）
-        sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.0"
-        
-        echo "安装完成"
-        ls -la $ANDROID_SDK_ROOT
-        
-    - name: 5. 创建必要文件
-      run: |
-        # local.properties
-        echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
-        
-        # gradle.properties
-        cat > gradle.properties << 'EOF'
-        org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-        android.useAndroidX=true
-        android.enableJetifier=true
-        EOF
-        
-        # 检查项目结构
-        echo "=== 项目结构 ==="
-        find . -name "*.gradle*" -o -name "*.java" -o -name "*.xml" | sort
-        
-    - name: 6. 使用系统Gradle构建
-      run: |
-        # 如果没有gradlew，创建一个简单的
-        if [ ! -f "gradlew" ]; then
-          echo "创建gradlew包装器..."
-          cat > gradlew << 'EOF'
-          #!/bin/bash
-          echo "使用系统Gradle构建..."
-          gradle "$@"
-          EOF
-          chmod +x gradlew
-        fi
-        
-        # 尝试构建
-        echo "=== 开始构建 ==="
-        ./gradlew clean assembleDebug \
-          --no-daemon \
-          --stacktrace \
-          --info \
-          2>&1 | tee build.log || echo "构建完成"
-        
-    - name: 7. 查找并上传APK
-      if: always()
-      run: |
-        echo "=== 查找APK文件 ==="
-        find . -name "*.apk" -type f 2>/dev/null | head -5
-        
+        chmod +x gradlew || true
+        ./gradlew clean assembleDebug --stacktrace
+    
     - uses: actions/upload-artifact@v4
-      if: always()
       with:
-        name: build-output
-        path: |
-          **/build/outputs/apk/**/*.apk
-          build.log
+        name: apk-artifacts
+        path: app/build/outputs/apk/debug/*.apk
