@@ -1,0 +1,24 @@
+name: 终极简单构建
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: 使用预配置的Android
+      uses: nttld/setup-android@v1.1.0
+      
+    - name: 直接构建
+      run: |
+        cd app
+        gradle assembleDebug
+        
+    - name: 上传
+      uses: actions/upload-artifact@v4
+      with:
+        name: app
+        path: app/build/outputs/apk/debug/*.apk
