@@ -1,4 +1,4 @@
-name: 构建APK
+name: 构建APK（降级Gradle）
 
 on: [push, workflow_dispatch]
 
@@ -15,18 +15,27 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
     
-    - name: 分析并修复项目
+    - name: 降级Gradle版本
       run: |
-        echo "=== 分析项目 ==="
+        echo "=== 降级Gradle版本 ==="
         
-        # 显示当前配置
-        echo "Gradle版本: 8.4 (来自wrapper)"
-        echo "Android Gradle Plugin: 7.4.2 (来自build.gradle)"
+        # 将Gradle 8.4降级到7.6.4（与AGP 7.4.2更兼容）
+        sed -i 's/gradle-8.4-bin.zip/gradle-7.6.4-bin.zip/' gradle/wrapper/gradle-wrapper.properties
         
-        # 修复1: 添加compileOptions到app/build.gradle
+        echo "更新后的gradle-wrapper.properties:"
+        cat gradle/wrapper/gradle-wrapper.properties
+        
+        # 下载gradlew
+        if [ ! -f "gradlew" ]; then
+          wget -q https://raw.githubusercontent.com/gradle/gradle/master/gradlew
+          chmod +x gradlew
+        fi
+        
+        # 设置local.properties
+        echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
+        
+        # 添加compileOptions
         if ! grep -q "compileOptions" app/build.gradle; then
-          echo ""
-          echo "修复: 添加compileOptions到app/build.gradle"
           echo "" >> app/build.gradle
           echo "compileOptions {" >> app/build.gradle
           echo "    sourceCompatibility JavaVersion.VERSION_17" >> app/build.gradle
@@ -34,68 +43,12 @@ jobs:
           echo "}" >> app/build.gradle
         fi
         
-        # 修复2: 确保local.properties存在
-        echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
-        
-        echo "✅ 项目修复完成"
+        echo "✅ 降级完成"
     
-    - name: 安装必要的Android SDK组件
+    - name: 构建
       run: |
-        echo "=== 安装Android SDK组件 ==="
-        
-        SDK_ROOT="/usr/local/lib/android/sdk"
-        
-        # 接受许可证
-        yes | $SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
-        
-        # 安装所需组件
-        $SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
-          "platforms;android-33" \
-          "build-tools;33.0.0" \
-          --sdk_root=$SDK_ROOT
-        
-        echo "✅ SDK组件安装完成"
-    
-    - name: 使用项目gradlew构建
-      run: |
-        echo "=== 使用项目gradlew构建 ==="
-        
-        # 确保gradlew可执行
         chmod +x gradlew
-        
-        # 显示Gradle和Java版本
-        echo "Java版本:"
-        java -version
-        echo ""
-        echo "Gradle版本:"
-        ./gradlew --version
-        
-        # 清理并构建
-        echo ""
-        echo "执行gradle clean..."
-        ./gradlew clean
-        
-        echo ""
-        echo "执行gradle assembleDebug..."
-        ./gradlew assembleDebug \
-          --stacktrace \
-          --no-daemon \
-          --warning-mode=summary
-        
-        echo "✅ 构建完成"
-    
-    - name: 检查并上传APK
-      run: |
-        echo "=== 检查APK ==="
-        
-        if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
-          echo "✅ APK生成成功！"
-          ls -lh app/build/outputs/apk/debug/*.apk
-        else
-          echo "❌ 未找到APK"
-          echo "搜索所有位置:"
-          find . -name "*.apk" -type f 2>/dev/null || echo "未找到APK"
-        fi
+        ./gradlew clean assembleDebug --stacktrace --no-daemon
     
     - uses: actions/upload-artifact@v4
       with:
