@@ -1,4 +1,4 @@
-name: 构建APK（降级Gradle）
+name: 构建APK（全新配置）
 
 on: [push, workflow_dispatch]
 
@@ -15,39 +15,87 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
     
-    - name: 降级Gradle版本
+    - name: 创建完全兼容的配置
       run: |
-        echo "=== 降级Gradle版本 ==="
+        echo "=== 创建兼容配置 ==="
         
-        # 将Gradle 8.4降级到7.6.4（与AGP 7.4.2更兼容）
-        sed -i 's/gradle-8.4-bin.zip/gradle-7.6.4-bin.zip/' gradle/wrapper/gradle-wrapper.properties
+        # 1. 使用Gradle 7.6.4
+        cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+        distributionBase=GRADLE_USER_HOME
+        distributionPath=wrapper/dists
+        distributionUrl=https\://services.gradle.org/distributions/gradle-7.6.4-bin.zip
+        zipStoreBase=GRADLE_USER_HOME
+        zipStorePath=wrapper/dists
+        EOF
         
-        echo "更新后的gradle-wrapper.properties:"
-        cat gradle/wrapper/gradle-wrapper.properties
+        # 2. 使用兼容的build.gradle
+        cat > build.gradle << 'EOF'
+        buildscript {
+            repositories {
+                google()
+                mavenCentral()
+            }
+            dependencies {
+                classpath 'com.android.tools.build:gradle:7.4.2'
+            }
+        }
         
-        # 下载gradlew
-        if [ ! -f "gradlew" ]; then
-          wget -q https://raw.githubusercontent.com/gradle/gradle/master/gradlew
-          chmod +x gradlew
-        fi
+        allprojects {
+            repositories {
+                google()
+                mavenCentral()
+            }
+        }
         
-        # 设置local.properties
+        task clean(type: Delete) {
+            delete rootProject.buildDir
+        }
+        EOF
+        
+        # 3. 使用兼容的app/build.gradle
+        cat > app/build.gradle << 'EOF'
+        apply plugin: 'com.android.application'
+        
+        android {
+            compileSdkVersion 33
+            
+            defaultConfig {
+                applicationId "com.pdf.reader"
+                minSdkVersion 21
+                targetSdkVersion 33
+                versionCode 1
+                versionName "1.0"
+            }
+            
+            buildTypes {
+                release {
+                    minifyEnabled false
+                }
+            }
+            
+            compileOptions {
+                sourceCompatibility JavaVersion.VERSION_17
+                targetCompatibility JavaVersion.VERSION_17
+            }
+        }
+        
+        dependencies {
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+        }
+        EOF
+        
+        # 4. 设置其他必要文件
+        echo "include ':app'" > settings.gradle
         echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
         
-        # 添加compileOptions
-        if ! grep -q "compileOptions" app/build.gradle; then
-          echo "" >> app/build.gradle
-          echo "compileOptions {" >> app/build.gradle
-          echo "    sourceCompatibility JavaVersion.VERSION_17" >> app/build.gradle
-          echo "    targetCompatibility JavaVersion.VERSION_17" >> app/build.gradle
-          echo "}" >> app/build.gradle
-        fi
+        # 5. 下载gradlew
+        wget -q https://raw.githubusercontent.com/gradle/gradle/master/gradlew
+        chmod +x gradlew
         
-        echo "✅ 降级完成"
+        echo "✅ 配置创建完成"
     
     - name: 构建
       run: |
-        chmod +x gradlew
         ./gradlew clean assembleDebug --stacktrace --no-daemon
     
     - uses: actions/upload-artifact@v4
