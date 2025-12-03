@@ -15,106 +15,90 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
     
-    - name: 验证Java版本
+    - name: 分析并修复项目
       run: |
-        echo "Java版本信息:"
-        java -version
-        echo "JAVA_HOME: $JAVA_HOME"
-    
-    - name: 使用系统Android SDK
-      run: |
-        echo "=== 使用预装Android SDK ==="
+        echo "=== 分析项目 ==="
         
-        # Ubuntu runner已预装Android SDK
-        SDK_ROOT="/usr/local/lib/android/sdk"
-        echo "Android SDK路径: $SDK_ROOT"
+        # 显示当前配置
+        echo "Gradle版本: 8.4 (来自wrapper)"
+        echo "Android Gradle Plugin: 7.4.2 (来自build.gradle)"
         
-        # 创建local.properties
-        echo "sdk.dir=$SDK_ROOT" > local.properties
-        
-        # 显示SDK内容
-        echo "SDK目录内容:"
-        ls -la $SDK_ROOT/ || echo "无法访问SDK目录"
-        
-        # 接受许可证（静默模式）
-        yes | $SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
-        
-        echo "✅ Android SDK配置完成"
-    
-    - name: 配置项目文件
-      run: |
-        echo "=== 配置项目 ==="
-        
-        # 显示原始项目文件
-        echo "原始build.gradle:"
-        cat build.gradle
-        echo ""
-        echo "原始app/build.gradle:"
-        cat app/build.gradle
-        
-        # 创建最小化配置（不使用here-document）
-        echo "创建最小化配置..."
-        
-        # 根目录build.gradle保持不变
-        
-        # 在app/build.gradle中添加Java 17兼容配置
+        # 修复1: 添加compileOptions到app/build.gradle
         if ! grep -q "compileOptions" app/build.gradle; then
+          echo ""
+          echo "修复: 添加compileOptions到app/build.gradle"
           echo "" >> app/build.gradle
           echo "compileOptions {" >> app/build.gradle
-          echo "    sourceCompatibility JavaVersion.VERSION_17" >> app/build.gradle  
+          echo "    sourceCompatibility JavaVersion.VERSION_17" >> app/build.gradle
           echo "    targetCompatibility JavaVersion.VERSION_17" >> app/build.gradle
           echo "}" >> app/build.gradle
-          echo "✅ 添加了Java 17编译选项"
         fi
         
-        # 确保settings.gradle存在
-        if [ ! -f "settings.gradle" ]; then
-          echo "include ':app'" > settings.gradle
-          echo "✅ 创建了settings.gradle"
-        fi
+        # 修复2: 确保local.properties存在
+        echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
+        
+        echo "✅ 项目修复完成"
     
-    - name: 直接使用Gradle构建
+    - name: 安装必要的Android SDK组件
       run: |
-        echo "=== 开始构建 ==="
+        echo "=== 安装Android SDK组件 ==="
         
-        # 设置环境
-        export ANDROID_SDK_ROOT="/usr/local/lib/android/sdk"
+        SDK_ROOT="/usr/local/lib/android/sdk"
         
-        # 检查是否有gradlew
-        if [ -f "gradlew" ]; then
-          echo "使用项目gradlew构建..."
-          chmod +x gradlew
-          ./gradlew clean assembleDebug --stacktrace --no-daemon
-        else
-          echo "使用系统gradle构建..."
-          gradle clean assembleDebug --stacktrace --no-daemon
-        fi
+        # 接受许可证
+        yes | $SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+        
+        # 安装所需组件
+        $SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
+          "platforms;android-33" \
+          "build-tools;33.0.0" \
+          --sdk_root=$SDK_ROOT
+        
+        echo "✅ SDK组件安装完成"
+    
+    - name: 使用项目gradlew构建
+      run: |
+        echo "=== 使用项目gradlew构建 ==="
+        
+        # 确保gradlew可执行
+        chmod +x gradlew
+        
+        # 显示Gradle和Java版本
+        echo "Java版本:"
+        java -version
+        echo ""
+        echo "Gradle版本:"
+        ./gradlew --version
+        
+        # 清理并构建
+        echo ""
+        echo "执行gradle clean..."
+        ./gradlew clean
+        
+        echo ""
+        echo "执行gradle assembleDebug..."
+        ./gradlew assembleDebug \
+          --stacktrace \
+          --no-daemon \
+          --warning-mode=summary
         
         echo "✅ 构建完成"
     
-    - name: 检查APK
+    - name: 检查并上传APK
       run: |
-        echo "=== 检查构建结果 ==="
+        echo "=== 检查APK ==="
         
-        # 查找APK文件
-        APK_FILES=$(find . -name "*.apk" -type f 2>/dev/null)
-        
-        if [ -n "$APK_FILES" ]; then
-          echo "✅ 找到APK文件:"
-          for file in $APK_FILES; do
-            size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null)
-            echo "  $file ($((size/1024)) KB)"
-          done
+        if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+          echo "✅ APK生成成功！"
+          ls -lh app/build/outputs/apk/debug/*.apk
         else
-          echo "❌ 未找到APK文件"
-          echo "检查build目录:"
-          find app/build -type d 2>/dev/null | head -10
+          echo "❌ 未找到APK"
+          echo "搜索所有位置:"
+          find . -name "*.apk" -type f 2>/dev/null || echo "未找到APK"
         fi
     
     - uses: actions/upload-artifact@v4
       with:
-        name: apk-artifact
-        path: |
-          app/build/outputs/apk/debug/*.apk
-          **/build/outputs/apk/**/*.apk
+        name: apk
+        path: app/build/outputs/apk/debug/*.apk
         if-no-files-found: warn
