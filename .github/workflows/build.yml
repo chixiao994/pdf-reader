@@ -7,100 +7,204 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - name: 检出代码
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
     
-    - name: 设置Java 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-    
-    - name: 配置Android SDK
+    - name: 设置双Java环境
       run: |
-        # 使用系统预装的Android SDK
+        # 安装Java 17供Android SDK使用
+        sudo apt-get update
+        sudo apt-get install -y openjdk-17-jdk
+        
+        # 设置Java 11为默认（供项目编译）
+        sudo update-java-alternatives --set java-1.11.0-openjdk-amd64
+        
+        echo "JAVA_HOME_17=/usr/lib/jvm/java-17-openjdk-amd64" >> $GITHUB_ENV
+        echo "JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64" >> $GITHUB_ENV
+        
+        echo "Java 17路径: /usr/lib/jvm/java-17-openjdk-amd64"
+        echo "Java 11路径: /usr/lib/jvm/java-11-openjdk-amd64"
+    
+    - name: 验证Java版本
+      run: |
+        echo "=== Java版本信息 ==="
+        echo "默认Java:"
+        java -version
+        echo ""
+        echo "Java 17:"
+        /usr/lib/jvm/java-17-openjdk-amd64/bin/java -version
+        echo ""
+        echo "Java 11:"
+        /usr/lib/jvm/java-11-openjdk-amd64/bin/java -version
+    
+    - name: 设置Android SDK（使用Java 17）
+      run: |
+        echo "=== 设置Android SDK ==="
+        
         SDK_ROOT="/usr/local/lib/android/sdk"
-        echo "使用Android SDK路径: $SDK_ROOT"
+        
+        # 使用Java 17运行sdkmanager
+        export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+        
+        # 接受许可证
+        yes | $SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
+        
+        # 安装Android SDK组件
+        $SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
+          "platforms;android-33" \
+          "build-tools;33.0.0" \
+          "platform-tools" \
+          --sdk_root=$SDK_ROOT
+        
+        echo "✅ SDK安装完成"
         
         # 创建local.properties
         echo "sdk.dir=$SDK_ROOT" > local.properties
-        
-        # 接受许可证
-        yes | $SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
     
-    - name: 初始化Gradle（无here-document）
+    - name: 修复项目配置
       run: |
-        echo "初始化Gradle配置..."
+        echo "=== 修复项目配置 ==="
         
-        # 方法1：使用echo命令创建文件
+        # 切换到Java 11进行项目编译
+        export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+        
+        # 创建兼容的build.gradle
+        cat > build.gradle << 'EOF'
+        buildscript {
+            repositories {
+                google()
+                mavenCentral()
+            }
+            dependencies {
+                classpath 'com.android.tools.build:gradle:7.4.2'
+            }
+        }
+        
+        allprojects {
+            repositories {
+                google()
+                mavenCentral()
+            }
+        }
+        
+        task clean(type: Delete) {
+            delete rootProject.buildDir
+        }
+        EOF
+        
+        # 创建兼容的app/build.gradle
+        cat > app/build.gradle << 'EOF'
+        plugins {
+            id 'com.android.application'
+        }
+        
+        android {
+            namespace 'com.pdf.reader'
+            compileSdk 33
+            
+            defaultConfig {
+                applicationId "com.pdf.reader"
+                minSdk 21
+                targetSdk 33
+                versionCode 1
+                versionName "1.0"
+            }
+            
+            buildTypes {
+                release {
+                    minifyEnabled false
+                }
+                debug {
+                    debuggable true
+                }
+            }
+            
+            compileOptions {
+                sourceCompatibility JavaVersion.VERSION_11
+                targetCompatibility JavaVersion.VERSION_11
+            }
+        }
+        
+        dependencies {
+            implementation 'androidx.appcompat:appcompat:1.6.1'
+        }
+        EOF
+        
+        # 创建settings.gradle
+        echo "include ':app'" > settings.gradle
+        echo "rootProject.name = 'PDFReader'" >> settings.gradle
+        
+        echo "✅ 项目配置完成"
+    
+    - name: 配置Gradle Wrapper
+      run: |
+        echo "=== 配置Gradle ==="
+        
+        # 使用Java 11
+        export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+        
+        # 创建gradle-wrapper.properties
         mkdir -p gradle/wrapper
+        cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+        distributionBase=GRADLE_USER_HOME
+        distributionPath=wrapper/dists
+        distributionUrl=https\://services.gradle.org/distributions/gradle-7.6.4-bin.zip
+        zipStoreBase=GRADLE_USER_HOME
+        zipStorePath=wrapper/dists
+        EOF
         
-        # 创建gradle-wrapper.properties（避免here-document）
-        echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
-        echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-        echo "distributionUrl=https://services.gradle.org/distributions/gradle-7.6.4-bin.zip" >> gradle/wrapper/gradle-wrapper.properties
-        echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
-        echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-        
-        # 如果已有gradlew，确保可执行
-        if [ -f "gradlew" ]; then
+        # 创建gradlew
+        if [ ! -f "gradlew" ]; then
+          cat > gradlew << 'EOF'
+          #!/bin/bash
+          # 设置Java 11
+          export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+          exec ./gradlew "$@"
+          EOF
           chmod +x gradlew
-          echo "已存在gradlew文件"
         fi
         
-        echo "Gradle配置完成"
+        echo "✅ Gradle配置完成"
     
-    - name: 显示项目信息
-      run: |
-        echo "=== 项目信息 ==="
-        echo "当前目录: $(pwd)"
-        echo ""
-        echo "文件列表:"
-        ls -la
-        echo ""
-        echo "Gradle配置:"
-        cat gradle/wrapper/gradle-wrapper.properties 2>/dev/null || echo "无gradle-wrapper.properties"
-    
-    - name: 构建APK（简单方式）
+    - name: 构建APK
       run: |
         echo "=== 开始构建 ==="
         
-        # 如果有gradlew就用，否则用系统gradle
-        if [ -f "gradlew" ]; then
-          echo "使用gradlew构建..."
-          ./gradlew clean assembleDebug --stacktrace --no-daemon
-        else
-          echo "使用系统gradle构建..."
-          gradle clean assembleDebug --stacktrace --no-daemon
-        fi
+        # 使用Java 11构建
+        export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+        export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
         
-        echo "构建完成"
+        echo "构建环境:"
+        echo "JAVA_HOME: $JAVA_HOME"
+        echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
+        echo ""
+        java -version
+        
+        # 初始化gradle wrapper
+        gradle wrapper --gradle-version=7.6.4 --distribution-type=bin
+        
+        # 构建
+        chmod +x gradlew
+        ./gradlew clean assembleDebug \
+          --stacktrace \
+          --no-daemon \
+          --warning-mode=summary
+        
+        echo "✅ 构建完成"
     
-    - name: 查找APK文件
+    - name: 检查并上传APK
       run: |
-        echo "=== 查找APK ==="
+        echo "=== 检查APK ==="
         
-        # 查找所有APK文件
-        APK_FILES=$(find . -name "*.apk" -type f 2>/dev/null)
-        
-        if [ -z "$APK_FILES" ]; then
-          echo "未找到APK文件"
-          echo "检查build目录:"
-          find app/build -type d 2>/dev/null || echo "无build目录"
+        if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+          echo "✅ APK生成成功！"
+          ls -lh app/build/outputs/apk/debug/*.apk
         else
-          echo "找到APK文件:"
-          echo "$APK_FILES"
-          for file in $APK_FILES; do
-            size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null)
-            echo "  $file - $((size/1024))KB"
-          done
+          echo "搜索APK文件:"
+          find . -name "*.apk" -type f 2>/dev/null || echo "未找到APK"
         fi
     
-    - name: 上传APK
-      uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v4
       with:
-        name: apk-artifact
-        path: |
-          app/build/outputs/apk/debug/*.apk
-          **/build/outputs/apk/**/*.apk
+        name: apk
+        path: app/build/outputs/apk/debug/*.apk
         if-no-files-found: warn
