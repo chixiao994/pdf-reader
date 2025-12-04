@@ -1,4 +1,4 @@
-name: 构建APK
+name: 安全构建
 
 on: [push, workflow_dispatch]
 
@@ -9,51 +9,23 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: 设置Java 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-    
-    - name: 创建最简单的项目配置
+    - name: 准备环境
       run: |
-        echo "=== 创建最简单的配置 ==="
-        
-        # 只创建绝对必要的文件
+        # 使用echo命令创建文件，避免here-document
         mkdir -p gradle/wrapper
+        echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
+        echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
+        echo "distributionUrl=https://services.gradle.org/distributions/gradle-7.6.4-all.zip" >> gradle/wrapper/gradle-wrapper.properties
+        echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
+        echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
         
-        # 创建gradle-wrapper.properties
-        cat > gradle/wrapper/gradle-wrapper.properties << 'END'
-distributionBase=GRADLE_USER_HOME
-distributionPath=wrapper/dists
-distributionUrl=https\://services.gradle.org/distributions/gradle-7.6.4-all.zip
-zipStoreBase=GRADLE_USER_HOME
-zipStorePath=wrapper/dists
-END
-        
-        # 设置local.properties
         echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
-        
-        # 不修改现有的build.gradle和app/build.gradle
-        echo "保持现有项目文件不变"
-        
-        echo "✅ 配置完成"
     
-    - name: 使用系统gradle直接构建
+    - name: 构建
       run: |
-        echo "=== 直接使用系统gradle构建 ==="
-        
-        # 检查系统gradle版本
-        gradle --version
-        
-        # 直接构建（不依赖wrapper）
-        echo "开始构建..."
-        gradle clean assembleDebug --stacktrace --no-daemon
-        
-        echo "✅ 构建完成"
+        gradle clean assembleDebug --stacktrace
     
     - uses: actions/upload-artifact@v4
       with:
         name: apk
         path: app/build/outputs/apk/debug/*.apk
-        if-no-files-found: warn
