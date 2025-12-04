@@ -1,4 +1,4 @@
-name: 直接构建APK
+name: 构建APK
 
 on: [push, workflow_dispatch]
 
@@ -9,101 +9,51 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: 使用Android SDK工具直接构建
+    - name: 设置Java 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    
+    - name: 创建最简单的项目配置
       run: |
-        echo "=== 使用Android SDK工具直接构建 ==="
+        echo "=== 创建最简单的配置 ==="
         
-        SDK_ROOT="/usr/local/lib/android/sdk"
+        # 只创建绝对必要的文件
+        mkdir -p gradle/wrapper
         
-        # 安装必要的工具
-        yes | $SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
-        $SDK_ROOT/cmdline-tools/latest/bin/sdkmanager \
-          "platforms;android-33" \
-          "build-tools;33.0.0" \
-          --sdk_root=$SDK_ROOT
+        # 创建gradle-wrapper.properties
+        cat > gradle/wrapper/gradle-wrapper.properties << 'END'
+distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+distributionUrl=https\://services.gradle.org/distributions/gradle-7.6.4-all.zip
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
+END
         
-        # 创建项目目录结构
-        mkdir -p app/src/main/java/com/pdf/reader
-        mkdir -p app/src/main/res/values
-        mkdir -p app/src/main/res/drawable
+        # 设置local.properties
+        echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
         
-        # 复制源代码
-        cp -r app/src/main/java/com/pdf/reader/* app/src/main/java/com/pdf/reader/ 2>/dev/null || true
+        # 不修改现有的build.gradle和app/build.gradle
+        echo "保持现有项目文件不变"
         
-        # 创建AndroidManifest.xml（如果不存在）
-        if [ ! -f "app/src/main/AndroidManifest.xml" ]; then
-          cat > app/src/main/AndroidManifest.xml << 'EOF'
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.pdf.reader">
-
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-
-    <application
-        android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
-        android:label="PDF阅读器"
-        android:theme="@style/Theme.AppCompat.Light.NoActionBar">
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"
-            android:screenOrientation="portrait">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-    </application>
-</manifest>
-EOF
-        fi
-        
-        # 创建strings.xml（如果不存在）
-        if [ ! -f "app/src/main/res/values/strings.xml" ]; then
-          cat > app/src/main/res/values/strings.xml << 'EOF'
-<resources>
-    <string name="app_name">PDF阅读器</string>
-</resources>
-EOF
-        fi
-        
-        # 创建简单的build.xml用于ant构建
-        cat > build.xml << 'EOF'
-<?xml version="1.0" encoding="UTF-8"?>
-<project name="PDFReader" default="debug">
-    <property file="local.properties" />
-    <property file="ant.properties" />
-    <property environment="env" />
+        echo "✅ 配置完成"
     
-    <condition property="sdk.dir" value="${env.ANDROID_SDK_ROOT}">
-        <isset property="env.ANDROID_SDK_ROOT" />
-    </condition>
-    
-    <loadproperties srcFile="project.properties" />
-    
-    <fail message="sdk.dir is missing." unless="sdk.dir" />
-    
-    <import file="${sdk.dir}/tools/ant/build.xml" />
-</project>
-EOF
+    - name: 使用系统gradle直接构建
+      run: |
+        echo "=== 直接使用系统gradle构建 ==="
         
-        # 创建project.properties
-        cat > project.properties << 'EOF'
-target=android-33
-android.library=false
-EOF
+        # 检查系统gradle版本
+        gradle --version
         
-        # 创建ant.properties
-        echo "sdk.dir=$SDK_ROOT" > ant.properties
+        # 直接构建（不依赖wrapper）
+        echo "开始构建..."
+        gradle clean assembleDebug --stacktrace --no-daemon
         
-        # 尝试使用ant构建
-        echo "尝试使用ant构建..."
-        ant debug || echo "ant构建失败，尝试其他方法"
-        
-        echo "✅ 构建尝试完成"
+        echo "✅ 构建完成"
     
     - uses: actions/upload-artifact@v4
       with:
         name: apk
-        path: bin/*.apk
+        path: app/build/outputs/apk/debug/*.apk
         if-no-files-found: warn
