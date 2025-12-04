@@ -1,4 +1,4 @@
-name: 安全构建
+name: 简单构建
 
 on: [push, workflow_dispatch]
 
@@ -9,23 +9,20 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: 准备环境
+    - name: 只设置SDK路径
       run: |
-        # 使用echo命令创建文件，避免here-document
-        mkdir -p gradle/wrapper
-        echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
-        echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-        echo "distributionUrl=https://services.gradle.org/distributions/gradle-7.6.4-all.zip" >> gradle/wrapper/gradle-wrapper.properties
-        echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
-        echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-        
+        # 只做这一件事
         echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
+        echo "✅ 配置完成"
     
     - name: 构建
       run: |
-        gradle clean assembleDebug --stacktrace
+        # 使用项目自带的gradlew
+        chmod +x gradlew
+        ./gradlew assembleDebug
     
     - uses: actions/upload-artifact@v4
       with:
         name: apk
         path: app/build/outputs/apk/debug/*.apk
+        if-no-files-found: warn
