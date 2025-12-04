@@ -1,4 +1,4 @@
-name: 构建APK
+name: 系统构建
 
 on: [push, workflow_dispatch]
 
@@ -9,65 +9,17 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: 准备环境
+    - name: 直接使用系统gradle
       run: |
-        echo "=== 准备构建环境 ==="
+        echo "=== 使用系统gradle构建 ==="
         
-        # 1. 下载gradlew
-        if [ ! -f "gradlew" ]; then
-          echo "下载gradlew..."
-          wget -q https://raw.githubusercontent.com/gradle/gradle/master/gradlew
-          chmod +x gradlew
-          echo "✅ gradlew下载完成"
-        fi
-        
-        # 2. 检查gradle/wrapper目录
-        if [ ! -d "gradle/wrapper" ]; then
-          echo "创建gradle/wrapper目录..."
-          mkdir -p gradle/wrapper
-          echo "distributionBase=GRADLE_USER_HOME" > gradle/wrapper/gradle-wrapper.properties
-          echo "distributionPath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-          echo "distributionUrl=https://services.gradle.org/distributions/gradle-7.6.4-all.zip" >> gradle/wrapper/gradle-wrapper.properties
-          echo "zipStoreBase=GRADLE_USER_HOME" >> gradle/wrapper/gradle-wrapper.properties
-          echo "zipStorePath=wrapper/dists" >> gradle/wrapper/gradle-wrapper.properties
-        fi
-        
-        # 3. 设置local.properties
+        # 设置local.properties
         echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
         
-        # 4. 显示当前目录结构
-        echo "当前文件:"
-        ls -la
-        echo ""
-        echo "gradle/wrapper目录:"
-        ls -la gradle/wrapper/ 2>/dev/null || echo "无gradle/wrapper目录"
-        
-        echo "✅ 环境准备完成"
-    
-    - name: 构建APK
-      run: |
-        echo "=== 开始构建 ==="
-        
-        # 确保gradlew可执行
-        chmod +x gradlew
-        
-        # 使用gradlew构建
-        ./gradlew clean assembleDebug --stacktrace --no-daemon
+        # 使用系统gradle（避免wrapper问题）
+        gradle clean assembleDebug --stacktrace --no-daemon
         
         echo "✅ 构建完成"
-    
-    - name: 检查结果
-      run: |
-        echo "=== 检查APK ==="
-        
-        if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
-          echo "✅ APK生成成功！"
-          ls -lh app/build/outputs/apk/debug/*.apk
-        else
-          echo "❌ 未找到APK"
-          echo "搜索所有APK:"
-          find . -name "*.apk" -type f 2>/dev/null || echo "未找到APK"
-        fi
     
     - uses: actions/upload-artifact@v4
       with:
