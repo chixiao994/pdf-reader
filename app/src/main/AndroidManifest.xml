@@ -36,7 +36,7 @@
     </queries>
 
     <application
-        android:name="com.chixiao994.pdf-readerApp"
+        android:name="com.chixiao994.pdf.readerApp"
         android:icon="${appIcon}"
         android:label="${appName}"
         android:largeHeap="true"
@@ -56,13 +56,13 @@
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="${admobAppId}" />
         <meta-data
-            android:name="pdf-reader.ADMOB_BANNER_ID"
+            android:name="pdf.reader.ADMOB_BANNER_ID"
             android:value="${admobBannerId}" />
         <meta-data
-            android:name="pdf-reader.ADMOB_FULLSCREEN_ID"
+            android:name="pdf.reader.ADMOB_FULLSCREEN_ID"
             android:value="${admobFullId}" />
         <meta-data
-            android:name="pdf-reader.GOOGLE_DRIVE_KEY"
+            android:name="pdf.reader.GOOGLE_DRIVE_KEY"
             android:value="${appGdriveKey}" />
 
         <provider
@@ -291,7 +291,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data android:scheme="${applicationId}" />
-                <data android:scheme="pdf-reader" />
+                <data android:scheme="pdf.reader" />
             </intent-filter>
         </activity>
 
