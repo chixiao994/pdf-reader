@@ -1,14 +1,22 @@
-plugins {
-    id 'java'
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:7.4.2'
+        classpath 'com.google.gms:google-services:4.3.15'
+    }
 }
 
-dependencies {
-    implementation fileTree(dir: 'src/libs', include: ['*.jar'])
-    runtimeOnly fileTree(dir: 'src/libs', include: ['*.aar', '*.jar'], exclude: [])
-    //implementation project(':smartreflow')
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url 'https://jitpack.io' }
+    }
 }
 
-//java {
-    //sourceCompatibility = JavaVersion.VERSION_1_8
-    //targetCompatibility = JavaVersion.VERSION_1_8
-//}
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
