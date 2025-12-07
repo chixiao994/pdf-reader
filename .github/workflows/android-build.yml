@@ -4,8 +4,8 @@ on:
   push:
     branches: [ main ]
     tags:
-      - 'v*.*.*'  # 当创建类似 v1.0.0 的tag时触发发布
-  workflow_dispatch:  # 允许手动触发
+      - 'v*.*.*'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -27,7 +27,17 @@ jobs:
     - name: Create local.properties
       run: |
         echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
-        echo "创建 local.properties 文件"
+      
+    - name: Create debug keystore
+      run: |
+        # 创建debug签名文件（用于Release构建）
+        keytool -genkey -v -keystore debug.keystore \
+          -alias androiddebugkey -storepass android -keypass android \
+          -keyalg RSA -keysize 2048 -validity 10000 \
+          -dname "CN=Android Debug, OU=Android, O=Google, L=Mountain View, ST=California, C=US"
+        
+        mv debug.keystore app/debug.keystore
+        echo "✅ 创建debug.keystore完成"
       
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
@@ -41,20 +51,28 @@ jobs:
       run: |
         ./gradlew assembleRelease --no-daemon --stacktrace
         
+    - name: Verify APK files
+      run: |
+        echo "=== 检查APK文件 ==="
+        find app/build/outputs/apk -name "*.apk" -type f | while read file; do
+          echo "找到APK: $file"
+          ls -lh "$file"
+        done
+        
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
       with:
-        name: pdf-reader-debug-apk
+        name: debug-apk
         path: app/build/outputs/apk/debug/*.apk
         
     - name: Upload Release APK
       if: startsWith(github.ref, 'refs/tags/v')
       uses: actions/upload-artifact@v4
       with:
-        name: pdf-reader-release-apk
+        name: release-apk
         path: app/build/outputs/apk/release/*.apk
         
-    # ========== 自动发布到 GitHub Releases ==========
+    # ========== 自动发布 ==========
     - name: Create GitHub Release
       if: startsWith(github.ref, 'refs/tags/v')
       uses: softprops/action-gh-release@v1
@@ -63,33 +81,26 @@ jobs:
         body: |
           ## 📱 PDF Reader ${{ github.ref_name }}
           
-          ### 🚀 新版本发布
-          
-          一个简洁的PDF阅读器应用，支持：
-          - 📄 PDF文件浏览
-          - 🌙 夜间模式
-          - 📖 整页/半页阅读模式
-          - 📍 阅读进度保存
-          
-          ### 📦 包含文件
-          - Release APK（正式版，可直接安装）
+          ### 📦 下载APK
+          点击下方文件下载APK安装包。
           
           ### 🔧 安装说明
           1. 下载APK文件
-          2. 在手机上找到下载的文件
+          2. 在手机文件管理中找到下载的文件
           3. 点击安装
-          4. 如需，开启"未知来源应用"安装权限
+          4. 如需，开启"未知来源应用"权限
           
-          ### 📝 更新日志
-          - 初始版本发布
+          ### 📝 版本信息
+          - 版本: ${{ github.ref_name }}
+          - 构建时间: ${{ github.event.head_commit.timestamp }}
+          - 提交: [${{ github.sha }}](https://github.com/chixiao994/pdf-reader/commit/${{ github.sha }})
           
           ### 🐛 问题反馈
-          如有问题，请在 [Issues](https://github.com/chixiao994/pdf-reader/issues) 页面反馈。
+          请在 [Issues](https://github.com/chixiao994/pdf-reader/issues) 页面反馈问题。
           
         files: |
           app/build/outputs/apk/release/*.apk
-        draft: false  # 立即发布，不是草稿
-        prerelease: false  # 不是预发布版本
-        generate_release_notes: true  # 自动生成发布说明
+        draft: false
+        prerelease: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
