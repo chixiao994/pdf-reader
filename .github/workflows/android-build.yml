@@ -20,14 +20,14 @@ jobs:
       
     # 2. 设置JDK
     - name: Set up JDK 17
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v3
       with:
         java-version: '17'
         distribution: 'temurin'
         
     # 3. 设置Android SDK
     - name: Setup Android SDK
-      uses: android-actions/setup-android@v4
+      uses: android-actions/setup-android@v3
       
     # 4. Gradle权限
     - name: Grant execute permission for gradlew
