@@ -1,29 +1,8 @@
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
-    }
-    dependencies {
-        // 使用与Gradle 8.14.3兼容的版本
-        classpath 'com.android.tools.build:gradle:7.0.4'
-    }
+// ⭐ 极简配置，避免所有兼容性问题
+plugins {
+    id 'com.android.application' version '8.1.2' apply false
 }
 
-// 所有模块共用的配置
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
-        maven { url 'https://jitpack.io' }
-    }
-    
-    // 全局配置
-    tasks.withType(JavaCompile) {
-        options.encoding = 'UTF-8'
-    }
-}
-
-// 清理任务
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
