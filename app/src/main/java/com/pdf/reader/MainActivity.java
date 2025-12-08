@@ -8,7 +8,9 @@ import android.Manifest;
 import android.content.ContentResolver;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
+import android.content.res.Configuration;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -17,8 +19,6 @@ import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Matrix;
 import android.graphics.Paint;
-import android.graphics.PorterDuff;
-import android.graphics.PorterDuffColorFilter;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.Build;
@@ -53,7 +53,7 @@ public class MainActivity extends AppCompatActivity {
     private FrameLayout readerContainer;
     private ImageView pdfImageView;
     private TextView pageTextView, titleTextView;
-    private Button nightModeBtn, halfPageBtn, prevBtn, nextBtn, openFileBtn, refreshBtn, jumpBtn;
+    private Button nightModeBtn, halfPageBtn, prevBtn, nextBtn, openFileBtn, refreshBtn, jumpBtn, pageModeBtn;
     
     // PDF相关
     private PdfRenderer pdfRenderer;
@@ -67,6 +67,8 @@ public class MainActivity extends AppCompatActivity {
     private boolean halfPageMode = false;
     private boolean leftPage = false;
     private boolean controlsVisible = true; // 控制栏是否可见
+    private boolean landscapeMode = false; // 横屏模式
+    private boolean twoPageMode = false; // 双页模式
     
     // 存储
     private SharedPreferences prefs;
@@ -87,6 +89,10 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
+        // 检测当前屏幕方向
+        int orientation = getResources().getConfiguration().orientation;
+        landscapeMode = (orientation == Configuration.ORIENTATION_LANDSCAPE);
+        
         // 全屏显示
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
@@ -100,6 +106,19 @@ public class MainActivity extends AppCompatActivity {
         
         // 请求权限
         requestPermissions();
+    }
+    
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        
+        // 更新横屏模式状态
+        landscapeMode = (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE);
+        
+        // 如果正在阅读PDF，重新显示当前页面以适应新的屏幕方向
+        if (pdfRenderer != null) {
+            displayCurrentPage();
+        }
     }
     
     private void requestPermissions() {
@@ -728,19 +747,43 @@ public class MainActivity extends AppCompatActivity {
         nightBtn.setTextColor(Color.WHITE);
         nightBtn.setOnClickListener(v -> toggleNightMode());
         
-        // 半页模式按钮
+        // 半页/整页按钮
         halfPageBtn = new Button(this);
-        halfPageBtn.setText(halfPageMode ? "整页" : "半页");
+        updateHalfPageBtnText();
         halfPageBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         halfPageBtn.setTextColor(Color.WHITE);
         halfPageBtn.setOnClickListener(v -> toggleHalfPageMode());
+        
+        // 单页/双页按钮（仅在横屏时显示）
+        pageModeBtn = new Button(this);
+        updatePageModeBtnText();
+        pageModeBtn.setBackgroundColor(Color.parseColor("#3700B3"));
+        pageModeBtn.setTextColor(Color.WHITE);
+        pageModeBtn.setOnClickListener(v -> togglePageMode());
         
         topBar.addView(backBtn);
         topBar.addView(titleTextView);
         topBar.addView(nightBtn);
         topBar.addView(halfPageBtn);
         
+        // 仅横屏时显示双页模式按钮
+        if (landscapeMode) {
+            topBar.addView(pageModeBtn);
+        }
+        
         return topBar;
+    }
+    
+    private void updateHalfPageBtnText() {
+        if (halfPageBtn != null) {
+            halfPageBtn.setText(halfPageMode ? "整页" : "半页");
+        }
+    }
+    
+    private void updatePageModeBtnText() {
+        if (pageModeBtn != null) {
+            pageModeBtn.setText(twoPageMode ? "单页" : "双页");
+        }
     }
     
     private void toggleControls() {
@@ -830,60 +873,161 @@ public class MainActivity extends AppCompatActivity {
         return invertedBitmap;
     }
     
+    // 双页模式：合并两页到一个Bitmap
+    private Bitmap combineTwoPages(int leftPageNum, int rightPageNum) {
+        try {
+            // 打开左页
+            PdfRenderer.Page leftPage = pdfRenderer.openPage(leftPageNum);
+            int leftWidth = leftPage.getWidth();
+            int leftHeight = leftPage.getHeight();
+            
+            // 打开右页（如果存在）
+            PdfRenderer.Page rightPage = null;
+            int rightWidth = 0;
+            int rightHeight = 0;
+            
+            if (rightPageNum < totalPages) {
+                rightPage = pdfRenderer.openPage(rightPageNum);
+                rightWidth = rightPage.getWidth();
+                rightHeight = rightPage.getHeight();
+            }
+            
+            // 计算总宽度和最大高度
+            int totalWidth = leftWidth + (rightPage != null ? rightWidth : 0);
+            int maxHeight = Math.max(leftHeight, rightPage != null ? rightHeight : 0);
+            
+            // 计算缩放比例以适合屏幕
+            int screenWidth = getResources().getDisplayMetrics().widthPixels;
+            int screenHeight = getResources().getDisplayMetrics().heightPixels;
+            
+            float widthScale = (float) screenWidth / totalWidth;
+            float heightScale = (float) screenHeight / maxHeight;
+            float scale = Math.min(widthScale, heightScale);
+            
+            // 计算缩放后的尺寸
+            int scaledLeftWidth = (int) (leftWidth * scale);
+            int scaledLeftHeight = (int) (leftHeight * scale);
+            int scaledRightWidth = rightPage != null ? (int) (rightWidth * scale) : 0;
+            int scaledRightHeight = rightPage != null ? (int) (rightHeight * scale) : 0;
+            
+            // 创建合并的Bitmap
+            Bitmap combinedBitmap = Bitmap.createBitmap(
+                scaledLeftWidth + scaledRightWidth,
+                Math.max(scaledLeftHeight, scaledRightHeight),
+                Bitmap.Config.ARGB_8888
+            );
+            
+            Canvas canvas = new Canvas(combinedBitmap);
+            canvas.drawColor(getBackgroundColor());
+            
+            // 绘制左页
+            Bitmap leftBitmap = Bitmap.createBitmap(scaledLeftWidth, scaledLeftHeight, Bitmap.Config.ARGB_8888);
+            leftPage.render(leftBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+            canvas.drawBitmap(leftBitmap, 0, (combinedBitmap.getHeight() - scaledLeftHeight) / 2, null);
+            leftPage.close();
+            
+            // 绘制右页（如果存在）
+            if (rightPage != null) {
+                Bitmap rightBitmap = Bitmap.createBitmap(scaledRightWidth, scaledRightHeight, Bitmap.Config.ARGB_8888);
+                rightPage.render(rightBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                canvas.drawBitmap(rightBitmap, scaledLeftWidth, (combinedBitmap.getHeight() - scaledRightHeight) / 2, null);
+                rightPage.close();
+            }
+            
+            return combinedBitmap;
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+    
     private void displayCurrentPage() {
         if (pdfRenderer == null) return;
         
         try {
-            PdfRenderer.Page page = pdfRenderer.openPage(currentPage);
+            Bitmap bitmap = null;
+            String pageText = "";
             
-            // 获取页面原始尺寸
-            int pageWidth = page.getWidth();
-            int pageHeight = page.getHeight();
-            
-            // 获取屏幕尺寸
-            int screenWidth = getResources().getDisplayMetrics().widthPixels;
-            int screenHeight = getResources().getDisplayMetrics().heightPixels;
-            
-            // 计算保持长宽比的缩放比例
-            float scale = Math.min(
-                (float) screenWidth / pageWidth,
-                (float) screenHeight / pageHeight
-            );
-            
-            // 计算缩放后的尺寸
-            int scaledWidth = (int) (pageWidth * scale);
-            int scaledHeight = (int) (pageHeight * scale);
-            
-            // 创建与页面比例匹配的Bitmap
-            Bitmap bitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888);
-            
-            if (halfPageMode) {
-                // 半边页模式
+            if (twoPageMode && landscapeMode) {
+                // 双页模式（仅横屏）
+                int leftPageNum = currentPage;
+                int rightPageNum = currentPage + 1;
+                
+                // 确保右页不超过总页数
+                if (rightPageNum >= totalPages) {
+                    rightPageNum = totalPages - 1;
+                }
+                
+                bitmap = combineTwoPages(leftPageNum, rightPageNum);
+                pageText = (leftPageNum + 1) + "-" + (rightPageNum + 1) + "/" + totalPages + " (双页)";
+                
+            } else if (halfPageMode) {
+                // 半页模式
+                PdfRenderer.Page page = pdfRenderer.openPage(currentPage);
+                
+                int pageWidth = page.getWidth();
+                int pageHeight = page.getHeight();
+                int screenWidth = getResources().getDisplayMetrics().widthPixels;
+                int screenHeight = getResources().getDisplayMetrics().heightPixels;
+                
+                float scale = Math.min(
+                    (float) screenWidth / pageWidth,
+                    (float) screenHeight / pageHeight
+                );
+                
+                int scaledWidth = (int) (pageWidth * scale);
+                int scaledHeight = (int) (pageHeight * scale);
+                
+                bitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888);
                 page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                 
                 // 裁剪半边
                 if (leftPage) {
                     bitmap = Bitmap.createBitmap(bitmap, 0, 0, scaledWidth / 2, scaledHeight);
-                    pageTextView.setText((currentPage + 1) + "/" + totalPages + " (左)");
+                    pageText = (currentPage + 1) + "/" + totalPages + " (左)";
                 } else {
                     bitmap = Bitmap.createBitmap(bitmap, scaledWidth / 2, 0, scaledWidth / 2, scaledHeight);
-                    pageTextView.setText((currentPage + 1) + "/" + totalPages + " (右)");
+                    pageText = (currentPage + 1) + "/" + totalPages + " (右)";
                 }
+                page.close();
+                
             } else {
                 // 整页模式
+                PdfRenderer.Page page = pdfRenderer.openPage(currentPage);
+                
+                int pageWidth = page.getWidth();
+                int pageHeight = page.getHeight();
+                int screenWidth = getResources().getDisplayMetrics().widthPixels;
+                int screenHeight = getResources().getDisplayMetrics().heightPixels;
+                
+                float scale = Math.min(
+                    (float) screenWidth / pageWidth,
+                    (float) screenHeight / pageHeight
+                );
+                
+                int scaledWidth = (int) (pageWidth * scale);
+                int scaledHeight = (int) (pageHeight * scale);
+                
+                bitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888);
                 page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                pageTextView.setText((currentPage + 1) + "/" + totalPages);
+                page.close();
+                
+                pageText = (currentPage + 1) + "/" + totalPages;
             }
             
-            page.close();
+            // 设置页码文本
+            pageTextView.setText(pageText);
             
-            // 夜间模式下反转图片颜色（黑白反转）
-            if (nightMode) {
-                bitmap = invertColors(bitmap);
+            if (bitmap != null) {
+                // 夜间模式下反转图片颜色（黑白反转）
+                if (nightMode) {
+                    bitmap = invertColors(bitmap);
+                }
+                
+                // 设置图片到ImageView
+                pdfImageView.setImageBitmap(bitmap);
             }
-            
-            // 设置图片到ImageView
-            pdfImageView.setImageBitmap(bitmap);
             
             // 保存阅读位置
             saveReadingPosition();
@@ -895,7 +1039,15 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void goToPrevPage() {
-        if (halfPageMode) {
+        if (twoPageMode && landscapeMode) {
+            // 双页模式：每次翻两页
+            if (currentPage >= 2) {
+                currentPage -= 2;
+            } else {
+                currentPage = 0;
+                Toast.makeText(this, "已经是第一页", Toast.LENGTH_SHORT).show();
+            }
+        } else if (halfPageMode) {
             if (leftPage) {
                 // 当前是左半页（古籍的后半部分），上一页应该是同页的右半部分（古籍的前半部分）
                 leftPage = false;
@@ -919,7 +1071,20 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void goToNextPage() {
-        if (halfPageMode) {
+        if (twoPageMode && landscapeMode) {
+            // 双页模式：每次翻两页
+            if (currentPage + 2 < totalPages) {
+                currentPage += 2;
+            } else {
+                // 调整到最后一对页面
+                if (totalPages % 2 == 0) {
+                    currentPage = totalPages - 2;
+                } else {
+                    currentPage = totalPages - 1;
+                }
+                Toast.makeText(this, "已经是最后一页", Toast.LENGTH_SHORT).show();
+            }
+        } else if (halfPageMode) {
             if (leftPage) {
                 // 当前是左半页（古籍的后半部分），下一页应该是下一页的右半部分（古籍下一页的前半部分）
                 if (currentPage < totalPages - 1) {
@@ -986,10 +1151,14 @@ public class MainActivity extends AppCompatActivity {
     
     private void toggleHalfPageMode() {
         halfPageMode = !halfPageMode;
-        if (halfPageBtn != null) {
-            halfPageBtn.setText(halfPageMode ? "整页" : "半页");
-        }
+        updateHalfPageBtnText();
         saveSettings();
+        displayCurrentPage();
+    }
+    
+    private void togglePageMode() {
+        twoPageMode = !twoPageMode;
+        updatePageModeBtnText();
         displayCurrentPage();
     }
     
