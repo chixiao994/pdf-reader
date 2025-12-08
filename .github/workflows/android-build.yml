@@ -1,11 +1,8 @@
-name: Android Build & Release
+name: Android Build
 
 on:
   push:
     branches: [ main ]
-    tags:
-      - 'v*.*.*'
-  workflow_dispatch:
 
 jobs:
   build:
@@ -23,84 +20,65 @@ jobs:
         
     - name: Setup Android SDK
       uses: android-actions/setup-android@v2
+      with:
+        # 明确指定要安装的组件
+        api-level: 33
+        build-tools: 33.0.0
+        # 确保SDK路径正确设置
       
-    - name: Create local.properties
+    - name: Verify Android SDK
       run: |
-        echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
-      
-    - name: Create debug keystore
-      run: |
-        # 创建debug签名文件（用于Release构建）
-        keytool -genkey -v -keystore debug.keystore \
-          -alias androiddebugkey -storepass android -keypass android \
-          -keyalg RSA -keysize 2048 -validity 10000 \
-          -dname "CN=Android Debug, OU=Android, O=Google, L=Mountain View, ST=California, C=US"
+        echo "ANDROID_HOME: $ANDROID_HOME"
+        echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
         
-        mv debug.keystore app/debug.keystore
-        echo "✅ 创建debug.keystore完成"
+        # 确保环境变量已设置
+        if [ -z "$ANDROID_HOME" ]; then
+          export ANDROID_HOME="/usr/local/lib/android/sdk"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+        fi
+        
+        if [ -z "$ANDROID_SDK_ROOT" ]; then
+          export ANDROID_SDK_ROOT="/usr/local/lib/android/sdk"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+        fi
+        
+        echo "设置后的环境变量:"
+        echo "ANDROID_HOME=$ANDROID_HOME"
+        echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+        
+        # 验证SDK是否存在
+        if [ -d "$ANDROID_HOME" ]; then
+          echo "✅ Android SDK目录存在"
+          ls -la $ANDROID_HOME/
+        else
+          echo "❌ Android SDK目录不存在"
+          # 创建local.properties文件作为备选方案
+          echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
+          echo "创建了local.properties文件"
+        fi
+      
+    - name: Create local.properties (备用)
+      run: |
+        # 创建local.properties文件，Gradle会读取这个文件
+        echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
+        echo "local.properties内容:"
+        cat local.properties
       
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
       
-    - name: Build Debug APK
+    - name: Build with Gradle
       run: |
+        # 显示完整环境
+        echo "=== 构建环境 ==="
+        ./gradlew --version
+        echo ""
+        echo "=== 开始构建 ==="
         ./gradlew assembleDebug --no-daemon --stacktrace
       
-    - name: Build Release APK
-      if: startsWith(github.ref, 'refs/tags/v')
-      run: |
-        ./gradlew assembleRelease --no-daemon --stacktrace
-        
-    - name: Verify APK files
-      run: |
-        echo "=== 检查APK文件 ==="
-        find app/build/outputs/apk -name "*.apk" -type f | while read file; do
-          echo "找到APK: $file"
-          ls -lh "$file"
-        done
-        
-    - name: Upload Debug APK
+    - name: Upload APK
+      if: success()
       uses: actions/upload-artifact@v4
       with:
-        name: debug-apk
+        name: pdf-reader-apk
         path: app/build/outputs/apk/debug/*.apk
-        
-    - name: Upload Release APK
-      if: startsWith(github.ref, 'refs/tags/v')
-      uses: actions/upload-artifact@v4
-      with:
-        name: release-apk
-        path: app/build/outputs/apk/release/*.apk
-        
-    # ========== 自动发布 ==========
-    - name: Create GitHub Release
-      if: startsWith(github.ref, 'refs/tags/v')
-      uses: softprops/action-gh-release@v1
-      with:
-        name: PDF Reader ${{ github.ref_name }}
-        body: |
-          ## 📱 PDF Reader ${{ github.ref_name }}
-          
-          ### 📦 下载APK
-          点击下方文件下载APK安装包。
-          
-          ### 🔧 安装说明
-          1. 下载APK文件
-          2. 在手机文件管理中找到下载的文件
-          3. 点击安装
-          4. 如需，开启"未知来源应用"权限
-          
-          ### 📝 版本信息
-          - 版本: ${{ github.ref_name }}
-          - 构建时间: ${{ github.event.head_commit.timestamp }}
-          - 提交: [${{ github.sha }}](https://github.com/chixiao994/pdf-reader/commit/${{ github.sha }})
-          
-          ### 🐛 问题反馈
-          请在 [Issues](https://github.com/chixiao994/pdf-reader/issues) 页面反馈问题。
-          
-        files: |
-          app/build/outputs/apk/release/*.apk
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
