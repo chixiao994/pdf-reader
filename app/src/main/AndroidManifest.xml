@@ -20,8 +20,8 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:screenOrientation="fullSensor" <!-- 改为fullSensor支持横竖屏 -->
-            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:screenOrientation="fullSensor" <!-- 改为支持横竖屏 -->
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize"
             android:windowSoftInputMode="stateAlwaysHidden|adjustPan">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
