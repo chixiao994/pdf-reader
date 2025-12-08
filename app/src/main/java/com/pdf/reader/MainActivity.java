@@ -72,6 +72,8 @@ public class MainActivity extends AppCompatActivity {
     
     // 存储
     private SharedPreferences prefs;
+    private static final String LAST_OPENED_FILE = "last_opened_file"; // 存储最后打开的文件路径
+    private static final String AUTO_OPEN_LAST_FILE = "auto_open_last_file"; // 是否自动打开最后文件
     
     // 权限请求码
     private static final int PERMISSION_REQUEST_CODE = 100;
@@ -103,6 +105,37 @@ public class MainActivity extends AppCompatActivity {
         
         // 请求权限
         requestPermissions();
+    }
+    
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // 检查是否应该自动打开上次阅读的文件
+        checkAutoOpenLastFile();
+    }
+    
+    private void checkAutoOpenLastFile() {
+        // 获取上次打开的文件路径
+        String lastOpenedFile = prefs.getString(LAST_OPENED_FILE, null);
+        boolean autoOpenLastFile = prefs.getBoolean(AUTO_OPEN_LAST_FILE, true); // 默认开启自动打开
+        
+        if (autoOpenLastFile && lastOpenedFile != null && !lastOpenedFile.isEmpty()) {
+            File file = new File(lastOpenedFile);
+            if (file.exists() && file.canRead()) {
+                // 延迟一小段时间打开，确保UI已经加载完成
+                new android.os.Handler().postDelayed(() -> {
+                    // 检查当前是否已经在阅读界面
+                    if (pdfRenderer == null) {
+                        Toast.makeText(this, "正在打开上次阅读的文档...", Toast.LENGTH_SHORT).show();
+                        openPdfFile(lastOpenedFile);
+                    }
+                }, 500);
+            } else {
+                // 文件不存在或不可读，清除记录
+                prefs.edit().remove(LAST_OPENED_FILE).apply();
+                Log.d("PDF_DEBUG", "上次打开的文件不存在或不可读: " + lastOpenedFile);
+            }
+        }
     }
     
     private void requestPermissions() {
@@ -165,16 +198,32 @@ public class MainActivity extends AppCompatActivity {
             .apply();
     }
     
+    private void saveLastOpenedFile(String filePath) {
+        if (filePath != null) {
+            prefs.edit()
+                .putString(LAST_OPENED_FILE, filePath)
+                .apply();
+        }
+    }
+    
     private void saveReadingPosition() {
         if (currentFilePath != null) {
             prefs.edit()
                 .putInt(currentFilePath + "_page", currentPage)
+                .putInt(currentFilePath + "_half_page_left", leftPage ? 1 : 0) // 保存半页状态
                 .apply();
+            
+            // 同时保存为最后打开的文件
+            saveLastOpenedFile(currentFilePath);
         }
     }
     
     private int getReadingPosition(String filePath) {
         return prefs.getInt(filePath + "_page", 0);
+    }
+    
+    private boolean getHalfPageLeftState(String filePath) {
+        return prefs.getInt(filePath + "_half_page_left", 0) == 1;
     }
     
     private void createMainLayout() {
@@ -258,11 +307,46 @@ public class MainActivity extends AppCompatActivity {
         fileListLayout.setPadding(20, 20, 20, 20);
         fileListLayout.setBackgroundColor(getBackgroundColor());
         
+        // 添加"继续阅读"按钮（如果存在上次阅读的文件）
+        addContinueReadingButton();
+        
         // 扫描PDF文件
         scanPdfFiles();
         
         mainLayout.addView(topBar);
         mainLayout.addView(fileListLayout);
+    }
+    
+    private void addContinueReadingButton() {
+        String lastOpenedFile = prefs.getString(LAST_OPENED_FILE, null);
+        if (lastOpenedFile != null && !lastOpenedFile.isEmpty()) {
+            File file = new File(lastOpenedFile);
+            if (file.exists() && file.canRead()) {
+                Button continueBtn = new Button(this);
+                continueBtn.setText("继续阅读: " + getShortFileName(file.getName()));
+                continueBtn.setBackgroundColor(Color.parseColor("#FF5722")); // 橙色
+                continueBtn.setTextColor(Color.WHITE);
+                continueBtn.setPadding(20, 30, 20, 30);
+                continueBtn.setAllCaps(false);
+                
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT);
+                params.bottomMargin = 20;
+                continueBtn.setLayoutParams(params);
+                
+                continueBtn.setOnClickListener(v -> openPdfFile(lastOpenedFile));
+                
+                fileListLayout.addView(continueBtn);
+            }
+        }
+    }
+    
+    private String getShortFileName(String fileName) {
+        if (fileName.length() > 25) {
+            return fileName.substring(0, 22) + "...";
+        }
+        return fileName;
     }
     
     private LinearLayout createTopBar() {
@@ -303,6 +387,9 @@ public class MainActivity extends AppCompatActivity {
     private void scanPdfFiles() {
         fileListLayout.removeAllViews();
         
+        // 添加"继续阅读"按钮
+        addContinueReadingButton();
+        
         // 检查权限
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -341,12 +428,7 @@ public class MainActivity extends AppCompatActivity {
     
     private void addFileButton(File file) {
         Button fileBtn = new Button(this);
-        String fileName = file.getName();
-        
-        // 限制文件名长度
-        if (fileName.length() > 30) {
-            fileName = fileName.substring(0, 27) + "...";
-        }
+        String fileName = getShortFileName(file.getName());
         
         // 显示阅读进度
         int lastPage = getReadingPosition(file.getAbsolutePath());
@@ -492,6 +574,9 @@ public class MainActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 fileListLayout.removeAllViews();
                 
+                // 添加"继续阅读"按钮
+                addContinueReadingButton();
+                
                 if (pdfFiles.isEmpty()) {
                     showNoFilesMessage();
                 } else {
@@ -550,11 +635,20 @@ public class MainActivity extends AppCompatActivity {
             currentFilePath = filePath;
             totalPages = pdfRenderer.getPageCount();
             
-            // 恢复阅读位置
+            // 恢复阅读位置和半页状态
             currentPage = getReadingPosition(filePath);
+            leftPage = getHalfPageLeftState(filePath);
+            
+            // 确保页码在有效范围内
             if (currentPage >= totalPages) {
                 currentPage = totalPages - 1;
             }
+            if (currentPage < 0) {
+                currentPage = 0;
+            }
+            
+            // 保存为最后打开的文件
+            saveLastOpenedFile(filePath);
             
             // 切换到阅读界面
             showReaderView();
@@ -855,10 +949,7 @@ public class MainActivity extends AppCompatActivity {
         titleTextView = new TextView(this);
         if (currentFilePath != null) {
             File file = new File(currentFilePath);
-            String fileName = file.getName();
-            if (fileName.length() > 25) {
-                fileName = fileName.substring(0, 22) + "...";
-            }
+            String fileName = getShortFileName(file.getName());
             titleTextView.setText(fileName);
         }
         titleTextView.setTextColor(nightMode ? Color.WHITE : Color.BLACK); // 根据夜间模式调整文字颜色
