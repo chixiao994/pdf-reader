@@ -9,14 +9,16 @@ import android.content.ContentResolver;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.content.res.Configuration;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
+import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.Build;
@@ -39,9 +41,12 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
     
@@ -50,7 +55,7 @@ public class MainActivity extends AppCompatActivity {
     private FrameLayout readerContainer;
     private ImageView pdfImageView;
     private TextView pageTextView, titleTextView;
-    private Button nightModeBtn, halfPageBtn, prevBtn, nextBtn, openFileBtn, refreshBtn, jumpBtn, pageModeBtn;
+    private Button nightModeBtn, halfPageBtn, prevBtn, nextBtn, openFileBtn, refreshBtn, jumpBtn;
     
     // PDF相关
     private PdfRenderer pdfRenderer;
@@ -64,8 +69,6 @@ public class MainActivity extends AppCompatActivity {
     private boolean halfPageMode = false;
     private boolean leftPage = false;
     private boolean controlsVisible = true; // 控制栏是否可见
-    private boolean landscapeMode = false; // 横屏模式
-    private boolean twoPageMode = false; // 双页模式
     
     // 存储
     private SharedPreferences prefs;
@@ -73,6 +76,7 @@ public class MainActivity extends AppCompatActivity {
     // 权限请求码
     private static final int PERMISSION_REQUEST_CODE = 100;
     private static final int FILE_PICKER_REQUEST_CODE = 101;
+    private static final int DOCUMENT_TREE_REQUEST_CODE = 102; // 新增：访问文件夹权限
     
     // 颜色常量
     private static final int DAY_MODE_BG = Color.WHITE;
@@ -85,10 +89,6 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
-        // 检测当前屏幕方向
-        int orientation = getResources().getConfiguration().orientation;
-        landscapeMode = (orientation == Configuration.ORIENTATION_LANDSCAPE);
         
         // 全屏显示
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
@@ -103,34 +103,6 @@ public class MainActivity extends AppCompatActivity {
         
         // 请求权限
         requestPermissions();
-        
-        // 处理通过Intent打开PDF
-        Intent intent = getIntent();
-        if (intent != null && intent.getAction() != null && 
-            Intent.ACTION_VIEW.equals(intent.getAction())) {
-            Uri uri = intent.getData();
-            if (uri != null) {
-                // 延迟一点打开文件，确保界面已初始化
-                new android.os.Handler().postDelayed(() -> {
-                    openPdfFromUri(uri);
-                }, 500);
-            }
-        }
-    }
-    
-    @Override
-    public void onConfigurationChanged(Configuration newConfig) {
-        super.onConfigurationChanged(newConfig);
-        
-        // 更新横屏模式状态
-        landscapeMode = (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE);
-        
-        Log.d("PDF_DEBUG", "屏幕方向改变: " + (landscapeMode ? "横屏" : "竖屏"));
-        
-        // 如果正在阅读PDF，重新显示当前页面以适应新的屏幕方向
-        if (pdfRenderer != null) {
-            displayCurrentPage();
-        }
     }
     
     private void requestPermissions() {
@@ -363,7 +335,8 @@ public class MainActivity extends AppCompatActivity {
             showNoFilesMessage();
         }
         
-        addFileChooserButton();
+        // 添加更多文件选择选项
+        addFileChooserOptions();
     }
     
     private void addFileButton(File file) {
@@ -405,7 +378,7 @@ public class MainActivity extends AppCompatActivity {
         noFilesText.setText("📂 未找到PDF文件\n\n" +
                            "请将PDF文件放置在：\n" +
                            "手机存储 → Download文件夹\n\n" +
-                           "或者点击下方按钮选择文件");
+                           "或者使用下方选项选择文件");
         noFilesText.setTextSize(16);
         noFilesText.setGravity(android.view.Gravity.CENTER);
         noFilesText.setTextColor(getTextColor());
@@ -413,21 +386,43 @@ public class MainActivity extends AppCompatActivity {
         fileListLayout.addView(noFilesText);
     }
     
-    private void addFileChooserButton() {
-        openFileBtn = new Button(this);
-        openFileBtn.setText("选择其他PDF文件");
-        openFileBtn.setBackgroundColor(Color.parseColor("#4CAF50"));
-        openFileBtn.setTextColor(Color.WHITE);
-        openFileBtn.setPadding(20, 30, 20, 30);
-        openFileBtn.setOnClickListener(v -> choosePdfFile());
+    private void addFileChooserOptions() {
+        LinearLayout optionsLayout = new LinearLayout(this);
+        optionsLayout.setOrientation(LinearLayout.VERTICAL);
+        optionsLayout.setPadding(0, 20, 0, 0);
         
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+        // 选项1：选择单个PDF文件
+        Button singleFileBtn = new Button(this);
+        singleFileBtn.setText("选择单个PDF文件");
+        singleFileBtn.setBackgroundColor(Color.parseColor("#4CAF50"));
+        singleFileBtn.setTextColor(Color.WHITE);
+        singleFileBtn.setPadding(20, 30, 20, 30);
+        singleFileBtn.setOnClickListener(v -> choosePdfFile());
+        
+        LinearLayout.LayoutParams singleParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
-        params.topMargin = 20;
-        openFileBtn.setLayoutParams(params);
+        singleParams.bottomMargin = 10;
+        singleFileBtn.setLayoutParams(singleParams);
         
-        fileListLayout.addView(openFileBtn);
+        // 选项2：扫描全盘PDF文件（Android 11+需要特殊权限）
+        Button scanAllBtn = new Button(this);
+        scanAllBtn.setText("扫描全盘PDF文件");
+        scanAllBtn.setBackgroundColor(Color.parseColor("#2196F3"));
+        scanAllBtn.setTextColor(Color.WHITE);
+        scanAllBtn.setPadding(20, 30, 20, 30);
+        scanAllBtn.setOnClickListener(v -> scanAllPdfFiles());
+        
+        LinearLayout.LayoutParams scanParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        scanParams.bottomMargin = 10;
+        scanAllBtn.setLayoutParams(scanParams);
+        
+        optionsLayout.addView(singleFileBtn);
+        optionsLayout.addView(scanAllBtn);
+        
+        fileListLayout.addView(optionsLayout);
     }
     
     private void choosePdfFile() {
@@ -435,11 +430,103 @@ public class MainActivity extends AppCompatActivity {
         intent.setType("application/pdf");
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         
+        // 对于Android 11+，尝试使用ACTION_OPEN_DOCUMENT以获得更好的文件访问权限
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("application/pdf");
+            
+            // 添加标志以持久化访问权限
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            }
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        }
+        
         try {
             startActivityForResult(Intent.createChooser(intent, "选择PDF文件"), 
                     FILE_PICKER_REQUEST_CODE);
         } catch (android.content.ActivityNotFoundException ex) {
             Toast.makeText(this, "未找到文件管理器", Toast.LENGTH_SHORT).show();
+        }
+    }
+    
+    private void scanAllPdfFiles() {
+        fileListLayout.removeAllViews();
+        
+        TextView scanningText = new TextView(this);
+        scanningText.setText("正在扫描全盘PDF文件，请稍候...");
+        scanningText.setTextSize(16);
+        scanningText.setGravity(android.view.Gravity.CENTER);
+        scanningText.setTextColor(getTextColor());
+        scanningText.setPadding(0, 50, 0, 50);
+        fileListLayout.addView(scanningText);
+        
+        // 在新线程中扫描文件，避免阻塞UI
+        new Thread(() -> {
+            List<File> pdfFiles = new ArrayList<>();
+            
+            try {
+                // 从常见的几个目录开始扫描
+                String[] scanPaths = {
+                    Environment.getExternalStorageDirectory().getAbsolutePath(),
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getAbsolutePath(),
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS).getAbsolutePath(),
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM).getAbsolutePath(),
+                    Environment.getDataDirectory().getAbsolutePath()
+                };
+                
+                for (String path : scanPaths) {
+                    try {
+                        scanDirectoryForPdf(new File(path), pdfFiles);
+                    } catch (SecurityException e) {
+                        Log.e("PDF_DEBUG", "无法访问目录: " + path);
+                    }
+                }
+                
+            } catch (Exception e) {
+                Log.e("PDF_DEBUG", "扫描错误: " + e.getMessage());
+            }
+            
+            // 回到UI线程显示结果
+            runOnUiThread(() -> {
+                fileListLayout.removeAllViews();
+                
+                if (pdfFiles.isEmpty()) {
+                    showNoFilesMessage();
+                } else {
+                    for (File file : pdfFiles) {
+                        addFileButton(file);
+                    }
+                }
+                
+                addFileChooserOptions();
+            });
+            
+        }).start();
+    }
+    
+    private void scanDirectoryForPdf(File directory, List<File> pdfFiles) {
+        if (directory == null || !directory.exists() || !directory.canRead()) {
+            return;
+        }
+        
+        File[] files = directory.listFiles();
+        if (files == null) {
+            return;
+        }
+        
+        for (File file : files) {
+            if (file.isDirectory()) {
+                // 递归扫描子目录，但避免系统目录和隐藏目录
+                if (!file.getName().startsWith(".") && 
+                    !file.getName().equals("Android") &&
+                    !file.getName().equals("lost+found")) {
+                    scanDirectoryForPdf(file, pdfFiles);
+                }
+            } else if (file.isFile() && file.getName().toLowerCase().endsWith(".pdf")) {
+                pdfFiles.add(file);
+            }
         }
     }
     
@@ -491,8 +578,20 @@ public class MainActivity extends AppCompatActivity {
             // 获取ContentResolver
             ContentResolver resolver = getContentResolver();
             
+            // 尝试获取文件信息
+            String displayName = null;
+            try (Cursor cursor = resolver.query(uri, null, null, null, null)) {
+                if (cursor != null && cursor.moveToFirst()) {
+                    int nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
+                    if (nameIndex != -1) {
+                        displayName = cursor.getString(nameIndex);
+                    }
+                }
+            }
+            
             // 创建临时文件名
-            String tempFileName = "temp_pdf_" + System.currentTimeMillis() + ".pdf";
+            String tempFileName = displayName != null ? displayName : 
+                "temp_pdf_" + System.currentTimeMillis() + ".pdf";
             File tempFile = new File(getCacheDir(), tempFileName);
             
             // 复制文件到临时目录
@@ -550,11 +649,18 @@ public class MainActivity extends AppCompatActivity {
                             filePath = Environment.getExternalStorageDirectory() + "/" + id;
                         } else {
                             // 外部存储或SD卡
-                            File externalDir = Environment.getExternalStorageDirectory();
-                            if (externalDir != null && externalDir.getParent() != null) {
-                                filePath = externalDir.getParent() + "/" + type + "/" + id;
+                            try {
+                                File externalDir = Environment.getExternalStorageDirectory();
+                                if (externalDir != null && externalDir.getParent() != null) {
+                                    filePath = externalDir.getParent() + "/" + type + "/" + id;
+                                }
+                            } catch (Exception e) {
+                                Log.e("PDF_DEBUG", "获取外部存储路径失败", e);
                             }
                         }
+                    } else {
+                        // 有些设备返回的ID不带冒号
+                        filePath = Environment.getExternalStorageDirectory() + "/" + wholeID;
                     }
                 }
             } else if ("content".equalsIgnoreCase(uri.getScheme())) {
@@ -582,8 +688,17 @@ public class MainActivity extends AppCompatActivity {
                 filePath = uri.getPath();
             }
             
+            // 验证文件是否存在
+            if (filePath != null) {
+                File file = new File(filePath);
+                if (!file.exists()) {
+                    Log.d("PDF_DEBUG", "文件不存在: " + filePath);
+                    return null;
+                }
+            }
+            
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e("PDF_DEBUG", "获取真实路径失败", e);
         }
         
         return filePath;
@@ -759,43 +874,19 @@ public class MainActivity extends AppCompatActivity {
         nightBtn.setTextColor(Color.WHITE);
         nightBtn.setOnClickListener(v -> toggleNightMode());
         
-        // 半页/整页按钮
+        // 半页模式按钮
         halfPageBtn = new Button(this);
-        updateHalfPageBtnText();
+        halfPageBtn.setText(halfPageMode ? "整页" : "半页");
         halfPageBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         halfPageBtn.setTextColor(Color.WHITE);
         halfPageBtn.setOnClickListener(v -> toggleHalfPageMode());
-        
-        // 单页/双页按钮（仅在横屏时显示）
-        pageModeBtn = new Button(this);
-        updatePageModeBtnText();
-        pageModeBtn.setBackgroundColor(Color.parseColor("#3700B3"));
-        pageModeBtn.setTextColor(Color.WHITE);
-        pageModeBtn.setOnClickListener(v -> togglePageMode());
         
         topBar.addView(backBtn);
         topBar.addView(titleTextView);
         topBar.addView(nightBtn);
         topBar.addView(halfPageBtn);
         
-        // 仅横屏时显示双页模式按钮
-        if (landscapeMode) {
-            topBar.addView(pageModeBtn);
-        }
-        
         return topBar;
-    }
-    
-    private void updateHalfPageBtnText() {
-        if (halfPageBtn != null) {
-            halfPageBtn.setText(halfPageMode ? "整页" : "半页");
-        }
-    }
-    
-    private void updatePageModeBtnText() {
-        if (pageModeBtn != null) {
-            pageModeBtn.setText(twoPageMode ? "单页" : "双页");
-        }
     }
     
     private void toggleControls() {
@@ -828,15 +919,7 @@ public class MainActivity extends AppCompatActivity {
     private void showJumpPageDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("跳转到指定页面");
-        
-        // 如果是双页模式，调整提示信息
-        String message;
-        if (twoPageMode && landscapeMode) {
-            message = "输入起始页面 (1 - " + totalPages + "):\n注意：双页模式会显示连续两页";
-        } else {
-            message = "输入页面 (1 - " + totalPages + "):";
-        }
-        builder.setMessage(message);
+        builder.setMessage("输入页面 (1 - " + totalPages + "):");
         
         final EditText input = new EditText(this);
         input.setInputType(InputType.TYPE_CLASS_NUMBER);
@@ -850,10 +933,6 @@ public class MainActivity extends AppCompatActivity {
                     int pageNum = Integer.parseInt(pageStr);
                     if (pageNum >= 1 && pageNum <= totalPages) {
                         currentPage = pageNum - 1;
-                        // 如果是双页模式且页码是偶数，调整到前一页
-                        if (twoPageMode && landscapeMode && currentPage % 2 == 1) {
-                            currentPage--;
-                        }
                         // 如果是半页模式，从新页面的左半页开始
                         if (halfPageMode) {
                             leftPage = true;
@@ -897,161 +976,60 @@ public class MainActivity extends AppCompatActivity {
         return invertedBitmap;
     }
     
-    // 双页模式：合并两页到一个Bitmap
-    private Bitmap combineTwoPages(int leftPageNum, int rightPageNum) {
-        try {
-            // 打开左页
-            PdfRenderer.Page leftPage = pdfRenderer.openPage(leftPageNum);
-            int leftWidth = leftPage.getWidth();
-            int leftHeight = leftPage.getHeight();
-            
-            // 打开右页（如果存在）
-            PdfRenderer.Page rightPage = null;
-            int rightWidth = 0;
-            int rightHeight = 0;
-            
-            if (rightPageNum < totalPages) {
-                rightPage = pdfRenderer.openPage(rightPageNum);
-                rightWidth = rightPage.getWidth();
-                rightHeight = rightPage.getHeight();
-            }
-            
-            // 计算总宽度和最大高度
-            int totalWidth = leftWidth + (rightPage != null ? rightWidth : 0);
-            int maxHeight = Math.max(leftHeight, rightPage != null ? rightHeight : 0);
-            
-            // 计算缩放比例以适合屏幕
-            int screenWidth = getResources().getDisplayMetrics().widthPixels;
-            int screenHeight = getResources().getDisplayMetrics().heightPixels;
-            
-            float widthScale = (float) screenWidth / totalWidth;
-            float heightScale = (float) screenHeight / maxHeight;
-            float scale = Math.min(widthScale, heightScale);
-            
-            // 计算缩放后的尺寸
-            int scaledLeftWidth = (int) (leftWidth * scale);
-            int scaledLeftHeight = (int) (leftHeight * scale);
-            int scaledRightWidth = rightPage != null ? (int) (rightWidth * scale) : 0;
-            int scaledRightHeight = rightPage != null ? (int) (rightHeight * scale) : 0;
-            
-            // 创建合并的Bitmap
-            Bitmap combinedBitmap = Bitmap.createBitmap(
-                scaledLeftWidth + scaledRightWidth,
-                Math.max(scaledLeftHeight, scaledRightHeight),
-                Bitmap.Config.ARGB_8888
-            );
-            
-            Canvas canvas = new Canvas(combinedBitmap);
-            canvas.drawColor(getBackgroundColor());
-            
-            // 绘制左页
-            Bitmap leftBitmap = Bitmap.createBitmap(scaledLeftWidth, scaledLeftHeight, Bitmap.Config.ARGB_8888);
-            leftPage.render(leftBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-            canvas.drawBitmap(leftBitmap, 0, (combinedBitmap.getHeight() - scaledLeftHeight) / 2, null);
-            leftPage.close();
-            
-            // 绘制右页（如果存在）
-            if (rightPage != null) {
-                Bitmap rightBitmap = Bitmap.createBitmap(scaledRightWidth, scaledRightHeight, Bitmap.Config.ARGB_8888);
-                rightPage.render(rightBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                canvas.drawBitmap(rightBitmap, scaledLeftWidth, (combinedBitmap.getHeight() - scaledRightHeight) / 2, null);
-                rightPage.close();
-            }
-            
-            return combinedBitmap;
-            
-        } catch (Exception e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-    
     private void displayCurrentPage() {
         if (pdfRenderer == null) return;
         
         try {
-            Bitmap bitmap = null;
-            String pageText = "";
+            PdfRenderer.Page page = pdfRenderer.openPage(currentPage);
             
-            if (twoPageMode && landscapeMode) {
-                // 双页模式（仅横屏）
-                int leftPageNum = currentPage;
-                int rightPageNum = currentPage + 1;
-                
-                // 确保右页不超过总页数
-                if (rightPageNum >= totalPages) {
-                    rightPageNum = totalPages - 1;
-                }
-                
-                bitmap = combineTwoPages(leftPageNum, rightPageNum);
-                pageText = (leftPageNum + 1) + "-" + (rightPageNum + 1) + "/" + totalPages + " (双页)";
-                
-            } else if (halfPageMode) {
-                // 半页模式
-                PdfRenderer.Page page = pdfRenderer.openPage(currentPage);
-                
-                int pageWidth = page.getWidth();
-                int pageHeight = page.getHeight();
-                int screenWidth = getResources().getDisplayMetrics().widthPixels;
-                int screenHeight = getResources().getDisplayMetrics().heightPixels;
-                
-                float scale = Math.min(
-                    (float) screenWidth / pageWidth,
-                    (float) screenHeight / pageHeight
-                );
-                
-                int scaledWidth = (int) (pageWidth * scale);
-                int scaledHeight = (int) (pageHeight * scale);
-                
-                bitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888);
+            // 获取页面原始尺寸
+            int pageWidth = page.getWidth();
+            int pageHeight = page.getHeight();
+            
+            // 获取屏幕尺寸
+            int screenWidth = getResources().getDisplayMetrics().widthPixels;
+            int screenHeight = getResources().getDisplayMetrics().heightPixels;
+            
+            // 计算保持长宽比的缩放比例
+            float scale = Math.min(
+                (float) screenWidth / pageWidth,
+                (float) screenHeight / pageHeight
+            );
+            
+            // 计算缩放后的尺寸
+            int scaledWidth = (int) (pageWidth * scale);
+            int scaledHeight = (int) (pageHeight * scale);
+            
+            // 创建与页面比例匹配的Bitmap
+            Bitmap bitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888);
+            
+            if (halfPageMode) {
+                // 半边页模式
                 page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                 
                 // 裁剪半边
                 if (leftPage) {
                     bitmap = Bitmap.createBitmap(bitmap, 0, 0, scaledWidth / 2, scaledHeight);
-                    pageText = (currentPage + 1) + "/" + totalPages + " (左)";
+                    pageTextView.setText((currentPage + 1) + "/" + totalPages + " (左)");
                 } else {
                     bitmap = Bitmap.createBitmap(bitmap, scaledWidth / 2, 0, scaledWidth / 2, scaledHeight);
-                    pageText = (currentPage + 1) + "/" + totalPages + " (右)";
+                    pageTextView.setText((currentPage + 1) + "/" + totalPages + " (右)");
                 }
-                page.close();
-                
             } else {
                 // 整页模式
-                PdfRenderer.Page page = pdfRenderer.openPage(currentPage);
-                
-                int pageWidth = page.getWidth();
-                int pageHeight = page.getHeight();
-                int screenWidth = getResources().getDisplayMetrics().widthPixels;
-                int screenHeight = getResources().getDisplayMetrics().heightPixels;
-                
-                float scale = Math.min(
-                    (float) screenWidth / pageWidth,
-                    (float) screenHeight / pageHeight
-                );
-                
-                int scaledWidth = (int) (pageWidth * scale);
-                int scaledHeight = (int) (pageHeight * scale);
-                
-                bitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888);
                 page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                page.close();
-                
-                pageText = (currentPage + 1) + "/" + totalPages;
+                pageTextView.setText((currentPage + 1) + "/" + totalPages);
             }
             
-            // 设置页码文本
-            pageTextView.setText(pageText);
+            page.close();
             
-            if (bitmap != null) {
-                // 夜间模式下反转图片颜色（黑白反转）
-                if (nightMode) {
-                    bitmap = invertColors(bitmap);
-                }
-                
-                // 设置图片到ImageView
-                pdfImageView.setImageBitmap(bitmap);
+            // 夜间模式下反转图片颜色（黑白反转）
+            if (nightMode) {
+                bitmap = invertColors(bitmap);
             }
+            
+            // 设置图片到ImageView
+            pdfImageView.setImageBitmap(bitmap);
             
             // 保存阅读位置
             saveReadingPosition();
@@ -1063,15 +1041,7 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void goToPrevPage() {
-        if (twoPageMode && landscapeMode) {
-            // 双页模式：每次翻两页
-            if (currentPage >= 2) {
-                currentPage -= 2;
-            } else {
-                currentPage = 0;
-                Toast.makeText(this, "已经是第一页", Toast.LENGTH_SHORT).show();
-            }
-        } else if (halfPageMode) {
+        if (halfPageMode) {
             if (leftPage) {
                 // 当前是左半页（古籍的后半部分），上一页应该是同页的右半部分（古籍的前半部分）
                 leftPage = false;
@@ -1095,20 +1065,7 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void goToNextPage() {
-        if (twoPageMode && landscapeMode) {
-            // 双页模式：每次翻两页
-            if (currentPage + 2 < totalPages) {
-                currentPage += 2;
-            } else {
-                // 调整到最后一对页面
-                if (totalPages % 2 == 0) {
-                    currentPage = totalPages - 2;
-                } else {
-                    currentPage = totalPages - 1;
-                }
-                Toast.makeText(this, "已经是最后一页", Toast.LENGTH_SHORT).show();
-            }
-        } else if (halfPageMode) {
+        if (halfPageMode) {
             if (leftPage) {
                 // 当前是左半页（古籍的后半部分），下一页应该是下一页的右半部分（古籍下一页的前半部分）
                 if (currentPage < totalPages - 1) {
@@ -1175,14 +1132,10 @@ public class MainActivity extends AppCompatActivity {
     
     private void toggleHalfPageMode() {
         halfPageMode = !halfPageMode;
-        updateHalfPageBtnText();
+        if (halfPageBtn != null) {
+            halfPageBtn.setText(halfPageMode ? "整页" : "半页");
+        }
         saveSettings();
-        displayCurrentPage();
-    }
-    
-    private void togglePageMode() {
-        twoPageMode = !twoPageMode;
-        updatePageModeBtnText();
         displayCurrentPage();
     }
     
@@ -1202,22 +1155,37 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == FILE_PICKER_REQUEST_CODE && resultCode == RESULT_OK && data != null) {
+        
+        if (resultCode == RESULT_OK && data != null) {
             Uri uri = data.getData();
             if (uri != null) {
                 // 调试信息
                 Log.d("PDF_DEBUG", "URI Scheme: " + uri.getScheme());
                 Log.d("PDF_DEBUG", "URI Path: " + uri.getPath());
                 
-                // 方法1：尝试获取真实路径
-                String filePath = getRealPathFromUri(uri);
-                Log.d("PDF_DEBUG", "Real Path: " + filePath);
-                
-                if (filePath != null && new File(filePath).exists()) {
-                    openPdfFile(filePath);
-                } else {
-                    // 方法2：使用URI直接打开（复制临时文件）
-                    openPdfFromUri(uri);
+                if (requestCode == FILE_PICKER_REQUEST_CODE) {
+                    // 对于Android 11+，尝试获取持久化访问权限
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                        try {
+                            final int takeFlags = data.getFlags() & 
+                                (Intent.FLAG_GRANT_READ_URI_PERMISSION | 
+                                 Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                            getContentResolver().takePersistableUriPermission(uri, takeFlags);
+                        } catch (SecurityException e) {
+                            Log.e("PDF_DEBUG", "无法获取持久化权限", e);
+                        }
+                    }
+                    
+                    // 方法1：尝试获取真实路径
+                    String filePath = getRealPathFromUri(uri);
+                    Log.d("PDF_DEBUG", "Real Path: " + filePath);
+                    
+                    if (filePath != null && new File(filePath).exists()) {
+                        openPdfFile(filePath);
+                    } else {
+                        // 方法2：使用URI直接打开（复制临时文件）
+                        openPdfFromUri(uri);
+                    }
                 }
             }
         }
