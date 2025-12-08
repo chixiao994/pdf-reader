@@ -29,7 +29,6 @@ import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.io.File;
@@ -751,16 +750,20 @@ public class MainActivity extends AppCompatActivity {
     private void goToPrevPage() {
         if (halfPageMode) {
             if (leftPage) {
-                // 当前是左半页，切换到上一页的右半页
+                // 当前是左半页（古籍的后半部分），上一页应该是同页的右半部分（古籍的前半部分）
+                leftPage = false;
+            } else {
+                // 当前是右半页（古籍的前半部分），上一页应该是上一页的左半部分（古籍的后半部分）
                 if (currentPage > 0) {
                     currentPage--;
-                    leftPage = false;
+                    leftPage = true;
+                } else {
+                    // 已经是第0页的右半页，没有上一页了
+                    Toast.makeText(this, "已经是第一页", Toast.LENGTH_SHORT).show();
                 }
-            } else {
-                // 当前是右半页，切换到左半页
-                leftPage = true;
             }
         } else {
+            // 整页模式
             if (currentPage > 0) {
                 currentPage--;
             }
@@ -771,16 +774,20 @@ public class MainActivity extends AppCompatActivity {
     private void goToNextPage() {
         if (halfPageMode) {
             if (leftPage) {
-                // 当前是左半页，切换到右半页
-                leftPage = false;
-            } else {
-                // 当前是右半页，切换到下一页的左半页
+                // 当前是左半页（古籍的后半部分），下一页应该是下一页的右半部分（古籍下一页的前半部分）
                 if (currentPage < totalPages - 1) {
                     currentPage++;
-                    leftPage = true;
+                    leftPage = false;
+                } else {
+                    // 已经是最后一页的左半页，没有下一页了
+                    Toast.makeText(this, "已经是最后一页", Toast.LENGTH_SHORT).show();
                 }
+            } else {
+                // 当前是右半页（古籍的前半部分），下一页应该是同页的左半部分（古籍同一页的后半部分）
+                leftPage = true;
             }
         } else {
+            // 整页模式
             if (currentPage < totalPages - 1) {
                 currentPage++;
             }
