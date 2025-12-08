@@ -8,7 +8,6 @@ import android.Manifest;
 import android.content.ContentResolver;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.database.Cursor;
@@ -17,7 +16,6 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
-import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
@@ -41,7 +39,6 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -106,6 +103,19 @@ public class MainActivity extends AppCompatActivity {
         
         // 请求权限
         requestPermissions();
+        
+        // 处理通过Intent打开PDF
+        Intent intent = getIntent();
+        if (intent != null && intent.getAction() != null && 
+            Intent.ACTION_VIEW.equals(intent.getAction())) {
+            Uri uri = intent.getData();
+            if (uri != null) {
+                // 延迟一点打开文件，确保界面已初始化
+                new android.os.Handler().postDelayed(() -> {
+                    openPdfFromUri(uri);
+                }, 500);
+            }
+        }
     }
     
     @Override
@@ -114,6 +124,8 @@ public class MainActivity extends AppCompatActivity {
         
         // 更新横屏模式状态
         landscapeMode = (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE);
+        
+        Log.d("PDF_DEBUG", "屏幕方向改变: " + (landscapeMode ? "横屏" : "竖屏"));
         
         // 如果正在阅读PDF，重新显示当前页面以适应新的屏幕方向
         if (pdfRenderer != null) {
@@ -816,7 +828,15 @@ public class MainActivity extends AppCompatActivity {
     private void showJumpPageDialog() {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setTitle("跳转到指定页面");
-        builder.setMessage("输入页面 (1 - " + totalPages + "):");
+        
+        // 如果是双页模式，调整提示信息
+        String message;
+        if (twoPageMode && landscapeMode) {
+            message = "输入起始页面 (1 - " + totalPages + "):\n注意：双页模式会显示连续两页";
+        } else {
+            message = "输入页面 (1 - " + totalPages + "):";
+        }
+        builder.setMessage(message);
         
         final EditText input = new EditText(this);
         input.setInputType(InputType.TYPE_CLASS_NUMBER);
@@ -830,6 +850,10 @@ public class MainActivity extends AppCompatActivity {
                     int pageNum = Integer.parseInt(pageStr);
                     if (pageNum >= 1 && pageNum <= totalPages) {
                         currentPage = pageNum - 1;
+                        // 如果是双页模式且页码是偶数，调整到前一页
+                        if (twoPageMode && landscapeMode && currentPage % 2 == 1) {
+                            currentPage--;
+                        }
                         // 如果是半页模式，从新页面的左半页开始
                         if (halfPageMode) {
                             leftPage = true;
