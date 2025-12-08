@@ -1,18 +1,26 @@
 package com.pdf.reader;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import android.Manifest;
+import android.content.ContentResolver;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.ParcelFileDescriptor;
+import android.provider.DocumentsContract;
+import android.provider.MediaStore;
+import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
@@ -21,7 +29,10 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 
 public class MainActivity extends AppCompatActivity {
     
@@ -29,7 +40,7 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout mainLayout, fileListLayout, readerLayout;
     private ImageView pdfImageView;
     private TextView pageTextView, titleTextView;
-    private Button nightModeBtn, halfPageBtn, prevBtn, nextBtn, openFileBtn;
+    private Button nightModeBtn, halfPageBtn, prevBtn, nextBtn, openFileBtn, refreshBtn;
     
     // PDF相关
     private PdfRenderer pdfRenderer;
@@ -45,6 +56,10 @@ public class MainActivity extends AppCompatActivity {
     
     // 存储
     private SharedPreferences prefs;
+    
+    // 权限请求码
+    private static final int PERMISSION_REQUEST_CODE = 100;
+    private static final int FILE_PICKER_REQUEST_CODE = 101;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,19 +77,55 @@ public class MainActivity extends AppCompatActivity {
         createMainLayout();
         
         // 请求权限
-        if (checkPermission()) {
+        requestPermissions();
+    }
+    
+    private void requestPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) 
+                    != PackageManager.PERMISSION_GRANTED) {
+                
+                // 显示解释对话框
+                if (shouldShowRequestPermissionRationale(
+                        Manifest.permission.READ_EXTERNAL_STORAGE)) {
+                    new AlertDialog.Builder(this)
+                        .setTitle("需要存储权限")
+                        .setMessage("需要存储权限来扫描PDF文件")
+                        .setPositiveButton("确定", (dialog, which) -> {
+                            requestPermissions(new String[]{
+                                Manifest.permission.READ_EXTERNAL_STORAGE
+                            }, PERMISSION_REQUEST_CODE);
+                        })
+                        .setNegativeButton("取消", null)
+                        .show();
+                } else {
+                    requestPermissions(new String[]{
+                        Manifest.permission.READ_EXTERNAL_STORAGE
+                    }, PERMISSION_REQUEST_CODE);
+                }
+            } else {
+                // 已经有权限，显示文件列表
+                showFileList();
+            }
+        } else {
+            // Android 6.0以下直接显示文件列表
             showFileList();
         }
     }
     
-    private boolean checkPermission() {
-        if (ContextCompat.checkSelfPermission(this, 
-                Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, 100);
-            return false;
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Toast.makeText(this, "权限已授予", Toast.LENGTH_SHORT).show();
+                showFileList();
+            } else {
+                Toast.makeText(this, "需要存储权限来扫描PDF文件", Toast.LENGTH_SHORT).show();
+                // 即使没有权限，仍然显示基础界面，用户可以通过文件选择器选择文件
+                showFileListWithoutScan();
+            }
         }
-        return true;
     }
     
     private void loadSettings() {
@@ -110,28 +161,44 @@ public class MainActivity extends AppCompatActivity {
         setContentView(mainLayout);
     }
     
+    private void showFileListWithoutScan() {
+        mainLayout.removeAllViews();
+        
+        // 创建顶部栏
+        LinearLayout topBar = createTopBar();
+        
+        // 创建文件列表区域
+        fileListLayout = new LinearLayout(this);
+        fileListLayout.setOrientation(LinearLayout.VERTICAL);
+        fileListLayout.setPadding(20, 20, 20, 20);
+        
+        TextView noPermissionText = new TextView(this);
+        noPermissionText.setText("📂 存储权限未授予\n\n" +
+                               "无法自动扫描PDF文件\n\n" +
+                               "请点击下方按钮手动选择PDF文件");
+        noPermissionText.setTextSize(16);
+        noPermissionText.setGravity(android.view.Gravity.CENTER);
+        noPermissionText.setTextColor(Color.BLACK);
+        noPermissionText.setPadding(0, 50, 0, 50);
+        fileListLayout.addView(noPermissionText);
+        
+        // 添加选择文件按钮
+        openFileBtn = new Button(this);
+        openFileBtn.setText("选择PDF文件");
+        openFileBtn.setBackgroundColor(Color.parseColor("#4CAF50"));
+        openFileBtn.setTextColor(Color.WHITE);
+        openFileBtn.setOnClickListener(v -> choosePdfFile());
+        fileListLayout.addView(openFileBtn);
+        
+        mainLayout.addView(topBar);
+        mainLayout.addView(fileListLayout);
+    }
+    
     private void showFileList() {
         mainLayout.removeAllViews();
         
         // 创建顶部栏
-        LinearLayout topBar = new LinearLayout(this);
-        topBar.setOrientation(LinearLayout.HORIZONTAL);
-        topBar.setBackgroundColor(Color.parseColor("#6200EE"));
-        
-        TextView title = new TextView(this);
-        title.setText("PDF阅读器");
-        title.setTextColor(Color.WHITE);
-        title.setTextSize(20);
-        title.setPadding(20, 20, 20, 20);
-        
-        nightModeBtn = new Button(this);
-        nightModeBtn.setText(nightMode ? "日间模式" : "夜间模式");
-        nightModeBtn.setBackgroundColor(Color.parseColor("#3700B3"));
-        nightModeBtn.setTextColor(Color.WHITE);
-        nightModeBtn.setOnClickListener(v -> toggleNightMode());
-        
-        topBar.addView(title);
-        topBar.addView(nightModeBtn);
+        LinearLayout topBar = createTopBar();
         
         // 创建文件列表区域
         fileListLayout = new LinearLayout(this);
@@ -145,66 +212,170 @@ public class MainActivity extends AppCompatActivity {
         mainLayout.addView(fileListLayout);
     }
     
+    private LinearLayout createTopBar() {
+        LinearLayout topBar = new LinearLayout(this);
+        topBar.setOrientation(LinearLayout.HORIZONTAL);
+        topBar.setBackgroundColor(Color.parseColor("#6200EE"));
+        topBar.setPadding(20, 20, 20, 20);
+        
+        TextView title = new TextView(this);
+        title.setText("PDF阅读器");
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(20);
+        title.setLayoutParams(new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+        
+        nightModeBtn = new Button(this);
+        nightModeBtn.setText(nightMode ? "日间模式" : "夜间模式");
+        nightModeBtn.setBackgroundColor(Color.parseColor("#3700B3"));
+        nightModeBtn.setTextColor(Color.WHITE);
+        nightModeBtn.setOnClickListener(v -> toggleNightMode());
+        
+        refreshBtn = new Button(this);
+        refreshBtn.setText("刷新");
+        refreshBtn.setBackgroundColor(Color.parseColor("#3700B3"));
+        refreshBtn.setTextColor(Color.WHITE);
+        refreshBtn.setOnClickListener(v -> scanPdfFiles());
+        refreshBtn.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+        
+        topBar.addView(title);
+        topBar.addView(nightModeBtn);
+        topBar.addView(refreshBtn);
+        
+        return topBar;
+    }
+    
     private void scanPdfFiles() {
         fileListLayout.removeAllViews();
         
-        File downloadDir = new File("/storage/emulated/0/Download");
-        if (downloadDir.exists()) {
-            File[] files = downloadDir.listFiles((dir, name) -> 
-                name.toLowerCase().endsWith(".pdf"));
-            
-            if (files != null && files.length > 0) {
-                for (File file : files) {
-                    Button fileBtn = new Button(this);
-                    String fileName = file.getName();
-                    if (fileName.length() > 30) {
-                        fileName = fileName.substring(0, 27) + "...";
-                    }
-                    
-                    // 显示阅读进度
-                    int lastPage = getReadingPosition(file.getAbsolutePath());
-                    if (lastPage > 0) {
-                        fileName += " (读到第" + (lastPage + 1) + "页)";
-                    }
-                    
-                    fileBtn.setText(fileName);
-                    fileBtn.setBackgroundColor(Color.parseColor("#6200EE"));
-                    fileBtn.setTextColor(Color.WHITE);
-                    fileBtn.setPadding(20, 30, 20, 30);
-                    
-                    // 设置点击事件
-                    String filePath = file.getAbsolutePath();
-                    fileBtn.setOnClickListener(v -> openPdfFile(filePath));
-                    
-                    fileListLayout.addView(fileBtn);
-                }
-            } else {
-                TextView noFilesText = new TextView(this);
-                noFilesText.setText("未找到PDF文件\n请将文件放在Download文件夹");
-                noFilesText.setTextSize(16);
-                noFilesText.setGravity(android.view.Gravity.CENTER);
-                fileListLayout.addView(noFilesText);
-            }
+        // 检查权限
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this, "需要存储权限来扫描文件", Toast.LENGTH_SHORT).show();
+            showFileListWithoutScan();
+            return;
         }
         
-        // 添加选择文件按钮
+        try {
+            // 使用标准路径获取Download文件夹
+            File downloadDir = Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DOWNLOADS);
+            
+            if (downloadDir.exists() && downloadDir.isDirectory()) {
+                File[] files = downloadDir.listFiles((dir, name) -> 
+                    name.toLowerCase().endsWith(".pdf"));
+                
+                if (files != null && files.length > 0) {
+                    for (File file : files) {
+                        addFileButton(file);
+                    }
+                } else {
+                    showNoFilesMessage();
+                }
+            } else {
+                showNoFilesMessage();
+            }
+        } catch (SecurityException e) {
+            Toast.makeText(this, "没有访问存储的权限", Toast.LENGTH_SHORT).show();
+            showNoFilesMessage();
+        }
+        
+        addFileChooserButton();
+    }
+    
+    private void addFileButton(File file) {
+        Button fileBtn = new Button(this);
+        String fileName = file.getName();
+        
+        // 限制文件名长度
+        if (fileName.length() > 30) {
+            fileName = fileName.substring(0, 27) + "...";
+        }
+        
+        // 显示阅读进度
+        int lastPage = getReadingPosition(file.getAbsolutePath());
+        if (lastPage > 0) {
+            fileName += " (读到第" + (lastPage + 1) + "页)";
+        }
+        
+        fileBtn.setText(fileName);
+        fileBtn.setBackgroundColor(Color.parseColor("#6200EE"));
+        fileBtn.setTextColor(Color.WHITE);
+        fileBtn.setPadding(20, 30, 20, 30);
+        fileBtn.setAllCaps(false);
+        
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.bottomMargin = 10;
+        fileBtn.setLayoutParams(params);
+        
+        // 设置点击事件
+        String filePath = file.getAbsolutePath();
+        fileBtn.setOnClickListener(v -> openPdfFile(filePath));
+        
+        fileListLayout.addView(fileBtn);
+    }
+    
+    private void showNoFilesMessage() {
+        TextView noFilesText = new TextView(this);
+        noFilesText.setText("📂 未找到PDF文件\n\n" +
+                           "请将PDF文件放置在：\n" +
+                           "手机存储 → Download文件夹\n\n" +
+                           "或者点击下方按钮选择文件");
+        noFilesText.setTextSize(16);
+        noFilesText.setGravity(android.view.Gravity.CENTER);
+        noFilesText.setTextColor(Color.BLACK);
+        noFilesText.setPadding(0, 50, 0, 50);
+        fileListLayout.addView(noFilesText);
+    }
+    
+    private void addFileChooserButton() {
         openFileBtn = new Button(this);
         openFileBtn.setText("选择其他PDF文件");
         openFileBtn.setBackgroundColor(Color.parseColor("#4CAF50"));
         openFileBtn.setTextColor(Color.WHITE);
+        openFileBtn.setPadding(20, 30, 20, 30);
         openFileBtn.setOnClickListener(v -> choosePdfFile());
+        
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.topMargin = 20;
+        openFileBtn.setLayoutParams(params);
+        
         fileListLayout.addView(openFileBtn);
     }
     
     private void choosePdfFile() {
         Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
         intent.setType("application/pdf");
-        startActivityForResult(intent, 101);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        
+        try {
+            startActivityForResult(Intent.createChooser(intent, "选择PDF文件"), 
+                    FILE_PICKER_REQUEST_CODE);
+        } catch (android.content.ActivityNotFoundException ex) {
+            Toast.makeText(this, "未找到文件管理器", Toast.LENGTH_SHORT).show();
+        }
     }
     
     private void openPdfFile(String filePath) {
         try {
             File file = new File(filePath);
+            
+            if (!file.exists()) {
+                Toast.makeText(this, "文件不存在: " + filePath, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            
+            if (!file.canRead()) {
+                Toast.makeText(this, "无法读取文件", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            
             fileDescriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
             pdfRenderer = new PdfRenderer(fileDescriptor);
             
@@ -220,9 +391,121 @@ public class MainActivity extends AppCompatActivity {
             // 切换到阅读界面
             showReaderView();
             
+            Toast.makeText(this, "成功打开PDF: " + file.getName(), Toast.LENGTH_SHORT).show();
+            
+        } catch (SecurityException e) {
+            Toast.makeText(this, "权限不足，无法访问文件", Toast.LENGTH_SHORT).show();
+            e.printStackTrace();
         } catch (IOException e) {
-            Toast.makeText(this, "无法打开PDF文件", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "无法打开PDF文件，可能文件已损坏", Toast.LENGTH_SHORT).show();
+            e.printStackTrace();
+        } catch (Exception e) {
+            Toast.makeText(this, "未知错误: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            e.printStackTrace();
         }
+    }
+    
+    private void openPdfFromUri(Uri uri) {
+        try {
+            // 获取ContentResolver
+            ContentResolver resolver = getContentResolver();
+            
+            // 创建临时文件名
+            String tempFileName = "temp_pdf_" + System.currentTimeMillis() + ".pdf";
+            File tempFile = new File(getCacheDir(), tempFileName);
+            
+            // 复制文件到临时目录
+            try (InputStream in = resolver.openInputStream(uri);
+                 FileOutputStream out = new FileOutputStream(tempFile)) {
+                
+                if (in == null) {
+                    Toast.makeText(this, "无法读取文件内容", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, bytesRead);
+                }
+                
+                // 打开临时文件
+                openPdfFile(tempFile.getAbsolutePath());
+                
+                // 清理旧的临时文件
+                if (currentFilePath != null && currentFilePath.contains("temp_pdf_")) {
+                    new File(currentFilePath).delete();
+                }
+                currentFilePath = tempFile.getAbsolutePath();
+                
+            } catch (IOException e) {
+                Toast.makeText(this, "读取文件失败", Toast.LENGTH_SHORT).show();
+                e.printStackTrace();
+            }
+            
+        } catch (Exception e) {
+            Toast.makeText(this, "无法打开PDF文件", Toast.LENGTH_SHORT).show();
+            e.printStackTrace();
+        }
+    }
+    
+    private String getRealPathFromUri(Uri uri) {
+        String filePath = null;
+        
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && 
+                    DocumentsContract.isDocumentUri(this, uri)) {
+                // DocumentProvider
+                String wholeID = DocumentsContract.getDocumentId(uri);
+                
+                if (wholeID != null) {
+                    String[] split = wholeID.split(":");
+                    if (split.length > 1) {
+                        String type = split[0];
+                        String id = split[1];
+                        
+                        if ("primary".equalsIgnoreCase(type)) {
+                            // 主存储
+                            filePath = Environment.getExternalStorageDirectory() + "/" + id;
+                        } else {
+                            // 外部存储或SD卡
+                            File externalDir = Environment.getExternalStorageDirectory();
+                            if (externalDir != null && externalDir.getParent() != null) {
+                                filePath = externalDir.getParent() + "/" + type + "/" + id;
+                            }
+                        }
+                    }
+                }
+            } else if ("content".equalsIgnoreCase(uri.getScheme())) {
+                // MediaStore (and general content:// URIs)
+                String[] projection = {MediaStore.Files.FileColumns.DATA};
+                Cursor cursor = null;
+                try {
+                    cursor = getContentResolver().query(uri, projection, null, null, null);
+                    if (cursor != null && cursor.moveToFirst()) {
+                        int columnIndex = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA);
+                        filePath = cursor.getString(columnIndex);
+                    }
+                } finally {
+                    if (cursor != null) {
+                        cursor.close();
+                    }
+                }
+            } else if ("file".equalsIgnoreCase(uri.getScheme())) {
+                // 文件URI
+                filePath = uri.getPath();
+            }
+            
+            // 最后尝试直接获取路径
+            if (filePath == null) {
+                filePath = uri.getPath();
+            }
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        
+        return filePath;
     }
     
     private void showReaderView() {
@@ -282,11 +565,17 @@ public class MainActivity extends AppCompatActivity {
         titleTextView = new TextView(this);
         if (currentFilePath != null) {
             File file = new File(currentFilePath);
-            titleTextView.setText(file.getName());
+            String fileName = file.getName();
+            if (fileName.length() > 25) {
+                fileName = fileName.substring(0, 22) + "...";
+            }
+            titleTextView.setText(fileName);
         }
         titleTextView.setTextColor(Color.WHITE);
         titleTextView.setTextSize(16);
         titleTextView.setPadding(10, 0, 10, 0);
+        titleTextView.setLayoutParams(new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
         
         // 半边页按钮
         halfPageBtn = new Button(this);
@@ -320,6 +609,8 @@ public class MainActivity extends AppCompatActivity {
         pageTextView.setTextColor(Color.WHITE);
         pageTextView.setTextSize(18);
         pageTextView.setGravity(android.view.Gravity.CENTER);
+        pageTextView.setLayoutParams(new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
         
         // 下一页按钮
         nextBtn = new Button(this);
@@ -456,10 +747,23 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == 101 && resultCode == RESULT_OK && data != null) {
+        if (requestCode == FILE_PICKER_REQUEST_CODE && resultCode == RESULT_OK && data != null) {
             Uri uri = data.getData();
             if (uri != null) {
-                openPdfFile(uri.getPath());
+                // 调试信息
+                Log.d("PDF_DEBUG", "URI Scheme: " + uri.getScheme());
+                Log.d("PDF_DEBUG", "URI Path: " + uri.getPath());
+                
+                // 方法1：尝试获取真实路径
+                String filePath = getRealPathFromUri(uri);
+                Log.d("PDF_DEBUG", "Real Path: " + filePath);
+                
+                if (filePath != null && new File(filePath).exists()) {
+                    openPdfFile(filePath);
+                } else {
+                    // 方法2：使用URI直接打开（复制临时文件）
+                    openPdfFromUri(uri);
+                }
             }
         }
     }
@@ -468,5 +772,13 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         closePdf();
+        
+        // 清理临时文件
+        if (currentFilePath != null && currentFilePath.contains("temp_pdf_")) {
+            File tempFile = new File(currentFilePath);
+            if (tempFile.exists()) {
+                tempFile.delete();
+            }
+        }
     }
 }
