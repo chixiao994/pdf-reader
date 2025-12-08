@@ -12,6 +12,7 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.Matrix;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.Build;
@@ -65,6 +66,13 @@ public class MainActivity extends AppCompatActivity {
     // 权限请求码
     private static final int PERMISSION_REQUEST_CODE = 100;
     private static final int FILE_PICKER_REQUEST_CODE = 101;
+    
+    // 颜色常量
+    private static final int DAY_MODE_BG = Color.WHITE;
+    private static final int DAY_MODE_TEXT = Color.BLACK;
+    private static final int NIGHT_MODE_BG = Color.BLACK;
+    private static final int NIGHT_MODE_TEXT = Color.WHITE;
+    private static final int STATUS_BAR_COLOR = Color.parseColor("#F0E68C"); // 卡其色
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -163,13 +171,25 @@ public class MainActivity extends AppCompatActivity {
         mainLayout.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.MATCH_PARENT));
+        
+        // 设置主题颜色
+        updateThemeColors();
+        
         setContentView(mainLayout);
+    }
+    
+    private void updateThemeColors() {
+        if (nightMode) {
+            mainLayout.setBackgroundColor(NIGHT_MODE_BG);
+        } else {
+            mainLayout.setBackgroundColor(DAY_MODE_BG);
+        }
     }
     
     private void showFileListWithoutScan() {
         mainLayout.removeAllViews();
         
-        // 创建顶部栏
+        // 创建顶部栏 - 使用卡其色
         LinearLayout topBar = createTopBar();
         
         // 创建文件列表区域
@@ -183,7 +203,7 @@ public class MainActivity extends AppCompatActivity {
                                "请点击下方按钮手动选择PDF文件");
         noPermissionText.setTextSize(16);
         noPermissionText.setGravity(android.view.Gravity.CENTER);
-        noPermissionText.setTextColor(Color.BLACK);
+        noPermissionText.setTextColor(nightMode ? NIGHT_MODE_TEXT : DAY_MODE_TEXT);
         noPermissionText.setPadding(0, 50, 0, 50);
         fileListLayout.addView(noPermissionText);
         
@@ -195,6 +215,9 @@ public class MainActivity extends AppCompatActivity {
         openFileBtn.setOnClickListener(v -> choosePdfFile());
         fileListLayout.addView(openFileBtn);
         
+        // 设置文件列表背景
+        fileListLayout.setBackgroundColor(nightMode ? NIGHT_MODE_BG : DAY_MODE_BG);
+        
         mainLayout.addView(topBar);
         mainLayout.addView(fileListLayout);
     }
@@ -202,13 +225,14 @@ public class MainActivity extends AppCompatActivity {
     private void showFileList() {
         mainLayout.removeAllViews();
         
-        // 创建顶部栏
+        // 创建顶部栏 - 使用卡其色
         LinearLayout topBar = createTopBar();
         
         // 创建文件列表区域
         fileListLayout = new LinearLayout(this);
         fileListLayout.setOrientation(LinearLayout.VERTICAL);
         fileListLayout.setPadding(20, 20, 20, 20);
+        fileListLayout.setBackgroundColor(nightMode ? NIGHT_MODE_BG : DAY_MODE_BG);
         
         // 扫描PDF文件
         scanPdfFiles();
@@ -220,12 +244,12 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout createTopBar() {
         LinearLayout topBar = new LinearLayout(this);
         topBar.setOrientation(LinearLayout.HORIZONTAL);
-        topBar.setBackgroundColor(Color.parseColor("#6200EE"));
+        topBar.setBackgroundColor(STATUS_BAR_COLOR); // 卡其色
         topBar.setPadding(20, 20, 20, 20);
         
         TextView title = new TextView(this);
         title.setText("PDF阅读器");
-        title.setTextColor(Color.WHITE);
+        title.setTextColor(Color.BLACK); // 标题文字保持黑色，在卡其色背景上清晰可见
         title.setTextSize(20);
         title.setLayoutParams(new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
@@ -332,7 +356,7 @@ public class MainActivity extends AppCompatActivity {
                            "或者点击下方按钮选择文件");
         noFilesText.setTextSize(16);
         noFilesText.setGravity(android.view.Gravity.CENTER);
-        noFilesText.setTextColor(Color.BLACK);
+        noFilesText.setTextColor(nightMode ? NIGHT_MODE_TEXT : DAY_MODE_TEXT);
         noFilesText.setPadding(0, 50, 0, 50);
         fileListLayout.addView(noFilesText);
     }
@@ -521,6 +545,7 @@ public class MainActivity extends AppCompatActivity {
         readerContainer.setLayoutParams(new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
+        readerContainer.setBackgroundColor(nightMode ? NIGHT_MODE_BG : DAY_MODE_BG);
         
         // PDF显示区域 - 添加触摸监听用于翻页和隐藏控制栏
         pdfImageView = new ImageView(this);
@@ -529,7 +554,7 @@ public class MainActivity extends AppCompatActivity {
                 FrameLayout.LayoutParams.MATCH_PARENT);
         pdfImageView.setLayoutParams(imageParams);
         pdfImageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        pdfImageView.setBackgroundColor(nightMode ? Color.BLACK : Color.WHITE);
+        pdfImageView.setBackgroundColor(nightMode ? NIGHT_MODE_BG : DAY_MODE_BG);
         
         // 添加触摸监听器
         pdfImageView.setOnTouchListener(new View.OnTouchListener() {
@@ -556,14 +581,14 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         
-        // 创建顶部控制栏
+        // 创建顶部控制栏 - 使用卡其色
         LinearLayout topBar = createReaderTopBar();
         topBar.setId(View.generateViewId());
         
         // 创建底部页码显示
         TextView bottomPageText = new TextView(this);
         bottomPageText.setId(View.generateViewId());
-        bottomPageText.setTextColor(Color.WHITE);
+        bottomPageText.setTextColor(nightMode ? NIGHT_MODE_TEXT : DAY_MODE_TEXT);
         bottomPageText.setTextSize(14);
         bottomPageText.setBackgroundColor(Color.parseColor("#80000000")); // 半透明背景
         bottomPageText.setPadding(10, 5, 10, 5);
@@ -626,7 +651,7 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout createReaderTopBar() {
         LinearLayout topBar = new LinearLayout(this);
         topBar.setOrientation(LinearLayout.HORIZONTAL);
-        topBar.setBackgroundColor(Color.parseColor("#CC6200EE")); // 半透明背景
+        topBar.setBackgroundColor(STATUS_BAR_COLOR); // 卡其色
         topBar.setPadding(10, 10, 10, 10);
         
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
@@ -654,7 +679,7 @@ public class MainActivity extends AppCompatActivity {
             }
             titleTextView.setText(fileName);
         }
-        titleTextView.setTextColor(Color.WHITE);
+        titleTextView.setTextColor(Color.BLACK); // 标题文字保持黑色，在卡其色背景上清晰可见
         titleTextView.setTextSize(16);
         titleTextView.setPadding(10, 0, 10, 0);
         titleTextView.setLayoutParams(new LinearLayout.LayoutParams(
@@ -712,10 +737,26 @@ public class MainActivity extends AppCompatActivity {
         try {
             PdfRenderer.Page page = pdfRenderer.openPage(currentPage);
             
-            int width = getResources().getDisplayMetrics().widthPixels;
-            int height = getResources().getDisplayMetrics().heightPixels;
+            // 获取页面原始尺寸
+            int pageWidth = page.getWidth();
+            int pageHeight = page.getHeight();
             
-            Bitmap bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+            // 获取屏幕尺寸
+            int screenWidth = getResources().getDisplayMetrics().widthPixels;
+            int screenHeight = getResources().getDisplayMetrics().heightPixels;
+            
+            // 计算保持长宽比的缩放比例
+            float scale = Math.min(
+                (float) screenWidth / pageWidth,
+                (float) screenHeight / pageHeight
+            );
+            
+            // 计算缩放后的尺寸
+            int scaledWidth = (int) (pageWidth * scale);
+            int scaledHeight = (int) (pageHeight * scale);
+            
+            // 创建与页面比例匹配的Bitmap
+            Bitmap bitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888);
             
             if (halfPageMode) {
                 // 半边页模式
@@ -723,10 +764,10 @@ public class MainActivity extends AppCompatActivity {
                 
                 // 裁剪半边
                 if (leftPage) {
-                    bitmap = Bitmap.createBitmap(bitmap, 0, 0, width / 2, height);
+                    bitmap = Bitmap.createBitmap(bitmap, 0, 0, scaledWidth / 2, scaledHeight);
                     pageTextView.setText((currentPage + 1) + "/" + totalPages + " (左)");
                 } else {
-                    bitmap = Bitmap.createBitmap(bitmap, width / 2, 0, width / 2, height);
+                    bitmap = Bitmap.createBitmap(bitmap, scaledWidth / 2, 0, scaledWidth / 2, scaledHeight);
                     pageTextView.setText((currentPage + 1) + "/" + totalPages + " (右)");
                 }
             } else {
@@ -735,6 +776,7 @@ public class MainActivity extends AppCompatActivity {
                 pageTextView.setText((currentPage + 1) + "/" + totalPages);
             }
             
+            // 设置图片到ImageView
             pdfImageView.setImageBitmap(bitmap);
             page.close();
             
@@ -797,18 +839,39 @@ public class MainActivity extends AppCompatActivity {
     
     private void toggleNightMode() {
         nightMode = !nightMode;
+        
+        // 更新按钮文本
+        if (nightModeBtn != null) {
+            nightModeBtn.setText(nightMode ? "日间模式" : "夜间模式");
+        }
+        
         saveSettings();
         
-        // 更新背景色
-        if (pdfImageView != null) {
-            pdfImageView.setBackgroundColor(nightMode ? Color.BLACK : Color.WHITE);
+        // 更新主题颜色
+        updateThemeColors();
+        
+        // 如果正在阅读，重新显示当前页面以应用夜间模式
+        if (pdfRenderer != null) {
+            // 更新阅读器背景
+            if (readerContainer != null) {
+                readerContainer.setBackgroundColor(nightMode ? NIGHT_MODE_BG : DAY_MODE_BG);
+            }
+            if (pdfImageView != null) {
+                pdfImageView.setBackgroundColor(nightMode ? NIGHT_MODE_BG : DAY_MODE_BG);
+            }
+            // 更新页码文字颜色
+            if (pageTextView != null) {
+                pageTextView.setTextColor(nightMode ? NIGHT_MODE_TEXT : DAY_MODE_TEXT);
+            }
+            displayCurrentPage();
         }
-        displayCurrentPage();
     }
     
     private void toggleHalfPageMode() {
         halfPageMode = !halfPageMode;
-        halfPageBtn.setText(halfPageMode ? "整页" : "半页");
+        if (halfPageBtn != null) {
+            halfPageBtn.setText(halfPageMode ? "整页" : "半页");
+        }
         saveSettings();
         displayCurrentPage();
     }
