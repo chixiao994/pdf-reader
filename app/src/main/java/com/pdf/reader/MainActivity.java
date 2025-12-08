@@ -21,11 +21,15 @@ import android.os.ParcelFileDescriptor;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.util.Log;
+import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 import java.io.File;
@@ -37,7 +41,8 @@ import java.io.InputStream;
 public class MainActivity extends AppCompatActivity {
     
     // 视图组件
-    private LinearLayout mainLayout, fileListLayout, readerLayout;
+    private LinearLayout mainLayout, fileListLayout;
+    private FrameLayout readerContainer;
     private ImageView pdfImageView;
     private TextView pageTextView, titleTextView;
     private Button nightModeBtn, halfPageBtn, prevBtn, nextBtn, openFileBtn, refreshBtn;
@@ -53,6 +58,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean nightMode = false;
     private boolean halfPageMode = false;
     private boolean leftPage = false;
+    private boolean controlsVisible = true; // 控制栏是否可见
     
     // 存储
     private SharedPreferences prefs;
@@ -511,35 +517,108 @@ public class MainActivity extends AppCompatActivity {
     private void showReaderView() {
         mainLayout.removeAllViews();
         
-        // 创建阅读器布局
-        readerLayout = new LinearLayout(this);
-        readerLayout.setOrientation(LinearLayout.VERTICAL);
-        readerLayout.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.MATCH_PARENT));
+        // 使用FrameLayout作为阅读器容器
+        readerContainer = new FrameLayout(this);
+        readerContainer.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
         
-        // 顶部控制栏
-        LinearLayout topBar = createReaderTopBar();
-        
-        // PDF显示区域
+        // PDF显示区域 - 添加触摸监听用于翻页和隐藏控制栏
         pdfImageView = new ImageView(this);
-        pdfImageView.setLayoutParams(new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                0, 1.0f));
+        FrameLayout.LayoutParams imageParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT);
+        pdfImageView.setLayoutParams(imageParams);
         pdfImageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
         pdfImageView.setBackgroundColor(nightMode ? Color.BLACK : Color.WHITE);
         
-        // 添加触摸监听
-        pdfImageView.setOnClickListener(v -> toggleHalfPage());
+        // 添加触摸监听器
+        pdfImageView.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                    float x = event.getX();
+                    float width = v.getWidth();
+                    
+                    // 点击左侧区域 (宽度1/3)：下一页
+                    if (x < width / 3) {
+                        goToNextPage();
+                    }
+                    // 点击右侧区域 (宽度2/3-3/3)：上一页
+                    else if (x > width * 2 / 3) {
+                        goToPrevPage();
+                    }
+                    // 点击中间区域：切换控制栏显示/隐藏
+                    else {
+                        toggleControls();
+                    }
+                }
+                return true;
+            }
+        });
         
-        // 底部控制栏
-        LinearLayout bottomBar = createReaderBottomBar();
+        // 创建顶部控制栏
+        LinearLayout topBar = createReaderTopBar();
+        topBar.setId(View.generateViewId());
         
-        readerLayout.addView(topBar);
-        readerLayout.addView(pdfImageView);
-        readerLayout.addView(bottomBar);
+        // 创建底部页码显示
+        TextView bottomPageText = new TextView(this);
+        bottomPageText.setId(View.generateViewId());
+        bottomPageText.setTextColor(Color.WHITE);
+        bottomPageText.setTextSize(14);
+        bottomPageText.setBackgroundColor(Color.parseColor("#80000000")); // 半透明背景
+        bottomPageText.setPadding(10, 5, 10, 5);
+        bottomPageText.setGravity(Gravity.CENTER);
         
-        mainLayout.addView(readerLayout);
+        // 上一页按钮 (右下角)
+        prevBtn = new Button(this);
+        prevBtn.setText("上一页");
+        prevBtn.setBackgroundColor(Color.parseColor("#6200EE"));
+        prevBtn.setTextColor(Color.WHITE);
+        prevBtn.setOnClickListener(v -> goToPrevPage());
+        
+        FrameLayout.LayoutParams prevParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        prevParams.gravity = Gravity.BOTTOM | Gravity.RIGHT;
+        prevParams.rightMargin = 20;
+        prevParams.bottomMargin = 80;
+        prevBtn.setLayoutParams(prevParams);
+        
+        // 下一页按钮 (左下角)
+        nextBtn = new Button(this);
+        nextBtn.setText("下一页");
+        nextBtn.setBackgroundColor(Color.parseColor("#6200EE"));
+        nextBtn.setTextColor(Color.WHITE);
+        nextBtn.setOnClickListener(v -> goToNextPage());
+        
+        FrameLayout.LayoutParams nextParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        nextParams.gravity = Gravity.BOTTOM | Gravity.LEFT;
+        nextParams.leftMargin = 20;
+        nextParams.bottomMargin = 80;
+        nextBtn.setLayoutParams(nextParams);
+        
+        // 底部页码显示布局参数
+        FrameLayout.LayoutParams pageParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        pageParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        pageParams.bottomMargin = 20;
+        bottomPageText.setLayoutParams(pageParams);
+        
+        // 添加所有视图到容器
+        readerContainer.addView(pdfImageView);
+        readerContainer.addView(topBar);
+        readerContainer.addView(prevBtn);
+        readerContainer.addView(nextBtn);
+        readerContainer.addView(bottomPageText);
+        
+        // 设置页面显示
+        pageTextView = bottomPageText;
+        
+        mainLayout.addView(readerContainer);
         
         // 显示当前页面
         displayCurrentPage();
@@ -548,8 +627,13 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout createReaderTopBar() {
         LinearLayout topBar = new LinearLayout(this);
         topBar.setOrientation(LinearLayout.HORIZONTAL);
-        topBar.setBackgroundColor(Color.parseColor("#6200EE"));
+        topBar.setBackgroundColor(Color.parseColor("#CC6200EE")); // 半透明背景
         topBar.setPadding(10, 10, 10, 10);
+        
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        topBar.setLayoutParams(params);
         
         // 返回按钮
         Button backBtn = new Button(this);
@@ -577,7 +661,14 @@ public class MainActivity extends AppCompatActivity {
         titleTextView.setLayoutParams(new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
         
-        // 半边页按钮
+        // 夜间模式按钮
+        Button nightBtn = new Button(this);
+        nightBtn.setText(nightMode ? "日间" : "夜间");
+        nightBtn.setBackgroundColor(Color.parseColor("#3700B3"));
+        nightBtn.setTextColor(Color.WHITE);
+        nightBtn.setOnClickListener(v -> toggleNightMode());
+        
+        // 半页模式按钮
         halfPageBtn = new Button(this);
         halfPageBtn.setText(halfPageMode ? "整页" : "半页");
         halfPageBtn.setBackgroundColor(Color.parseColor("#3700B3"));
@@ -586,44 +677,34 @@ public class MainActivity extends AppCompatActivity {
         
         topBar.addView(backBtn);
         topBar.addView(titleTextView);
+        topBar.addView(nightBtn);
         topBar.addView(halfPageBtn);
         
         return topBar;
     }
     
-    private LinearLayout createReaderBottomBar() {
-        LinearLayout bottomBar = new LinearLayout(this);
-        bottomBar.setOrientation(LinearLayout.HORIZONTAL);
-        bottomBar.setBackgroundColor(Color.parseColor("#6200EE"));
-        bottomBar.setPadding(10, 10, 10, 10);
+    private void toggleControls() {
+        controlsVisible = !controlsVisible;
         
-        // 上一页按钮
-        prevBtn = new Button(this);
-        prevBtn.setText("上一页");
-        prevBtn.setBackgroundColor(Color.parseColor("#3700B3"));
-        prevBtn.setTextColor(Color.WHITE);
-        prevBtn.setOnClickListener(v -> goToPrevPage());
+        // 获取所有控制元素
+        View topBar = readerContainer.findViewById(readerContainer.getChildAt(1).getId());
+        View prevBtn = readerContainer.getChildAt(2);
+        View nextBtn = readerContainer.getChildAt(3);
+        View pageText = readerContainer.getChildAt(4);
         
-        // 页码显示
-        pageTextView = new TextView(this);
-        pageTextView.setTextColor(Color.WHITE);
-        pageTextView.setTextSize(18);
-        pageTextView.setGravity(android.view.Gravity.CENTER);
-        pageTextView.setLayoutParams(new LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
-        
-        // 下一页按钮
-        nextBtn = new Button(this);
-        nextBtn.setText("下一页");
-        nextBtn.setBackgroundColor(Color.parseColor("#3700B3"));
-        nextBtn.setTextColor(Color.WHITE);
-        nextBtn.setOnClickListener(v -> goToNextPage());
-        
-        bottomBar.addView(prevBtn);
-        bottomBar.addView(pageTextView);
-        bottomBar.addView(nextBtn);
-        
-        return bottomBar;
+        if (controlsVisible) {
+            // 显示控制元素
+            topBar.setVisibility(View.VISIBLE);
+            prevBtn.setVisibility(View.VISIBLE);
+            nextBtn.setVisibility(View.VISIBLE);
+            pageText.setVisibility(View.VISIBLE);
+        } else {
+            // 隐藏控制元素
+            topBar.setVisibility(View.GONE);
+            prevBtn.setVisibility(View.GONE);
+            nextBtn.setVisibility(View.GONE);
+            pageText.setVisibility(View.GONE);
+        }
     }
     
     private void displayCurrentPage() {
@@ -663,6 +744,7 @@ public class MainActivity extends AppCompatActivity {
             
         } catch (Exception e) {
             Toast.makeText(this, "显示页面失败", Toast.LENGTH_SHORT).show();
+            e.printStackTrace();
         }
     }
     
@@ -708,13 +790,13 @@ public class MainActivity extends AppCompatActivity {
     
     private void toggleNightMode() {
         nightMode = !nightMode;
-        nightModeBtn.setText(nightMode ? "日间模式" : "夜间模式");
         saveSettings();
         
         // 更新背景色
         if (pdfImageView != null) {
             pdfImageView.setBackgroundColor(nightMode ? Color.BLACK : Color.WHITE);
         }
+        displayCurrentPage();
     }
     
     private void toggleHalfPageMode() {
@@ -722,13 +804,6 @@ public class MainActivity extends AppCompatActivity {
         halfPageBtn.setText(halfPageMode ? "整页" : "半页");
         saveSettings();
         displayCurrentPage();
-    }
-    
-    private void toggleHalfPage() {
-        if (halfPageMode) {
-            leftPage = !leftPage;
-            displayCurrentPage();
-        }
     }
     
     private void closePdf() {
