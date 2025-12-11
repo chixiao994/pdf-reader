@@ -55,7 +55,7 @@ public class MainActivity extends AppCompatActivity {
     private FrameLayout readerContainer;
     private ImageView pdfImageView;
     private TextView pageTextView, titleTextView;
-    private Button nightModeBtn, halfPageBtn, prevBtn, nextBtn, openFileBtn, refreshBtn, jumpBtn;
+    private Button nightModeBtn, halfPageBtn, prevBtn, nextBtn, openFileBtn, refreshBtn, jumpBtn, rotateBtn;
     
     // PDF相关
     private PdfRenderer pdfRenderer;
@@ -69,6 +69,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean halfPageMode = false;
     private boolean leftPage = false;
     private boolean controlsVisible = true; // 控制栏是否可见
+    private int rotationAngle = 0; // 旋转角度：0, 90, 180, 270
     
     // 存储
     private SharedPreferences prefs;
@@ -189,12 +190,14 @@ public class MainActivity extends AppCompatActivity {
     private void loadSettings() {
         nightMode = prefs.getBoolean("night_mode", false);
         halfPageMode = prefs.getBoolean("half_page", false);
+        rotationAngle = prefs.getInt("rotation_angle", 0); // 加载旋转角度
     }
     
     private void saveSettings() {
         prefs.edit()
             .putBoolean("night_mode", nightMode)
             .putBoolean("half_page", halfPageMode)
+            .putInt("rotation_angle", rotationAngle) // 保存旋转角度
             .apply();
     }
     
@@ -211,6 +214,7 @@ public class MainActivity extends AppCompatActivity {
             prefs.edit()
                 .putInt(currentFilePath + "_page", currentPage)
                 .putInt(currentFilePath + "_half_page_left", leftPage ? 1 : 0) // 保存半页状态
+                .putInt(currentFilePath + "_rotation", rotationAngle) // 保存旋转角度
                 .apply();
             
             // 同时保存为最后打开的文件
@@ -224,6 +228,10 @@ public class MainActivity extends AppCompatActivity {
     
     private boolean getHalfPageLeftState(String filePath) {
         return prefs.getInt(filePath + "_half_page_left", 0) == 1;
+    }
+    
+    private int getSavedRotation(String filePath) {
+        return prefs.getInt(filePath + "_rotation", 0);
     }
     
     private void createMainLayout() {
@@ -635,9 +643,10 @@ public class MainActivity extends AppCompatActivity {
             currentFilePath = filePath;
             totalPages = pdfRenderer.getPageCount();
             
-            // 恢复阅读位置和半页状态
+            // 恢复阅读位置、半页状态和旋转角度
             currentPage = getReadingPosition(filePath);
             leftPage = getHalfPageLeftState(filePath);
+            rotationAngle = getSavedRotation(filePath);
             
             // 确保页码在有效范围内
             if (currentPage >= totalPages) {
@@ -645,6 +654,12 @@ public class MainActivity extends AppCompatActivity {
             }
             if (currentPage < 0) {
                 currentPage = 0;
+            }
+            
+            // 确保旋转角度在有效范围内 (0, 90, 180, 270)
+            rotationAngle = rotationAngle % 360;
+            if (rotationAngle % 90 != 0) {
+                rotationAngle = 0; // 如果不是90的倍数，重置为0
             }
             
             // 保存为最后打开的文件
@@ -972,10 +987,18 @@ public class MainActivity extends AppCompatActivity {
         halfPageBtn.setTextColor(Color.WHITE);
         halfPageBtn.setOnClickListener(v -> toggleHalfPageMode());
         
+        // 旋转按钮
+        rotateBtn = new Button(this);
+        rotateBtn.setText("旋转 " + rotationAngle + "°");
+        rotateBtn.setBackgroundColor(Color.parseColor("#3700B3"));
+        rotateBtn.setTextColor(Color.WHITE);
+        rotateBtn.setOnClickListener(v -> rotatePage());
+        
         topBar.addView(backBtn);
         topBar.addView(titleTextView);
         topBar.addView(nightBtn);
         topBar.addView(halfPageBtn);
+        topBar.addView(rotateBtn);
         
         return topBar;
     }
@@ -1005,6 +1028,23 @@ public class MainActivity extends AppCompatActivity {
             jumpBtn.setVisibility(View.GONE);
             pageText.setVisibility(View.GONE);
         }
+    }
+    
+    private void rotatePage() {
+        // 每次旋转90度
+        rotationAngle = (rotationAngle + 90) % 360;
+        
+        // 更新旋转按钮文本
+        if (rotateBtn != null) {
+            rotateBtn.setText("旋转 " + rotationAngle + "°");
+        }
+        
+        // 保存设置
+        saveSettings();
+        saveReadingPosition();
+        
+        // 重新显示当前页面以应用旋转
+        displayCurrentPage();
     }
     
     private void showJumpPageDialog() {
@@ -1067,6 +1107,28 @@ public class MainActivity extends AppCompatActivity {
         return invertedBitmap;
     }
     
+    // 旋转图片的方法
+    private Bitmap rotateBitmap(Bitmap bitmap, int degrees) {
+        if (degrees == 0) {
+            return bitmap;
+        }
+        
+        Matrix matrix = new Matrix();
+        matrix.postRotate(degrees);
+        
+        // 创建旋转后的Bitmap
+        Bitmap rotatedBitmap = Bitmap.createBitmap(
+            bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true
+        );
+        
+        // 回收原始Bitmap（如果是新创建的）
+        if (rotatedBitmap != bitmap) {
+            bitmap.recycle();
+        }
+        
+        return rotatedBitmap;
+    }
+    
     private void displayCurrentPage() {
         if (pdfRenderer == null) return;
         
@@ -1080,6 +1142,14 @@ public class MainActivity extends AppCompatActivity {
             // 获取屏幕尺寸
             int screenWidth = getResources().getDisplayMetrics().widthPixels;
             int screenHeight = getResources().getDisplayMetrics().heightPixels;
+            
+            // 根据旋转角度调整尺寸计算
+            if (rotationAngle == 90 || rotationAngle == 270) {
+                // 交换宽高，因为旋转后宽高会互换
+                int temp = pageWidth;
+                pageWidth = pageHeight;
+                pageHeight = temp;
+            }
             
             // 计算保持长宽比的缩放比例
             float scale = Math.min(
@@ -1113,6 +1183,11 @@ public class MainActivity extends AppCompatActivity {
             }
             
             page.close();
+            
+            // 应用旋转
+            if (rotationAngle != 0) {
+                bitmap = rotateBitmap(bitmap, rotationAngle);
+            }
             
             // 夜间模式下反转图片颜色（黑白反转）
             if (nightMode) {
