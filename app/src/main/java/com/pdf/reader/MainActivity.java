@@ -832,20 +832,29 @@ public class MainActivity extends AppCompatActivity {
         pdfImageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
         pdfImageView.setBackgroundColor(getBackgroundColor());
         
-        // 添加触摸监听器
+        // 添加触摸监听器 - 根据旋转角度调整触摸区域
         pdfImageView.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
                 if (event.getAction() == MotionEvent.ACTION_DOWN) {
                     float x = event.getX();
+                    float y = event.getY();
                     float width = v.getWidth();
+                    float height = v.getHeight();
+                    
+                    // 根据旋转角度调整坐标
+                    float[] adjustedCoords = adjustTouchCoordinates(x, y, width, height);
+                    float adjustedX = adjustedCoords[0];
+                    float adjustedY = adjustedCoords[1];
+                    float adjustedWidth = adjustedCoords[2];
+                    float adjustedHeight = adjustedCoords[3];
                     
                     // 点击左侧区域 (宽度1/3)：下一页
-                    if (x < width / 3) {
+                    if (adjustedX < adjustedWidth / 3) {
                         goToNextPage();
                     }
                     // 点击右侧区域 (宽度2/3-3/3)：上一页
-                    else if (x > width * 2 / 3) {
+                    else if (adjustedX > adjustedWidth * 2 / 3) {
                         goToPrevPage();
                     }
                     // 点击中间区域：切换控制栏显示/隐藏
@@ -870,56 +879,15 @@ public class MainActivity extends AppCompatActivity {
         bottomPageText.setPadding(10, 5, 10, 5);
         bottomPageText.setGravity(Gravity.CENTER);
         
-        // 上一页按钮 (右下角)
-        prevBtn = new Button(this);
-        prevBtn.setText("上一页");
-        prevBtn.setBackgroundColor(Color.parseColor("#6200EE"));
-        prevBtn.setTextColor(Color.WHITE);
-        prevBtn.setOnClickListener(v -> goToPrevPage());
-        
-        FrameLayout.LayoutParams prevParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT);
-        prevParams.gravity = Gravity.BOTTOM | Gravity.RIGHT;
-        prevParams.rightMargin = 20;
-        prevParams.bottomMargin = 80;
-        prevBtn.setLayoutParams(prevParams);
-        
-        // 下一页按钮 (左下角)
-        nextBtn = new Button(this);
-        nextBtn.setText("下一页");
-        nextBtn.setBackgroundColor(Color.parseColor("#6200EE"));
-        nextBtn.setTextColor(Color.WHITE);
-        nextBtn.setOnClickListener(v -> goToNextPage());
-        
-        FrameLayout.LayoutParams nextParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT);
-        nextParams.gravity = Gravity.BOTTOM | Gravity.LEFT;
-        nextParams.leftMargin = 20;
-        nextParams.bottomMargin = 80;
-        nextBtn.setLayoutParams(nextParams);
-        
-        // 跳转按钮 (中间)
-        jumpBtn = new Button(this);
-        jumpBtn.setText("跳转");
-        jumpBtn.setBackgroundColor(Color.parseColor("#4CAF50"));
-        jumpBtn.setTextColor(Color.WHITE);
-        jumpBtn.setOnClickListener(v -> showJumpPageDialog());
-        
-        FrameLayout.LayoutParams jumpParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT);
-        jumpParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        jumpParams.bottomMargin = 80;
-        jumpBtn.setLayoutParams(jumpParams);
+        // 根据旋转角度设置按钮位置
+        setupControlButtons();
         
         // 底部页码显示布局参数
         FrameLayout.LayoutParams pageParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT);
-        pageParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        pageParams.bottomMargin = 20;
+        // 根据旋转角度调整页码显示位置
+        setPageTextPosition(pageParams);
         bottomPageText.setLayoutParams(pageParams);
         
         // 添加所有视图到容器
@@ -939,6 +907,155 @@ public class MainActivity extends AppCompatActivity {
         displayCurrentPage();
     }
     
+    // 根据旋转角度调整触摸坐标
+    private float[] adjustTouchCoordinates(float x, float y, float width, float height) {
+        float adjustedX = x;
+        float adjustedY = y;
+        float adjustedWidth = width;
+        float adjustedHeight = height;
+        
+        switch (rotationAngle) {
+            case 90:
+                // 顺时针旋转90度，需要调整坐标
+                adjustedX = y;
+                adjustedY = width - x;
+                adjustedWidth = height;
+                adjustedHeight = width;
+                break;
+            case 180:
+                // 旋转180度
+                adjustedX = width - x;
+                adjustedY = height - y;
+                break;
+            case 270:
+                // 顺时针旋转270度（或逆时针90度）
+                adjustedX = height - y;
+                adjustedY = x;
+                adjustedWidth = height;
+                adjustedHeight = width;
+                break;
+            // 0度不需要调整
+        }
+        
+        return new float[]{adjustedX, adjustedY, adjustedWidth, adjustedHeight};
+    }
+    
+    private void setupControlButtons() {
+        // 根据旋转角度设置按钮位置
+        FrameLayout.LayoutParams prevParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        FrameLayout.LayoutParams nextParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        FrameLayout.LayoutParams jumpParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        
+        switch (rotationAngle) {
+            case 0:
+                // 正常方向
+                prevParams.gravity = Gravity.BOTTOM | Gravity.RIGHT;
+                prevParams.rightMargin = 20;
+                prevParams.bottomMargin = 80;
+                
+                nextParams.gravity = Gravity.BOTTOM | Gravity.LEFT;
+                nextParams.leftMargin = 20;
+                nextParams.bottomMargin = 80;
+                
+                jumpParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+                jumpParams.bottomMargin = 80;
+                break;
+                
+            case 90:
+                // 顺时针旋转90度
+                prevParams.gravity = Gravity.TOP | Gravity.LEFT;
+                prevParams.leftMargin = 80;
+                prevParams.topMargin = 20;
+                
+                nextParams.gravity = Gravity.BOTTOM | Gravity.LEFT;
+                nextParams.leftMargin = 80;
+                nextParams.bottomMargin = 20;
+                
+                jumpParams.gravity = Gravity.LEFT | Gravity.CENTER_VERTICAL;
+                jumpParams.leftMargin = 80;
+                break;
+                
+            case 180:
+                // 旋转180度
+                prevParams.gravity = Gravity.TOP | Gravity.LEFT;
+                prevParams.leftMargin = 20;
+                prevParams.topMargin = 80;
+                
+                nextParams.gravity = Gravity.TOP | Gravity.RIGHT;
+                nextParams.rightMargin = 20;
+                nextParams.topMargin = 80;
+                
+                jumpParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+                jumpParams.topMargin = 80;
+                break;
+                
+            case 270:
+                // 顺时针旋转270度
+                prevParams.gravity = Gravity.BOTTOM | Gravity.RIGHT;
+                prevParams.rightMargin = 80;
+                prevParams.bottomMargin = 20;
+                
+                nextParams.gravity = Gravity.TOP | Gravity.RIGHT;
+                nextParams.rightMargin = 80;
+                nextParams.topMargin = 20;
+                
+                jumpParams.gravity = Gravity.RIGHT | Gravity.CENTER_VERTICAL;
+                jumpParams.rightMargin = 80;
+                break;
+        }
+        
+        // 上一页按钮
+        prevBtn = new Button(this);
+        prevBtn.setText("上一页");
+        prevBtn.setBackgroundColor(Color.parseColor("#6200EE"));
+        prevBtn.setTextColor(Color.WHITE);
+        prevBtn.setOnClickListener(v -> goToPrevPage());
+        prevBtn.setLayoutParams(prevParams);
+        
+        // 下一页按钮
+        nextBtn = new Button(this);
+        nextBtn.setText("下一页");
+        nextBtn.setBackgroundColor(Color.parseColor("#6200EE"));
+        nextBtn.setTextColor(Color.WHITE);
+        nextBtn.setOnClickListener(v -> goToNextPage());
+        nextBtn.setLayoutParams(nextParams);
+        
+        // 跳转按钮
+        jumpBtn = new Button(this);
+        jumpBtn.setText("跳转");
+        jumpBtn.setBackgroundColor(Color.parseColor("#4CAF50"));
+        jumpBtn.setTextColor(Color.WHITE);
+        jumpBtn.setOnClickListener(v -> showJumpPageDialog());
+        jumpBtn.setLayoutParams(jumpParams);
+    }
+    
+    private void setPageTextPosition(FrameLayout.LayoutParams params) {
+        switch (rotationAngle) {
+            case 0:
+                params.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+                params.bottomMargin = 20;
+                break;
+            case 90:
+                params.gravity = Gravity.LEFT | Gravity.CENTER_VERTICAL;
+                params.leftMargin = 20;
+                break;
+            case 180:
+                params.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+                params.topMargin = 20;
+                break;
+            case 270:
+                params.gravity = Gravity.RIGHT | Gravity.CENTER_VERTICAL;
+                params.rightMargin = 20;
+                break;
+        }
+    }
+    
     private LinearLayout createReaderTopBar() {
         LinearLayout topBar = new LinearLayout(this);
         topBar.setOrientation(LinearLayout.HORIZONTAL);
@@ -948,6 +1065,27 @@ public class MainActivity extends AppCompatActivity {
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT);
+        
+        // 根据旋转角度调整顶部栏位置
+        switch (rotationAngle) {
+            case 0:
+                params.gravity = Gravity.TOP;
+                break;
+            case 90:
+                params.gravity = Gravity.RIGHT;
+                // 调整方向为垂直
+                topBar.setOrientation(LinearLayout.VERTICAL);
+                break;
+            case 180:
+                params.gravity = Gravity.BOTTOM;
+                break;
+            case 270:
+                params.gravity = Gravity.LEFT;
+                // 调整方向为垂直
+                topBar.setOrientation(LinearLayout.VERTICAL);
+                break;
+        }
+        
         topBar.setLayoutParams(params);
         
         // 返回按钮
@@ -1043,8 +1181,8 @@ public class MainActivity extends AppCompatActivity {
         saveSettings();
         saveReadingPosition();
         
-        // 重新显示当前页面以应用旋转
-        displayCurrentPage();
+        // 重新创建阅读界面以应用旋转
+        showReaderView();
     }
     
     private void showJumpPageDialog() {
@@ -1107,7 +1245,7 @@ public class MainActivity extends AppCompatActivity {
         return invertedBitmap;
     }
     
-    // 旋转图片的方法
+    // 旋转图片的方法 - 修复长宽比问题
     private Bitmap rotateBitmap(Bitmap bitmap, int degrees) {
         if (degrees == 0) {
             return bitmap;
@@ -1120,11 +1258,6 @@ public class MainActivity extends AppCompatActivity {
         Bitmap rotatedBitmap = Bitmap.createBitmap(
             bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true
         );
-        
-        // 回收原始Bitmap（如果是新创建的）
-        if (rotatedBitmap != bitmap) {
-            bitmap.recycle();
-        }
         
         return rotatedBitmap;
     }
@@ -1144,18 +1277,28 @@ public class MainActivity extends AppCompatActivity {
             int screenHeight = getResources().getDisplayMetrics().heightPixels;
             
             // 根据旋转角度调整尺寸计算
+            float scale;
             if (rotationAngle == 90 || rotationAngle == 270) {
-                // 交换宽高，因为旋转后宽高会互换
-                int temp = pageWidth;
-                pageWidth = pageHeight;
-                pageHeight = temp;
+                // 旋转90度或270度时，需要以旋转后的宽高计算缩放比例
+                // 首先计算如果不旋转的缩放比例
+                float scaleWidth = (float) screenWidth / pageWidth;
+                float scaleHeight = (float) screenHeight / pageHeight;
+                float originalScale = Math.min(scaleWidth, scaleHeight);
+                
+                // 然后计算旋转后的缩放比例（交换宽高）
+                float rotatedScaleWidth = (float) screenWidth / pageHeight;
+                float rotatedScaleHeight = (float) screenHeight / pageWidth;
+                float rotatedScale = Math.min(rotatedScaleWidth, rotatedScaleHeight);
+                
+                // 使用保持长宽比的最小缩放比例
+                scale = Math.min(originalScale, rotatedScale);
+            } else {
+                // 0度或180度，正常计算
+                scale = Math.min(
+                    (float) screenWidth / pageWidth,
+                    (float) screenHeight / pageHeight
+                );
             }
-            
-            // 计算保持长宽比的缩放比例
-            float scale = Math.min(
-                (float) screenWidth / pageWidth,
-                (float) screenHeight / pageHeight
-            );
             
             // 计算缩放后的尺寸
             int scaledWidth = (int) (pageWidth * scale);
