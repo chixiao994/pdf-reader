@@ -32,7 +32,6 @@ import android.util.Log;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.EditText;
@@ -54,9 +53,9 @@ public class MainActivity extends AppCompatActivity {
     // 视图组件
     private LinearLayout mainLayout, fileListLayout;
     private FrameLayout readerContainer;
-    private ImageView pdfImageView, leftPageImageView, rightPageImageView;
-    private TextView pageTextView;
-    private Button nightModeBtn, halfPageBtn, doublePageBtn, prevBtn, nextBtn, openFileBtn, refreshBtn, jumpBtn, rotateBtn;
+    private ImageView pdfImageView;
+    private TextView pageTextView, titleTextView;
+    private Button nightModeBtn, halfPageBtn, prevBtn, nextBtn, openFileBtn, refreshBtn, jumpBtn;
     
     // PDF相关
     private PdfRenderer pdfRenderer;
@@ -68,15 +67,11 @@ public class MainActivity extends AppCompatActivity {
     // 设置
     private boolean nightMode = false;
     private boolean halfPageMode = false;
-    private boolean doublePageMode = false; // 新增：双页模式
     private boolean leftPage = false;
     private boolean controlsVisible = true; // 控制栏是否可见
-    private int rotationAngle = 0; // 旋转角度：0, 90, 180, 270
     
     // 存储
     private SharedPreferences prefs;
-    private static final String LAST_OPENED_FILE = "last_opened_file"; // 存储最后打开的文件路径
-    private static final String AUTO_OPEN_LAST_FILE = "auto_open_last_file"; // 是否自动打开最后文件
     
     // 权限请求码
     private static final int PERMISSION_REQUEST_CODE = 100;
@@ -108,37 +103,6 @@ public class MainActivity extends AppCompatActivity {
         
         // 请求权限
         requestPermissions();
-    }
-    
-    @Override
-    protected void onResume() {
-        super.onResume();
-        // 检查是否应该自动打开上次阅读的文件
-        checkAutoOpenLastFile();
-    }
-    
-    private void checkAutoOpenLastFile() {
-        // 获取上次打开的文件路径
-        String lastOpenedFile = prefs.getString(LAST_OPENED_FILE, null);
-        boolean autoOpenLastFile = prefs.getBoolean(AUTO_OPEN_LAST_FILE, true); // 默认开启自动打开
-        
-        if (autoOpenLastFile && lastOpenedFile != null && !lastOpenedFile.isEmpty()) {
-            File file = new File(lastOpenedFile);
-            if (file.exists() && file.canRead()) {
-                // 延迟一小段时间打开，确保UI已经加载完成
-                new android.os.Handler().postDelayed(() -> {
-                    // 检查当前是否已经在阅读界面
-                    if (pdfRenderer == null) {
-                        Toast.makeText(this, "正在打开上次阅读的文档...", Toast.LENGTH_SHORT).show();
-                        openPdfFile(lastOpenedFile);
-                    }
-                }, 500);
-            } else {
-                // 文件不存在或不可读，清除记录
-                prefs.edit().remove(LAST_OPENED_FILE).apply();
-                Log.d("PDF_DEBUG", "上次打开的文件不存在或不可读: " + lastOpenedFile);
-            }
-        }
     }
     
     private void requestPermissions() {
@@ -192,50 +156,25 @@ public class MainActivity extends AppCompatActivity {
     private void loadSettings() {
         nightMode = prefs.getBoolean("night_mode", false);
         halfPageMode = prefs.getBoolean("half_page", false);
-        doublePageMode = prefs.getBoolean("double_page", false); // 加载双页模式设置
-        rotationAngle = prefs.getInt("rotation_angle", 0); // 加载旋转角度
     }
     
     private void saveSettings() {
         prefs.edit()
             .putBoolean("night_mode", nightMode)
             .putBoolean("half_page", halfPageMode)
-            .putBoolean("double_page", doublePageMode) // 保存双页模式设置
-            .putInt("rotation_angle", rotationAngle) // 保存旋转角度
             .apply();
-    }
-    
-    private void saveLastOpenedFile(String filePath) {
-        if (filePath != null) {
-            prefs.edit()
-                .putString(LAST_OPENED_FILE, filePath)
-                .apply();
-        }
     }
     
     private void saveReadingPosition() {
         if (currentFilePath != null) {
             prefs.edit()
                 .putInt(currentFilePath + "_page", currentPage)
-                .putInt(currentFilePath + "_half_page_left", leftPage ? 1 : 0) // 保存半页状态
-                .putInt(currentFilePath + "_rotation", rotationAngle) // 保存旋转角度
                 .apply();
-            
-            // 同时保存为最后打开的文件
-            saveLastOpenedFile(currentFilePath);
         }
     }
     
     private int getReadingPosition(String filePath) {
         return prefs.getInt(filePath + "_page", 0);
-    }
-    
-    private boolean getHalfPageLeftState(String filePath) {
-        return prefs.getInt(filePath + "_half_page_left", 0) == 1;
-    }
-    
-    private int getSavedRotation(String filePath) {
-        return prefs.getInt(filePath + "_rotation", 0);
     }
     
     private void createMainLayout() {
@@ -319,46 +258,11 @@ public class MainActivity extends AppCompatActivity {
         fileListLayout.setPadding(20, 20, 20, 20);
         fileListLayout.setBackgroundColor(getBackgroundColor());
         
-        // 添加"继续阅读"按钮（如果存在上次阅读的文件）
-        addContinueReadingButton();
-        
         // 扫描PDF文件
         scanPdfFiles();
         
         mainLayout.addView(topBar);
         mainLayout.addView(fileListLayout);
-    }
-    
-    private void addContinueReadingButton() {
-        String lastOpenedFile = prefs.getString(LAST_OPENED_FILE, null);
-        if (lastOpenedFile != null && !lastOpenedFile.isEmpty()) {
-            File file = new File(lastOpenedFile);
-            if (file.exists() && file.canRead()) {
-                Button continueBtn = new Button(this);
-                continueBtn.setText("继续阅读: " + getShortFileName(file.getName()));
-                continueBtn.setBackgroundColor(Color.parseColor("#FF5722")); // 橙色
-                continueBtn.setTextColor(Color.WHITE);
-                continueBtn.setPadding(20, 30, 20, 30);
-                continueBtn.setAllCaps(false);
-                
-                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT);
-                params.bottomMargin = 20;
-                continueBtn.setLayoutParams(params);
-                
-                continueBtn.setOnClickListener(v -> openPdfFile(lastOpenedFile));
-                
-                fileListLayout.addView(continueBtn);
-            }
-        }
-    }
-    
-    private String getShortFileName(String fileName) {
-        if (fileName.length() > 25) {
-            return fileName.substring(0, 22) + "...";
-        }
-        return fileName;
     }
     
     private LinearLayout createTopBar() {
@@ -399,9 +303,6 @@ public class MainActivity extends AppCompatActivity {
     private void scanPdfFiles() {
         fileListLayout.removeAllViews();
         
-        // 添加"继续阅读"按钮
-        addContinueReadingButton();
-        
         // 检查权限
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
@@ -440,7 +341,12 @@ public class MainActivity extends AppCompatActivity {
     
     private void addFileButton(File file) {
         Button fileBtn = new Button(this);
-        String fileName = getShortFileName(file.getName());
+        String fileName = file.getName();
+        
+        // 限制文件名长度
+        if (fileName.length() > 30) {
+            fileName = fileName.substring(0, 27) + "...";
+        }
         
         // 显示阅读进度
         int lastPage = getReadingPosition(file.getAbsolutePath());
@@ -586,9 +492,6 @@ public class MainActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 fileListLayout.removeAllViews();
                 
-                // 添加"继续阅读"按钮
-                addContinueReadingButton();
-                
                 if (pdfFiles.isEmpty()) {
                     showNoFilesMessage();
                 } else {
@@ -647,27 +550,11 @@ public class MainActivity extends AppCompatActivity {
             currentFilePath = filePath;
             totalPages = pdfRenderer.getPageCount();
             
-            // 恢复阅读位置、半页状态和旋转角度
+            // 恢复阅读位置
             currentPage = getReadingPosition(filePath);
-            leftPage = getHalfPageLeftState(filePath);
-            rotationAngle = getSavedRotation(filePath);
-            
-            // 确保页码在有效范围内
             if (currentPage >= totalPages) {
                 currentPage = totalPages - 1;
             }
-            if (currentPage < 0) {
-                currentPage = 0;
-            }
-            
-            // 确保旋转角度在有效范围内 (0, 90, 180, 270)
-            rotationAngle = rotationAngle % 360;
-            if (rotationAngle % 90 != 0) {
-                rotationAngle = 0; // 如果不是90的倍数，重置为0
-            }
-            
-            // 保存为最后打开的文件
-            saveLastOpenedFile(filePath);
             
             // 切换到阅读界面
             showReaderView();
@@ -827,123 +714,39 @@ public class MainActivity extends AppCompatActivity {
                 FrameLayout.LayoutParams.MATCH_PARENT));
         readerContainer.setBackgroundColor(getBackgroundColor());
         
-        // 创建一个容器来包含所有元素，这个容器会整体旋转
-        FrameLayout rotatingContainer = new FrameLayout(this);
-        FrameLayout.LayoutParams rotatingParams = new FrameLayout.LayoutParams(
+        // PDF显示区域 - 添加触摸监听用于翻页和隐藏控制栏
+        pdfImageView = new ImageView(this);
+        FrameLayout.LayoutParams imageParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT);
-        rotatingContainer.setLayoutParams(rotatingParams);
-        rotatingContainer.setRotation(rotationAngle); // 整个容器旋转
-        rotatingContainer.setPivotX(0.5f); // 设置旋转中心为宽度的一半
-        rotatingContainer.setPivotY(0.5f); // 设置旋转中心为高度的一半
+        pdfImageView.setLayoutParams(imageParams);
+        pdfImageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        pdfImageView.setBackgroundColor(getBackgroundColor());
         
-        // 调整旋转容器的大小以适应旋转
-        adjustContainerSizeForRotation(rotatingContainer);
-        
-        if (doublePageMode) {
-            // 双页模式：创建水平布局显示两页
-            LinearLayout doublePageLayout = new LinearLayout(this);
-            doublePageLayout.setOrientation(LinearLayout.HORIZONTAL);
-            doublePageLayout.setLayoutParams(new FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT));
-            doublePageLayout.setBackgroundColor(getBackgroundColor());
-            
-            // 右侧页面（奇数页）
-            rightPageImageView = new ImageView(this);
-            LinearLayout.LayoutParams rightParams = new LinearLayout.LayoutParams(
-                    0, LinearLayout.LayoutParams.MATCH_PARENT, 1.0f);
-            rightPageImageView.setLayoutParams(rightParams);
-            rightPageImageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            rightPageImageView.setBackgroundColor(getBackgroundColor());
-            
-            // 左侧页面（偶数页）
-            leftPageImageView = new ImageView(this);
-            LinearLayout.LayoutParams leftParams = new LinearLayout.LayoutParams(
-                    0, LinearLayout.LayoutParams.MATCH_PARENT, 1.0f);
-            leftPageImageView.setLayoutParams(leftParams);
-            leftPageImageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            leftPageImageView.setBackgroundColor(getBackgroundColor());
-            
-            // 添加触摸监听器（使用已旋转的坐标）
-            View.OnTouchListener doublePageTouchListener = new View.OnTouchListener() {
-                @Override
-                public boolean onTouch(View v, MotionEvent event) {
-                    if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                        float x = event.getX();
-                        float width = v.getWidth();
-                        
-                        // 调整触摸坐标以适应旋转
-                        float[] adjustedCoords = adjustTouchCoordinates(x, event.getY(), width, v.getHeight());
-                        float adjustedX = adjustedCoords[0];
-                        float adjustedWidth = adjustedCoords[2];
-                        
-                        // 点击左侧区域 (宽度1/3)：下一页
-                        if (adjustedX < adjustedWidth / 3) {
-                            goToNextPage();
-                        }
-                        // 点击右侧区域 (宽度2/3-3/3)：上一页
-                        else if (adjustedX > adjustedWidth * 2 / 3) {
-                            goToPrevPage();
-                        }
-                        // 点击中间区域：切换控制栏显示/隐藏
-                        else {
-                            toggleControls();
-                        }
+        // 添加触摸监听器
+        pdfImageView.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                    float x = event.getX();
+                    float width = v.getWidth();
+                    
+                    // 点击左侧区域 (宽度1/3)：下一页
+                    if (x < width / 3) {
+                        goToNextPage();
                     }
-                    return true;
-                }
-            };
-            
-            rightPageImageView.setOnTouchListener(doublePageTouchListener);
-            leftPageImageView.setOnTouchListener(doublePageTouchListener);
-            
-            doublePageLayout.addView(rightPageImageView);
-            doublePageLayout.addView(leftPageImageView);
-            rotatingContainer.addView(doublePageLayout);
-            
-        } else {
-            // 单页模式
-            pdfImageView = new ImageView(this);
-            FrameLayout.LayoutParams imageParams = new FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT);
-            pdfImageView.setLayoutParams(imageParams);
-            pdfImageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            pdfImageView.setBackgroundColor(getBackgroundColor());
-            
-            // 添加触摸监听器（使用已旋转的坐标）
-            pdfImageView.setOnTouchListener(new View.OnTouchListener() {
-                @Override
-                public boolean onTouch(View v, MotionEvent event) {
-                    if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                        float x = event.getX();
-                        float width = v.getWidth();
-                        
-                        // 调整触摸坐标以适应旋转
-                        float[] adjustedCoords = adjustTouchCoordinates(x, event.getY(), width, v.getHeight());
-                        float adjustedX = adjustedCoords[0];
-                        float adjustedWidth = adjustedCoords[2];
-                        
-                        // 点击左侧区域 (宽度1/3)：下一页
-                        if (adjustedX < adjustedWidth / 3) {
-                            goToNextPage();
-                        }
-                        // 点击右侧区域 (宽度2/3-3/3)：上一页
-                        else if (adjustedX > adjustedWidth * 2 / 3) {
-                            goToPrevPage();
-                        }
-                        // 点击中间区域：切换控制栏显示/隐藏
-                        else {
-                            toggleControls();
-                        }
+                    // 点击右侧区域 (宽度2/3-3/3)：上一页
+                    else if (x > width * 2 / 3) {
+                        goToPrevPage();
                     }
-                    return true;
+                    // 点击中间区域：切换控制栏显示/隐藏
+                    else {
+                        toggleControls();
+                    }
                 }
-            });
-            
-            rotatingContainer.addView(pdfImageView);
-        }
+                return true;
+            }
+        });
         
         // 创建顶部控制栏
         LinearLayout topBar = createReaderTopBar();
@@ -954,314 +757,138 @@ public class MainActivity extends AppCompatActivity {
         bottomPageText.setId(View.generateViewId());
         bottomPageText.setTextColor(getTextColor());
         bottomPageText.setTextSize(14);
-        bottomPageText.setBackgroundColor(Color.parseColor("#80000000"));
+        bottomPageText.setBackgroundColor(Color.parseColor("#80000000")); // 半透明背景
         bottomPageText.setPadding(10, 5, 10, 5);
         bottomPageText.setGravity(Gravity.CENTER);
         
-        // 根据旋转角度设置按钮位置
-        setupControlButtons();
-        
-        // 底部页码显示布局参数
-        FrameLayout.LayoutParams pageParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT);
-        // 根据旋转角度调整页码显示位置
-        setPageTextPosition(pageParams);
-        bottomPageText.setLayoutParams(pageParams);
-        
-        // 将控制元素添加到旋转容器
-        rotatingContainer.addView(topBar);
-        rotatingContainer.addView(prevBtn);
-        rotatingContainer.addView(nextBtn);
-        rotatingContainer.addView(jumpBtn);
-        rotatingContainer.addView(bottomPageText);
-        
-        // 设置页面显示
-        pageTextView = bottomPageText;
-        
-        // 将旋转容器添加到主容器
-        readerContainer.addView(rotatingContainer);
-        
-        mainLayout.addView(readerContainer);
-        
-        // 显示当前页面
-        displayCurrentPage();
-    }    
-    // 调整容器大小以适应旋转
-    private void adjustContainerSizeForRotation(View container) {
-        ViewGroup.LayoutParams params = container.getLayoutParams();
-        if (params == null) {
-            return;
-        }
-        
-        // 获取屏幕尺寸
-        int screenWidth = getResources().getDisplayMetrics().widthPixels;
-        int screenHeight = getResources().getDisplayMetrics().heightPixels;
-        
-        // 当旋转90度或270度时，宽高交换
-        if (rotationAngle == 90 || rotationAngle == 270) {
-            // 创建新的参数，宽高交换
-            FrameLayout.LayoutParams newParams = new FrameLayout.LayoutParams(
-                screenHeight, screenWidth);
-            newParams.gravity = Gravity.CENTER;
-            container.setLayoutParams(newParams);
-        } else {
-            // 正常方向
-            FrameLayout.LayoutParams newParams = new FrameLayout.LayoutParams(
-                screenWidth, screenHeight);
-            container.setLayoutParams(newParams);
-        }
-    }
-    
-    // 根据旋转角度调整触摸坐标
-    private float[] adjustTouchCoordinates(float x, float y, float width, float height) {
-        float adjustedX = x;
-        float adjustedY = y;
-        float adjustedWidth = width;
-        float adjustedHeight = height;
-        
-        switch (rotationAngle) {
-            case 90:
-                // 顺时针旋转90度，需要调整坐标
-                adjustedX = y;
-                adjustedY = width - x;
-                adjustedWidth = height;
-                adjustedHeight = width;
-                break;
-            case 180:
-                // 旋转180度
-                adjustedX = width - x;
-                adjustedY = height - y;
-                break;
-            case 270:
-                // 顺时针旋转270度（或逆时针90度）
-                adjustedX = height - y;
-                adjustedY = x;
-                adjustedWidth = height;
-                adjustedHeight = width;
-                break;
-            // 0度不需要调整
-        }
-        
-        return new float[]{adjustedX, adjustedY, adjustedWidth, adjustedHeight};
-    }
-    
-    private void setupControlButtons() {
-        // 根据旋转角度设置按钮位置
-        FrameLayout.LayoutParams prevParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT);
-        FrameLayout.LayoutParams nextParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT);
-        FrameLayout.LayoutParams jumpParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT);
-        
-        switch (rotationAngle) {
-            case 0:
-                // 正常方向
-                prevParams.gravity = Gravity.BOTTOM | Gravity.RIGHT;
-                prevParams.rightMargin = 20;
-                prevParams.bottomMargin = 80;
-                
-                nextParams.gravity = Gravity.BOTTOM | Gravity.LEFT;
-                nextParams.leftMargin = 20;
-                nextParams.bottomMargin = 80;
-                
-                jumpParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-                jumpParams.bottomMargin = 80;
-                break;
-                
-            case 90:
-                // 顺时针旋转90度
-                prevParams.gravity = Gravity.TOP | Gravity.LEFT;
-                prevParams.leftMargin = 80;
-                prevParams.topMargin = 20;
-                
-                nextParams.gravity = Gravity.BOTTOM | Gravity.LEFT;
-                nextParams.leftMargin = 80;
-                nextParams.bottomMargin = 20;
-                
-                jumpParams.gravity = Gravity.LEFT | Gravity.CENTER_VERTICAL;
-                jumpParams.leftMargin = 80;
-                break;
-                
-            case 180:
-                // 旋转180度
-                prevParams.gravity = Gravity.TOP | Gravity.LEFT;
-                prevParams.leftMargin = 20;
-                prevParams.topMargin = 80;
-                
-                nextParams.gravity = Gravity.TOP | Gravity.RIGHT;
-                nextParams.rightMargin = 20;
-                nextParams.topMargin = 80;
-                
-                jumpParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-                jumpParams.topMargin = 80;
-                break;
-                
-            case 270:
-                // 顺时针旋转270度
-                prevParams.gravity = Gravity.BOTTOM | Gravity.RIGHT;
-                prevParams.rightMargin = 80;
-                prevParams.bottomMargin = 20;
-                
-                nextParams.gravity = Gravity.TOP | Gravity.RIGHT;
-                nextParams.rightMargin = 80;
-                nextParams.topMargin = 20;
-                
-                jumpParams.gravity = Gravity.RIGHT | Gravity.CENTER_VERTICAL;
-                jumpParams.rightMargin = 80;
-                break;
-        }
-        
-        // 上一页按钮 - 不单独旋转
+        // 上一页按钮 (右下角)
         prevBtn = new Button(this);
         prevBtn.setText("上一页");
         prevBtn.setBackgroundColor(Color.parseColor("#6200EE"));
         prevBtn.setTextColor(Color.WHITE);
         prevBtn.setOnClickListener(v -> goToPrevPage());
+        
+        FrameLayout.LayoutParams prevParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        prevParams.gravity = Gravity.BOTTOM | Gravity.RIGHT;
+        prevParams.rightMargin = 20;
+        prevParams.bottomMargin = 80;
         prevBtn.setLayoutParams(prevParams);
         
-        // 下一页按钮 - 不单独旋转
+        // 下一页按钮 (左下角)
         nextBtn = new Button(this);
         nextBtn.setText("下一页");
         nextBtn.setBackgroundColor(Color.parseColor("#6200EE"));
         nextBtn.setTextColor(Color.WHITE);
         nextBtn.setOnClickListener(v -> goToNextPage());
+        
+        FrameLayout.LayoutParams nextParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        nextParams.gravity = Gravity.BOTTOM | Gravity.LEFT;
+        nextParams.leftMargin = 20;
+        nextParams.bottomMargin = 80;
         nextBtn.setLayoutParams(nextParams);
         
-        // 跳转按钮 - 不单独旋转
+        // 跳转按钮 (中间)
         jumpBtn = new Button(this);
         jumpBtn.setText("跳转");
         jumpBtn.setBackgroundColor(Color.parseColor("#4CAF50"));
         jumpBtn.setTextColor(Color.WHITE);
         jumpBtn.setOnClickListener(v -> showJumpPageDialog());
-        jumpBtn.setLayoutParams(jumpParams);
-    }
         
-        // 调整按钮大小以适应旋转
-        adjustButtonSizeForRotation(jumpBtn);
+        FrameLayout.LayoutParams jumpParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        jumpParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        jumpParams.bottomMargin = 80;
         jumpBtn.setLayoutParams(jumpParams);
-    }
-    
-    // 调整按钮大小以适应旋转
-    private void adjustButtonSizeForRotation(Button button) {
-        // 当旋转90度或270度时，增加按钮宽度以适应垂直文字
-        if (rotationAngle == 90 || rotationAngle == 270) {
-            button.setMinimumWidth(150); // 增加最小宽度
-        }
-    }
-    
-    private void setPageTextPosition(FrameLayout.LayoutParams params) {
-        switch (rotationAngle) {
-            case 0:
-                params.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-                params.bottomMargin = 20;
-                break;
-            case 90:
-                params.gravity = Gravity.LEFT | Gravity.CENTER_VERTICAL;
-                params.leftMargin = 20;
-                break;
-            case 180:
-                params.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-                params.topMargin = 20;
-                break;
-            case 270:
-                params.gravity = Gravity.RIGHT | Gravity.CENTER_VERTICAL;
-                params.rightMargin = 20;
-                break;
-        }
+        
+        // 底部页码显示布局参数
+        FrameLayout.LayoutParams pageParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        pageParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        pageParams.bottomMargin = 20;
+        bottomPageText.setLayoutParams(pageParams);
+        
+        // 添加所有视图到容器
+        readerContainer.addView(pdfImageView);
+        readerContainer.addView(topBar);
+        readerContainer.addView(prevBtn);
+        readerContainer.addView(nextBtn);
+        readerContainer.addView(jumpBtn);
+        readerContainer.addView(bottomPageText);
+        
+        // 设置页面显示
+        pageTextView = bottomPageText;
+        
+        mainLayout.addView(readerContainer);
+        
+        // 显示当前页面
+        displayCurrentPage();
     }
     
     private LinearLayout createReaderTopBar() {
         LinearLayout topBar = new LinearLayout(this);
-        
-        // 根据旋转角度设置布局方向
-        if (rotationAngle == 0 || rotationAngle == 180) {
-            topBar.setOrientation(LinearLayout.HORIZONTAL);
-        } else {
-            topBar.setOrientation(LinearLayout.VERTICAL);
-        }
-        
-        topBar.setBackgroundColor(getStatusBarColor());
+        topBar.setOrientation(LinearLayout.HORIZONTAL);
+        topBar.setBackgroundColor(getStatusBarColor()); // 日间卡其色，夜间黑色
         topBar.setPadding(10, 10, 10, 10);
         
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT);
-        
-        // 根据旋转角度调整顶部栏位置
-        switch (rotationAngle) {
-            case 0:
-                params.gravity = Gravity.TOP;
-                params.width = FrameLayout.LayoutParams.MATCH_PARENT;
-                break;
-            case 90:
-                params.gravity = Gravity.RIGHT;
-                params.height = FrameLayout.LayoutParams.MATCH_PARENT;
-                break;
-            case 180:
-                params.gravity = Gravity.BOTTOM;
-                params.width = FrameLayout.LayoutParams.MATCH_PARENT;
-                break;
-            case 270:
-                params.gravity = Gravity.LEFT;
-                params.height = FrameLayout.LayoutParams.MATCH_PARENT;
-                break;
-        }
-        
         topBar.setLayoutParams(params);
         
-        // 创建按钮，但不要单独旋转
-        Button createButton(String text, View.OnClickListener listener) {
-            Button button = new Button(this);
-            button.setText(text);
-            button.setBackgroundColor(Color.parseColor("#3700B3"));
-            button.setTextColor(Color.WHITE);
-            
-            LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-            
-            if (rotationAngle == 0 || rotationAngle == 180) {
-                btnParams.rightMargin = 10;
-            } else {
-                btnParams.bottomMargin = 10;
-            }
-            
-            button.setLayoutParams(btnParams);
-            button.setOnClickListener(listener);
-            return button;
-        }
-        
         // 返回按钮
-        Button backBtn = createButton("返回", v -> {
+        Button backBtn = new Button(this);
+        backBtn.setText("返回");
+        backBtn.setBackgroundColor(Color.parseColor("#3700B3"));
+        backBtn.setTextColor(Color.WHITE);
+        backBtn.setOnClickListener(v -> {
             closePdf();
             showFileList();
         });
         
+        // 标题
+        titleTextView = new TextView(this);
+        if (currentFilePath != null) {
+            File file = new File(currentFilePath);
+            String fileName = file.getName();
+            if (fileName.length() > 25) {
+                fileName = fileName.substring(0, 22) + "...";
+            }
+            titleTextView.setText(fileName);
+        }
+        titleTextView.setTextColor(nightMode ? Color.WHITE : Color.BLACK); // 根据夜间模式调整文字颜色
+        titleTextView.setTextSize(16);
+        titleTextView.setPadding(10, 0, 10, 0);
+        titleTextView.setLayoutParams(new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+        
         // 夜间模式按钮
-        Button nightBtn = createButton(nightMode ? "日间" : "夜间", v -> toggleNightMode());
+        Button nightBtn = new Button(this);
+        nightBtn.setText(nightMode ? "日间" : "夜间");
+        nightBtn.setBackgroundColor(Color.parseColor("#3700B3"));
+        nightBtn.setTextColor(Color.WHITE);
+        nightBtn.setOnClickListener(v -> toggleNightMode());
         
         // 半页模式按钮
-        halfPageBtn = createButton(halfPageMode ? "整页" : "半页", v -> toggleHalfPageMode());
-        
-        // 双页模式按钮
-        doublePageBtn = createButton(doublePageMode ? "单页" : "双页", v -> toggleDoublePageMode());
-        
-        // 旋转按钮
-        rotateBtn = createButton("旋转 " + rotationAngle + "°", v -> rotatePage());
+        halfPageBtn = new Button(this);
+        halfPageBtn.setText(halfPageMode ? "整页" : "半页");
+        halfPageBtn.setBackgroundColor(Color.parseColor("#3700B3"));
+        halfPageBtn.setTextColor(Color.WHITE);
+        halfPageBtn.setOnClickListener(v -> toggleHalfPageMode());
         
         topBar.addView(backBtn);
+        topBar.addView(titleTextView);
         topBar.addView(nightBtn);
         topBar.addView(halfPageBtn);
-        topBar.addView(doublePageBtn);
-        topBar.addView(rotateBtn);
         
         return topBar;
     }
+    
     private void toggleControls() {
         controlsVisible = !controlsVisible;
         
@@ -1287,38 +914,6 @@ public class MainActivity extends AppCompatActivity {
             jumpBtn.setVisibility(View.GONE);
             pageText.setVisibility(View.GONE);
         }
-    }
-    
-    private void toggleDoublePageMode() {
-        doublePageMode = !doublePageMode;
-        
-        // 更新按钮文本
-        if (doublePageBtn != null) {
-            doublePageBtn.setText(doublePageMode ? "单页" : "双页");
-        }
-        
-        // 保存设置
-        saveSettings();
-        
-        // 重新创建阅读界面以应用双页模式
-        showReaderView();
-    }
-    
-    private void rotatePage() {
-        // 每次旋转90度
-        rotationAngle = (rotationAngle + 90) % 360;
-        
-        // 更新旋转按钮文本
-        if (rotateBtn != null) {
-            rotateBtn.setText("旋转 " + rotationAngle + "°");
-        }
-        
-        // 保存设置
-        saveSettings();
-        saveReadingPosition();
-        
-        // 重新创建阅读界面以应用旋转
-        showReaderView();
     }
     
     private void showJumpPageDialog() {
@@ -1381,221 +976,60 @@ public class MainActivity extends AppCompatActivity {
         return invertedBitmap;
     }
     
-    // 旋转图片的方法
-    private Bitmap rotateBitmap(Bitmap bitmap, int degrees) {
-        if (degrees == 0) {
-            return bitmap;
-        }
-        
-        Matrix matrix = new Matrix();
-        matrix.postRotate(degrees);
-        
-        // 创建旋转后的Bitmap
-        Bitmap rotatedBitmap = Bitmap.createBitmap(
-            bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true
-        );
-        
-        return rotatedBitmap;
-    }
-    
-    // 获取当前显示的两页页码（用于双页模式）
-    private int[] getDoublePageNumbers() {
-        int[] pages = new int[2];
-        
-        // 古籍从右向左阅读：右页为奇数页，左页为偶数页
-        // 显示顺序：右1左2，右3左4，右5左6...
-        
-        if (currentPage % 2 == 0) {
-            // 当前是偶数页（左页），显示前一个奇数页（右页）和当前页（左页）
-            pages[0] = currentPage;      // 左页（偶数页）
-            pages[1] = currentPage + 1;  // 右页（下一个奇数页）
-        } else {
-            // 当前是奇数页（右页），显示当前页（右页）和下一个偶数页（左页）
-            pages[0] = currentPage - 1;  // 左页（前一个偶数页）
-            pages[1] = currentPage;      // 右页（奇数页）
-        }
-        
-        // 确保页码在有效范围内
-        if (pages[0] < 0) pages[0] = 0;
-        if (pages[1] >= totalPages) pages[1] = totalPages - 1;
-        
-        return pages;
-    }
-    
     private void displayCurrentPage() {
         if (pdfRenderer == null) return;
         
         try {
-            if (doublePageMode) {
-                // 双页模式显示
-                int[] pageNumbers = getDoublePageNumbers();
-                int leftPageNum = pageNumbers[0];  // 左页（偶数页）
-                int rightPageNum = pageNumbers[1]; // 右页（奇数页）
+            PdfRenderer.Page page = pdfRenderer.openPage(currentPage);
+            
+            // 获取页面原始尺寸
+            int pageWidth = page.getWidth();
+            int pageHeight = page.getHeight();
+            
+            // 获取屏幕尺寸
+            int screenWidth = getResources().getDisplayMetrics().widthPixels;
+            int screenHeight = getResources().getDisplayMetrics().heightPixels;
+            
+            // 计算保持长宽比的缩放比例
+            float scale = Math.min(
+                (float) screenWidth / pageWidth,
+                (float) screenHeight / pageHeight
+            );
+            
+            // 计算缩放后的尺寸
+            int scaledWidth = (int) (pageWidth * scale);
+            int scaledHeight = (int) (pageHeight * scale);
+            
+            // 创建与页面比例匹配的Bitmap
+            Bitmap bitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888);
+            
+            if (halfPageMode) {
+                // 半边页模式
+                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                 
-                // 获取屏幕尺寸
-                int screenWidth = getResources().getDisplayMetrics().widthPixels;
-                int screenHeight = getResources().getDisplayMetrics().heightPixels;
-                
-                // 根据旋转角度调整显示的尺寸
-                int displayWidth = screenWidth;
-                int displayHeight = screenHeight;
-                
-                // 当旋转90度或270度时，宽高交换
-                if (rotationAngle == 90 || rotationAngle == 270) {
-                    displayWidth = screenHeight;
-                    displayHeight = screenWidth;
-                }
-                
-                // 每页宽度为屏幕宽度的一半
-                int pageWidth = displayWidth / 2;
-                int pageHeight = displayHeight;
-                
-                // 显示左页（偶数页）
-                if (leftPageNum < totalPages && leftPageNum >= 0) {
-                    PdfRenderer.Page leftPage = pdfRenderer.openPage(leftPageNum);
-                    
-                    // 获取左页原始尺寸
-                    int originalLeftWidth = leftPage.getWidth();
-                    int originalLeftHeight = leftPage.getHeight();
-                    
-                    // 计算左页缩放比例
-                    float leftScale = Math.min(
-                        (float) pageWidth / originalLeftWidth,
-                        (float) pageHeight / originalLeftHeight
-                    );
-                    
-                    // 计算左页缩放后的尺寸
-                    int scaledLeftWidth = (int) (originalLeftWidth * leftScale);
-                    int scaledLeftHeight = (int) (originalLeftHeight * leftScale);
-                    
-                    // 创建左页Bitmap
-                    Bitmap leftBitmap = Bitmap.createBitmap(scaledLeftWidth, scaledLeftHeight, Bitmap.Config.ARGB_8888);
-                    leftPage.render(leftBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                    leftPage.close();
-                    
-                    // 应用旋转
-                    if (rotationAngle != 0) {
-                        leftBitmap = rotateBitmap(leftBitmap, rotationAngle);
-                    }
-                    
-                    // 夜间模式下反转图片颜色
-                    if (nightMode) {
-                        leftBitmap = invertColors(leftBitmap);
-                    }
-                    
-                    leftPageImageView.setImageBitmap(leftBitmap);
+                // 裁剪半边
+                if (leftPage) {
+                    bitmap = Bitmap.createBitmap(bitmap, 0, 0, scaledWidth / 2, scaledHeight);
+                    pageTextView.setText((currentPage + 1) + "/" + totalPages + " (左)");
                 } else {
-                    leftPageImageView.setImageBitmap(null);
+                    bitmap = Bitmap.createBitmap(bitmap, scaledWidth / 2, 0, scaledWidth / 2, scaledHeight);
+                    pageTextView.setText((currentPage + 1) + "/" + totalPages + " (右)");
                 }
-                
-                // 显示右页（奇数页）
-                if (rightPageNum < totalPages && rightPageNum >= 0) {
-                    PdfRenderer.Page rightPage = pdfRenderer.openPage(rightPageNum);
-                    
-                    // 获取右页原始尺寸
-                    int originalRightWidth = rightPage.getWidth();
-                    int originalRightHeight = rightPage.getHeight();
-                    
-                    // 计算右页缩放比例
-                    float rightScale = Math.min(
-                        (float) pageWidth / originalRightWidth,
-                        (float) pageHeight / originalRightHeight
-                    );
-                    
-                    // 计算右页缩放后的尺寸
-                    int scaledRightWidth = (int) (originalRightWidth * rightScale);
-                    int scaledRightHeight = (int) (originalRightHeight * rightScale);
-                    
-                    // 创建右页Bitmap
-                    Bitmap rightBitmap = Bitmap.createBitmap(scaledRightWidth, scaledRightHeight, Bitmap.Config.ARGB_8888);
-                    rightPage.render(rightBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                    rightPage.close();
-                    
-                    // 应用旋转
-                    if (rotationAngle != 0) {
-                        rightBitmap = rotateBitmap(rightBitmap, rotationAngle);
-                    }
-                    
-                    // 夜间模式下反转图片颜色
-                    if (nightMode) {
-                        rightBitmap = invertColors(rightBitmap);
-                    }
-                    
-                    rightPageImageView.setImageBitmap(rightBitmap);
-                } else {
-                    rightPageImageView.setImageBitmap(null);
-                }
-                
-                // 更新页码显示
-                pageTextView.setText("第" + (leftPageNum + 1) + "-" + (rightPageNum + 1) + "页 / 共" + totalPages + "页");
-                
             } else {
-                // 单页模式显示
-                PdfRenderer.Page page = pdfRenderer.openPage(currentPage);
-                
-                // 获取页面原始尺寸
-                int pageWidth = page.getWidth();
-                int pageHeight = page.getHeight();
-                
-                // 获取屏幕尺寸
-                int screenWidth = getResources().getDisplayMetrics().widthPixels;
-                int screenHeight = getResources().getDisplayMetrics().heightPixels;
-                
-                // 根据旋转角度调整显示的尺寸
-                int displayWidth = screenWidth;
-                int displayHeight = screenHeight;
-                
-                // 当旋转90度或270度时，宽高交换
-                if (rotationAngle == 90 || rotationAngle == 270) {
-                    displayWidth = screenHeight;
-                    displayHeight = screenWidth;
-                }
-                
-                float scale = Math.min(
-                    (float) displayWidth / pageWidth,
-                    (float) displayHeight / pageHeight
-                );
-                
-                // 计算缩放后的尺寸
-                int scaledWidth = (int) (pageWidth * scale);
-                int scaledHeight = (int) (pageHeight * scale);
-                
-                // 创建与页面比例匹配的Bitmap
-                Bitmap bitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888);
-                
-                if (halfPageMode) {
-                    // 半边页模式
-                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                    
-                    // 裁剪半边
-                    if (leftPage) {
-                        bitmap = Bitmap.createBitmap(bitmap, 0, 0, scaledWidth / 2, scaledHeight);
-                        pageTextView.setText((currentPage + 1) + "/" + totalPages + " (左)");
-                    } else {
-                        bitmap = Bitmap.createBitmap(bitmap, scaledWidth / 2, 0, scaledWidth / 2, scaledHeight);
-                        pageTextView.setText((currentPage + 1) + "/" + totalPages + " (右)");
-                    }
-                } else {
-                    // 整页模式
-                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                    pageTextView.setText((currentPage + 1) + "/" + totalPages);
-                }
-                
-                page.close();
-                
-                // 应用旋转
-                if (rotationAngle != 0) {
-                    bitmap = rotateBitmap(bitmap, rotationAngle);
-                }
-                
-                // 夜间模式下反转图片颜色（黑白反转）
-                if (nightMode) {
-                    bitmap = invertColors(bitmap);
-                }
-                
-                // 设置图片到ImageView
-                pdfImageView.setImageBitmap(bitmap);
+                // 整页模式
+                page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                pageTextView.setText((currentPage + 1) + "/" + totalPages);
             }
+            
+            page.close();
+            
+            // 夜间模式下反转图片颜色（黑白反转）
+            if (nightMode) {
+                bitmap = invertColors(bitmap);
+            }
+            
+            // 设置图片到ImageView
+            pdfImageView.setImageBitmap(bitmap);
             
             // 保存阅读位置
             saveReadingPosition();
@@ -1607,27 +1041,22 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void goToPrevPage() {
-        if (doublePageMode) {
-            // 双页模式：每次翻两页（因为显示两页）
-            if (currentPage > 1) {
-                currentPage -= 2;
-            } else if (currentPage > 0) {
-                currentPage = 0;
-            } else {
-                Toast.makeText(this, "已经是第一页", Toast.LENGTH_SHORT).show();
-            }
-        } else if (halfPageMode) {
+        if (halfPageMode) {
             if (leftPage) {
+                // 当前是左半页（古籍的后半部分），上一页应该是同页的右半部分（古籍的前半部分）
                 leftPage = false;
             } else {
+                // 当前是右半页（古籍的前半部分），上一页应该是上一页的左半部分（古籍的后半部分）
                 if (currentPage > 0) {
                     currentPage--;
                     leftPage = true;
                 } else {
+                    // 已经是第0页的右半页，没有上一页了
                     Toast.makeText(this, "已经是第一页", Toast.LENGTH_SHORT).show();
                 }
             }
         } else {
+            // 整页模式
             if (currentPage > 0) {
                 currentPage--;
             }
@@ -1636,52 +1065,28 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void goToNextPage() {
-        if (doublePageMode) {
-            // 双页模式：每次翻两页（因为显示两页）
-            if (currentPage < totalPages - 2) {
-                currentPage += 2;
-            } else if (currentPage < totalPages - 1) {
-                currentPage = totalPages - 1;
-            } else {
-                Toast.makeText(this, "已经是最后一页", Toast.LENGTH_SHORT).show();
-            }
-        } else if (halfPageMode) {
+        if (halfPageMode) {
             if (leftPage) {
+                // 当前是左半页（古籍的后半部分），下一页应该是下一页的右半部分（古籍下一页的前半部分）
                 if (currentPage < totalPages - 1) {
                     currentPage++;
                     leftPage = false;
                 } else {
+                    // 已经是最后一页的左半页，没有下一页了
                     Toast.makeText(this, "已经是最后一页", Toast.LENGTH_SHORT).show();
                 }
             } else {
+                // 当前是右半页（古籍的前半部分），下一页应该是同页的左半部分（古籍同一页的后半部分）
                 leftPage = true;
             }
         } else {
+            // 整页模式
             if (currentPage < totalPages - 1) {
                 currentPage++;
             }
         }
         displayCurrentPage();
     }
-    // 调整容器大小以适应旋转
-    private void adjustContainerSizeForRotation(FrameLayout container) {
-        // 获取屏幕尺寸
-        int screenWidth = getResources().getDisplayMetrics().widthPixels;
-        int screenHeight = getResources().getDisplayMetrics().heightPixels;
-        
-        if (rotationAngle == 90 || rotationAngle == 270) {
-            // 当旋转90度或270度时，宽高交换
-            FrameLayout.LayoutParams newParams = new FrameLayout.LayoutParams(
-                screenHeight, screenWidth);
-            newParams.gravity = Gravity.CENTER;
-            container.setLayoutParams(newParams);
-        } else {
-            // 正常方向
-            FrameLayout.LayoutParams newParams = new FrameLayout.LayoutParams(
-                screenWidth, screenHeight);
-            container.setLayoutParams(newParams);
-        }
-    }    
     
     private void toggleNightMode() {
         nightMode = !nightMode;
@@ -1705,12 +1110,6 @@ public class MainActivity extends AppCompatActivity {
             if (pdfImageView != null) {
                 pdfImageView.setBackgroundColor(getBackgroundColor());
             }
-            if (leftPageImageView != null) {
-                leftPageImageView.setBackgroundColor(getBackgroundColor());
-            }
-            if (rightPageImageView != null) {
-                rightPageImageView.setBackgroundColor(getBackgroundColor());
-            }
             // 更新页码文字颜色
             if (pageTextView != null) {
                 pageTextView.setTextColor(getTextColor());
@@ -1720,6 +1119,11 @@ public class MainActivity extends AppCompatActivity {
                 LinearLayout topBar = (LinearLayout) readerContainer.getChildAt(1);
                 if (topBar != null) {
                     topBar.setBackgroundColor(getStatusBarColor());
+                    // 更新标题文字颜色
+                    TextView title = (TextView) topBar.getChildAt(1);
+                    if (title != null) {
+                        title.setTextColor(nightMode ? Color.WHITE : Color.BLACK);
+                    }
                 }
             }
             displayCurrentPage();
