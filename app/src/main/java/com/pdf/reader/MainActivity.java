@@ -68,14 +68,14 @@ public class MainActivity extends AppCompatActivity {
     private boolean nightMode = false;
     private boolean halfPageMode = false;
     private boolean leftPage = false;
-    private boolean controlsVisible = true; // 控制栏是否可见
+    private boolean controlsVisible = true;
     private float rotationAngle = 0f; // 旋转角度
     
     // 存储
     private SharedPreferences prefs;
     private static final String LAST_OPENED_FILE = "last_opened_file";
     private static final String AUTO_OPEN_LAST_FILE = "auto_open_last_file";
-    private static final String ROTATION_ANGLE_KEY = "rotation_angle"; // 旋转角度存储
+    private static final String ROTATION_ANGLE_KEY = "rotation_angle";
     
     // 权限请求码
     private static final int PERMISSION_REQUEST_CODE = 100;
@@ -86,8 +86,8 @@ public class MainActivity extends AppCompatActivity {
     private static final int DAY_MODE_TEXT = Color.BLACK;
     private static final int NIGHT_MODE_BG = Color.BLACK;
     private static final int NIGHT_MODE_TEXT = Color.WHITE;
-    private static final int DAY_STATUS_BAR_COLOR = Color.parseColor("#F0E68C"); // 卡其色（日间）
-    private static final int NIGHT_STATUS_BAR_COLOR = Color.BLACK; // 黑色（夜间）
+    private static final int DAY_STATUS_BAR_COLOR = Color.parseColor("#F0E68C");
+    private static final int NIGHT_STATUS_BAR_COLOR = Color.BLACK;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -111,28 +111,23 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // 检查是否应该自动打开上次阅读的文件
         checkAutoOpenLastFile();
     }
     
     private void checkAutoOpenLastFile() {
-        // 获取上次打开的文件路径
         String lastOpenedFile = prefs.getString(LAST_OPENED_FILE, null);
         boolean autoOpenLastFile = prefs.getBoolean(AUTO_OPEN_LAST_FILE, true);
         
         if (autoOpenLastFile && lastOpenedFile != null && !lastOpenedFile.isEmpty()) {
             File file = new File(lastOpenedFile);
             if (file.exists() && file.canRead()) {
-                // 延迟一小段时间打开，确保UI已经加载完成
                 new android.os.Handler().postDelayed(() -> {
-                    // 检查当前是否已经在阅读界面
                     if (pdfRenderer == null) {
                         Toast.makeText(this, "正在打开上次阅读的文档...", Toast.LENGTH_SHORT).show();
                         openPdfFile(lastOpenedFile);
                     }
                 }, 500);
             } else {
-                // 文件不存在或不可读，清除记录
                 prefs.edit().remove(LAST_OPENED_FILE).apply();
                 Log.d("PDF_DEBUG", "上次打开的文件不存在或不可读: " + lastOpenedFile);
             }
@@ -144,7 +139,6 @@ public class MainActivity extends AppCompatActivity {
             if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) 
                     != PackageManager.PERMISSION_GRANTED) {
                 
-                // 显示解释对话框
                 if (shouldShowRequestPermissionRationale(
                         Manifest.permission.READ_EXTERNAL_STORAGE)) {
                     new AlertDialog.Builder(this)
@@ -163,11 +157,9 @@ public class MainActivity extends AppCompatActivity {
                     }, PERMISSION_REQUEST_CODE);
                 }
             } else {
-                // 已经有权限，显示文件列表
                 showFileList();
             }
         } else {
-            // Android 6.0以下直接显示文件列表
             showFileList();
         }
     }
@@ -189,14 +181,14 @@ public class MainActivity extends AppCompatActivity {
     private void loadSettings() {
         nightMode = prefs.getBoolean("night_mode", false);
         halfPageMode = prefs.getBoolean("half_page", false);
-        rotationAngle = prefs.getFloat(ROTATION_ANGLE_KEY, 0f); // 加载旋转角度
+        rotationAngle = prefs.getFloat(ROTATION_ANGLE_KEY, 0f);
     }
     
     private void saveSettings() {
         prefs.edit()
             .putBoolean("night_mode", nightMode)
             .putBoolean("half_page", halfPageMode)
-            .putFloat(ROTATION_ANGLE_KEY, rotationAngle) // 保存旋转角度
+            .putFloat(ROTATION_ANGLE_KEY, rotationAngle)
             .apply();
     }
     
@@ -776,25 +768,48 @@ public class MainActivity extends AppCompatActivity {
         
         // 设置旋转
         pdfImageView.setRotation(rotationAngle);
+        pdfImageView.setPivotX(0.5f);
+        pdfImageView.setPivotY(0.5f);
         
         pdfImageView.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
                 if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                    // 获取触摸点的原始坐标
                     float x = event.getX();
+                    float y = event.getY();
                     float width = v.getWidth();
+                    float height = v.getHeight();
                     
-                    // 考虑旋转后的坐标
-                    float[] point = {x, event.getY()};
-                    Matrix matrix = new Matrix();
-                    matrix.setRotate(-rotationAngle, width / 2, v.getHeight() / 2);
-                    matrix.mapPoints(point);
+                    // 计算相对于屏幕中心的坐标
+                    float centerX = width / 2;
+                    float centerY = height / 2;
                     
-                    if (point[0] < width / 3) {
+                    // 将触摸点坐标转换为相对于中心点的坐标
+                    float relativeX = x - centerX;
+                    float relativeY = y - centerY;
+                    
+                    // 根据旋转角度反向旋转坐标
+                    double radian = Math.toRadians(-rotationAngle);
+                    float cos = (float) Math.cos(radian);
+                    float sin = (float) Math.sin(radian);
+                    
+                    // 应用反向旋转
+                    float rotatedX = relativeX * cos - relativeY * sin;
+                    float rotatedY = relativeX * sin + relativeY * cos;
+                    
+                    // 转换回屏幕坐标
+                    float originalX = rotatedX + centerX;
+                    
+                    // 判断点击区域
+                    if (originalX < width / 3) {
+                        // 左侧区域 - 下一页
                         goToNextPage();
-                    } else if (point[0] > width * 2 / 3) {
+                    } else if (originalX > width * 2 / 3) {
+                        // 右侧区域 - 上一页
                         goToPrevPage();
                     } else {
+                        // 中间区域 - 切换控制栏
                         toggleControls();
                     }
                 }
@@ -804,6 +819,10 @@ public class MainActivity extends AppCompatActivity {
         
         LinearLayout topBar = createReaderTopBar();
         topBar.setId(View.generateViewId());
+        // 设置旋转中心
+        topBar.setPivotX(0.5f);
+        topBar.setPivotY(0f);
+        topBar.setRotation(rotationAngle);
         
         TextView bottomPageText = new TextView(this);
         bottomPageText.setId(View.generateViewId());
@@ -812,6 +831,9 @@ public class MainActivity extends AppCompatActivity {
         bottomPageText.setBackgroundColor(Color.parseColor("#80000000"));
         bottomPageText.setPadding(10, 5, 10, 5);
         bottomPageText.setGravity(Gravity.CENTER);
+        bottomPageText.setPivotX(0.5f);
+        bottomPageText.setPivotY(1f);
+        bottomPageText.setRotation(rotationAngle);
         
         // 上一页按钮 (右下角)
         prevBtn = new Button(this);
@@ -819,6 +841,9 @@ public class MainActivity extends AppCompatActivity {
         prevBtn.setBackgroundColor(Color.parseColor("#6200EE"));
         prevBtn.setTextColor(Color.WHITE);
         prevBtn.setOnClickListener(v -> goToPrevPage());
+        prevBtn.setPivotX(1f);
+        prevBtn.setPivotY(1f);
+        prevBtn.setRotation(rotationAngle);
         
         FrameLayout.LayoutParams prevParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -834,6 +859,9 @@ public class MainActivity extends AppCompatActivity {
         nextBtn.setBackgroundColor(Color.parseColor("#6200EE"));
         nextBtn.setTextColor(Color.WHITE);
         nextBtn.setOnClickListener(v -> goToNextPage());
+        nextBtn.setPivotX(0f);
+        nextBtn.setPivotY(1f);
+        nextBtn.setRotation(rotationAngle);
         
         FrameLayout.LayoutParams nextParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -849,6 +877,9 @@ public class MainActivity extends AppCompatActivity {
         jumpBtn.setBackgroundColor(Color.parseColor("#4CAF50"));
         jumpBtn.setTextColor(Color.WHITE);
         jumpBtn.setOnClickListener(v -> showJumpPageDialog());
+        jumpBtn.setPivotX(0.5f);
+        jumpBtn.setPivotY(1f);
+        jumpBtn.setRotation(rotationAngle);
         
         FrameLayout.LayoutParams jumpParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -856,21 +887,6 @@ public class MainActivity extends AppCompatActivity {
         jumpParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         jumpParams.bottomMargin = 80;
         jumpBtn.setLayoutParams(jumpParams);
-        
-        // 旋转按钮 (右上角)
-        rotateBtn = new Button(this);
-        rotateBtn.setText("旋转");
-        rotateBtn.setBackgroundColor(Color.parseColor("#FF9800")); // 橙色
-        rotateBtn.setTextColor(Color.WHITE);
-        rotateBtn.setOnClickListener(v -> rotatePage());
-        
-        FrameLayout.LayoutParams rotateParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT);
-        rotateParams.gravity = Gravity.TOP | Gravity.RIGHT;
-        rotateParams.rightMargin = 20;
-        rotateParams.topMargin = 20;
-        rotateBtn.setLayoutParams(rotateParams);
         
         FrameLayout.LayoutParams pageParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -885,15 +901,11 @@ public class MainActivity extends AppCompatActivity {
         readerContainer.addView(prevBtn);
         readerContainer.addView(nextBtn);
         readerContainer.addView(jumpBtn);
-        readerContainer.addView(rotateBtn);
         readerContainer.addView(bottomPageText);
         
         pageTextView = bottomPageText;
         
         mainLayout.addView(readerContainer);
-        
-        // 应用旋转到所有控制元素
-        applyRotationToControls();
         
         displayCurrentPage();
     }
@@ -919,6 +931,23 @@ public class MainActivity extends AppCompatActivity {
             showFileList();
         });
         
+        // 旋转按钮 - 添加到控制栏中
+        rotateBtn = new Button(this);
+        rotateBtn.setText("旋转 " + (int)rotationAngle + "°");
+        rotateBtn.setBackgroundColor(Color.parseColor("#FF9800")); // 橙色
+        rotateBtn.setTextColor(Color.WHITE);
+        rotateBtn.setOnClickListener(v -> {
+            // 旋转90度
+            rotationAngle += 90;
+            if (rotationAngle >= 360) {
+                rotationAngle = 0;
+            }
+            rotateBtn.setText("旋转 " + (int)rotationAngle + "°");
+            saveSettings();
+            applyRotationToAllViews();
+            displayCurrentPage();
+        });
+        
         // 夜间模式按钮
         Button nightBtn = new Button(this);
         nightBtn.setText(nightMode ? "日间" : "夜间");
@@ -934,42 +963,44 @@ public class MainActivity extends AppCompatActivity {
         halfPageBtn.setOnClickListener(v -> toggleHalfPageMode());
         
         topBar.addView(backBtn);
+        topBar.addView(rotateBtn);
         topBar.addView(nightBtn);
         topBar.addView(halfPageBtn);
         
         return topBar;
     }
     
-    private void applyRotationToControls() {
-        // 应用旋转到所有控制元素
-        for (int i = 1; i < readerContainer.getChildCount(); i++) {
-            View child = readerContainer.getChildAt(i);
-            if (child != null) {
-                child.setRotation(rotationAngle);
-            }
-        }
-    }
-    
-    private void rotatePage() {
-        // 每次旋转90度
-        rotationAngle += 90;
-        if (rotationAngle >= 360) {
-            rotationAngle = 0;
-        }
-        
-        // 保存旋转角度
-        saveSettings();
-        
-        // 应用旋转到所有元素
+    private void applyRotationToAllViews() {
+        // 应用旋转到所有视图
         if (pdfImageView != null) {
             pdfImageView.setRotation(rotationAngle);
         }
         
-        // 应用旋转到控制元素
-        applyRotationToControls();
+        // 应用旋转到控制栏中的所有按钮
+        if (readerContainer != null) {
+            for (int i = 1; i < readerContainer.getChildCount(); i++) {
+                View child = readerContainer.getChildAt(i);
+                if (child != null) {
+                    child.setRotation(rotationAngle);
+                    
+                    // 对于LinearLayout（顶部控制栏），也需要旋转其子按钮
+                    if (child instanceof LinearLayout) {
+                        LinearLayout layout = (LinearLayout) child;
+                        for (int j = 0; j < layout.getChildCount(); j++) {
+                            View button = layout.getChildAt(j);
+                            if (button instanceof Button) {
+                                button.setRotation(0); // 按钮本身不旋转，只旋转父容器
+                            }
+                        }
+                    }
+                }
+            }
+        }
         
-        // 重新显示页面
-        displayCurrentPage();
+        // 更新旋转按钮文本
+        if (rotateBtn != null) {
+            rotateBtn.setText("旋转 " + (int)rotationAngle + "°");
+        }
     }
     
     private void toggleControls() {
@@ -1096,18 +1127,9 @@ public class MainActivity extends AppCompatActivity {
                 Matrix matrix = new Matrix();
                 matrix.postRotate(rotationAngle, scaledWidth / 2f, scaledHeight / 2f);
                 
-                // 如果是90度或270度旋转，需要调整Bitmap尺寸
-                if (rotationAngle % 180 == 90) {
-                    Bitmap rotatedBitmap = Bitmap.createBitmap(
-                        bitmap, 0, 0, scaledWidth, scaledHeight, matrix, true
-                    );
-                    bitmap.recycle();
-                    bitmap = rotatedBitmap;
-                } else {
-                    bitmap = Bitmap.createBitmap(
-                        bitmap, 0, 0, scaledWidth, scaledHeight, matrix, true
-                    );
-                }
+                bitmap = Bitmap.createBitmap(
+                    bitmap, 0, 0, scaledWidth, scaledHeight, matrix, true
+                );
             }
             
             // 夜间模式下反转图片颜色
