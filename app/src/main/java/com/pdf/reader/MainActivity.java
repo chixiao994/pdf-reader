@@ -758,6 +758,15 @@ public class MainActivity extends AppCompatActivity {
                 FrameLayout.LayoutParams.MATCH_PARENT));
         readerContainer.setBackgroundColor(getBackgroundColor());
         
+        // 创建一个旋转容器
+        FrameLayout rotationContainer = new FrameLayout(this);
+        rotationContainer.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT));
+        rotationContainer.setRotation(rotationAngle);
+        rotationContainer.setPivotX(0.5f);
+        rotationContainer.setPivotY(0.5f);
+        
         pdfImageView = new ImageView(this);
         FrameLayout.LayoutParams imageParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -766,12 +775,99 @@ public class MainActivity extends AppCompatActivity {
         pdfImageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
         pdfImageView.setBackgroundColor(getBackgroundColor());
         
-        // 设置旋转
-        pdfImageView.setRotation(rotationAngle);
-        pdfImageView.setPivotX(0.5f);
-        pdfImageView.setPivotY(0.5f);
+        // 创建顶部控制栏
+        LinearLayout topBar = createReaderTopBar();
+        FrameLayout.LayoutParams topBarParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        topBarParams.gravity = Gravity.TOP;
+        topBar.setLayoutParams(topBarParams);
         
-        pdfImageView.setOnTouchListener(new View.OnTouchListener() {
+        // 创建底部控制区域
+        LinearLayout bottomBar = new LinearLayout(this);
+        bottomBar.setOrientation(LinearLayout.VERTICAL);
+        bottomBar.setGravity(Gravity.CENTER);
+        FrameLayout.LayoutParams bottomBarParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        bottomBarParams.gravity = Gravity.BOTTOM;
+        bottomBarParams.bottomMargin = 20;
+        bottomBar.setLayoutParams(bottomBarParams);
+        
+        // 底部按钮布局
+        LinearLayout bottomButtons = new LinearLayout(this);
+        bottomButtons.setOrientation(LinearLayout.HORIZONTAL);
+        bottomButtons.setGravity(Gravity.CENTER);
+        bottomButtons.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+        
+        // 上一页按钮
+        prevBtn = new Button(this);
+        prevBtn.setText("上一页");
+        prevBtn.setBackgroundColor(Color.parseColor("#6200EE"));
+        prevBtn.setTextColor(Color.WHITE);
+        prevBtn.setOnClickListener(v -> goToPrevPage());
+        LinearLayout.LayoutParams prevParams = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        prevParams.leftMargin = 10;
+        prevParams.rightMargin = 5;
+        prevBtn.setLayoutParams(prevParams);
+        
+        // 跳转按钮
+        jumpBtn = new Button(this);
+        jumpBtn.setText("跳转");
+        jumpBtn.setBackgroundColor(Color.parseColor("#4CAF50"));
+        jumpBtn.setTextColor(Color.WHITE);
+        jumpBtn.setOnClickListener(v -> showJumpPageDialog());
+        LinearLayout.LayoutParams jumpParams = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        jumpParams.leftMargin = 5;
+        jumpParams.rightMargin = 5;
+        jumpBtn.setLayoutParams(jumpParams);
+        
+        // 下一页按钮
+        nextBtn = new Button(this);
+        nextBtn.setText("下一页");
+        nextBtn.setBackgroundColor(Color.parseColor("#6200EE"));
+        nextBtn.setTextColor(Color.WHITE);
+        nextBtn.setOnClickListener(v -> goToNextPage());
+        LinearLayout.LayoutParams nextParams = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        nextParams.leftMargin = 5;
+        nextParams.rightMargin = 10;
+        nextBtn.setLayoutParams(nextParams);
+        
+        bottomButtons.addView(prevBtn);
+        bottomButtons.addView(jumpBtn);
+        bottomButtons.addView(nextBtn);
+        
+        // 页面信息文本
+        pageTextView = new TextView(this);
+        pageTextView.setTextColor(getTextColor());
+        pageTextView.setTextSize(16);
+        pageTextView.setGravity(Gravity.CENTER);
+        pageTextView.setPadding(10, 10, 10, 10);
+        LinearLayout.LayoutParams pageParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        pageTextView.setLayoutParams(pageParams);
+        
+        // 添加到底部栏
+        bottomBar.addView(bottomButtons);
+        bottomBar.addView(pageTextView);
+        
+        // 将控件添加到旋转容器
+        rotationContainer.addView(pdfImageView);
+        rotationContainer.addView(topBar);
+        rotationContainer.addView(bottomBar);
+        
+        // 将旋转容器添加到主容器
+        readerContainer.addView(rotationContainer);
+        mainLayout.addView(readerContainer);
+        
+        // 设置触摸监听器
+        rotationContainer.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
                 if (event.getAction() == MotionEvent.ACTION_DOWN) {
@@ -781,33 +877,21 @@ public class MainActivity extends AppCompatActivity {
                     float width = v.getWidth();
                     float height = v.getHeight();
                     
-                    // 计算相对于屏幕中心的坐标
-                    float centerX = width / 2;
-                    float centerY = height / 2;
+                    // 根据旋转角度反向转换坐标
+                    Matrix inverseMatrix = new Matrix();
+                    v.getMatrix().invert(inverseMatrix);
+                    float[] point = {x, y};
+                    inverseMatrix.mapPoints(point);
                     
-                    // 将触摸点坐标转换为相对于中心点的坐标
-                    float relativeX = x - centerX;
-                    float relativeY = y - centerY;
-                    
-                    // 根据旋转角度反向旋转坐标
-                    double radian = Math.toRadians(-rotationAngle);
-                    float cos = (float) Math.cos(radian);
-                    float sin = (float) Math.sin(radian);
-                    
-                    // 应用反向旋转
-                    float rotatedX = relativeX * cos - relativeY * sin;
-                    float rotatedY = relativeX * sin + relativeY * cos;
-                    
-                    // 转换回屏幕坐标
-                    float originalX = rotatedX + centerX;
+                    float originalX = point[0];
                     
                     // 判断点击区域
                     if (originalX < width / 3) {
-                        // 左侧区域 - 下一页
-                        goToNextPage();
-                    } else if (originalX > width * 2 / 3) {
-                        // 右侧区域 - 上一页
+                        // 左侧区域 - 上一页
                         goToPrevPage();
+                    } else if (originalX > width * 2 / 3) {
+                        // 右侧区域 - 下一页
+                        goToNextPage();
                     } else {
                         // 中间区域 - 切换控制栏
                         toggleControls();
@@ -816,96 +900,6 @@ public class MainActivity extends AppCompatActivity {
                 return true;
             }
         });
-        
-        LinearLayout topBar = createReaderTopBar();
-        topBar.setId(View.generateViewId());
-        // 设置旋转中心
-        topBar.setPivotX(0.5f);
-        topBar.setPivotY(0f);
-        topBar.setRotation(rotationAngle);
-        
-        TextView bottomPageText = new TextView(this);
-        bottomPageText.setId(View.generateViewId());
-        bottomPageText.setTextColor(getTextColor());
-        bottomPageText.setTextSize(14);
-        bottomPageText.setBackgroundColor(Color.parseColor("#80000000"));
-        bottomPageText.setPadding(10, 5, 10, 5);
-        bottomPageText.setGravity(Gravity.CENTER);
-        bottomPageText.setPivotX(0.5f);
-        bottomPageText.setPivotY(1f);
-        bottomPageText.setRotation(rotationAngle);
-        
-        // 上一页按钮 (右下角)
-        prevBtn = new Button(this);
-        prevBtn.setText("上一页");
-        prevBtn.setBackgroundColor(Color.parseColor("#6200EE"));
-        prevBtn.setTextColor(Color.WHITE);
-        prevBtn.setOnClickListener(v -> goToPrevPage());
-        prevBtn.setPivotX(1f);
-        prevBtn.setPivotY(1f);
-        prevBtn.setRotation(rotationAngle);
-        
-        FrameLayout.LayoutParams prevParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT);
-        prevParams.gravity = Gravity.BOTTOM | Gravity.RIGHT;
-        prevParams.rightMargin = 20;
-        prevParams.bottomMargin = 80;
-        prevBtn.setLayoutParams(prevParams);
-        
-        // 下一页按钮 (左下角)
-        nextBtn = new Button(this);
-        nextBtn.setText("下一页");
-        nextBtn.setBackgroundColor(Color.parseColor("#6200EE"));
-        nextBtn.setTextColor(Color.WHITE);
-        nextBtn.setOnClickListener(v -> goToNextPage());
-        nextBtn.setPivotX(0f);
-        nextBtn.setPivotY(1f);
-        nextBtn.setRotation(rotationAngle);
-        
-        FrameLayout.LayoutParams nextParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT);
-        nextParams.gravity = Gravity.BOTTOM | Gravity.LEFT;
-        nextParams.leftMargin = 20;
-        nextParams.bottomMargin = 80;
-        nextBtn.setLayoutParams(nextParams);
-        
-        // 跳转按钮 (中间)
-        jumpBtn = new Button(this);
-        jumpBtn.setText("跳转");
-        jumpBtn.setBackgroundColor(Color.parseColor("#4CAF50"));
-        jumpBtn.setTextColor(Color.WHITE);
-        jumpBtn.setOnClickListener(v -> showJumpPageDialog());
-        jumpBtn.setPivotX(0.5f);
-        jumpBtn.setPivotY(1f);
-        jumpBtn.setRotation(rotationAngle);
-        
-        FrameLayout.LayoutParams jumpParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT);
-        jumpParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        jumpParams.bottomMargin = 80;
-        jumpBtn.setLayoutParams(jumpParams);
-        
-        FrameLayout.LayoutParams pageParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT);
-        pageParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        pageParams.bottomMargin = 20;
-        bottomPageText.setLayoutParams(pageParams);
-        
-        // 添加所有视图到容器
-        readerContainer.addView(pdfImageView);
-        readerContainer.addView(topBar);
-        readerContainer.addView(prevBtn);
-        readerContainer.addView(nextBtn);
-        readerContainer.addView(jumpBtn);
-        readerContainer.addView(bottomPageText);
-        
-        pageTextView = bottomPageText;
-        
-        mainLayout.addView(readerContainer);
         
         displayCurrentPage();
     }
@@ -916,11 +910,6 @@ public class MainActivity extends AppCompatActivity {
         topBar.setBackgroundColor(getStatusBarColor());
         topBar.setPadding(10, 10, 10, 10);
         
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT);
-        topBar.setLayoutParams(params);
-        
         // 返回按钮
         Button backBtn = new Button(this);
         backBtn.setText("返回");
@@ -930,11 +919,14 @@ public class MainActivity extends AppCompatActivity {
             closePdf();
             showFileList();
         });
+        LinearLayout.LayoutParams backParams = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        backBtn.setLayoutParams(backParams);
         
-        // 旋转按钮 - 添加到控制栏中
+        // 旋转按钮
         rotateBtn = new Button(this);
         rotateBtn.setText("旋转 " + (int)rotationAngle + "°");
-        rotateBtn.setBackgroundColor(Color.parseColor("#FF9800")); // 橙色
+        rotateBtn.setBackgroundColor(Color.parseColor("#FF9800"));
         rotateBtn.setTextColor(Color.WHITE);
         rotateBtn.setOnClickListener(v -> {
             // 旋转90度
@@ -944,9 +936,18 @@ public class MainActivity extends AppCompatActivity {
             }
             rotateBtn.setText("旋转 " + (int)rotationAngle + "°");
             saveSettings();
-            applyRotationToAllViews();
+            
+            // 重新设置旋转容器的角度
+            FrameLayout rotationContainer = (FrameLayout) readerContainer.getChildAt(0);
+            if (rotationContainer != null) {
+                rotationContainer.setRotation(rotationAngle);
+            }
+            
             displayCurrentPage();
         });
+        LinearLayout.LayoutParams rotateParams = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        rotateBtn.setLayoutParams(rotateParams);
         
         // 夜间模式按钮
         Button nightBtn = new Button(this);
@@ -954,6 +955,9 @@ public class MainActivity extends AppCompatActivity {
         nightBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         nightBtn.setTextColor(Color.WHITE);
         nightBtn.setOnClickListener(v -> toggleNightMode());
+        LinearLayout.LayoutParams nightParams = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        nightBtn.setLayoutParams(nightParams);
         
         // 半页模式按钮
         halfPageBtn = new Button(this);
@@ -961,6 +965,9 @@ public class MainActivity extends AppCompatActivity {
         halfPageBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         halfPageBtn.setTextColor(Color.WHITE);
         halfPageBtn.setOnClickListener(v -> toggleHalfPageMode());
+        LinearLayout.LayoutParams halfParams = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        halfPageBtn.setLayoutParams(halfParams);
         
         topBar.addView(backBtn);
         topBar.addView(rotateBtn);
@@ -971,30 +978,10 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void applyRotationToAllViews() {
-        // 应用旋转到所有视图
-        if (pdfImageView != null) {
-            pdfImageView.setRotation(rotationAngle);
-        }
-        
-        // 应用旋转到控制栏中的所有按钮
-        if (readerContainer != null) {
-            for (int i = 1; i < readerContainer.getChildCount(); i++) {
-                View child = readerContainer.getChildAt(i);
-                if (child != null) {
-                    child.setRotation(rotationAngle);
-                    
-                    // 对于LinearLayout（顶部控制栏），也需要旋转其子按钮
-                    if (child instanceof LinearLayout) {
-                        LinearLayout layout = (LinearLayout) child;
-                        for (int j = 0; j < layout.getChildCount(); j++) {
-                            View button = layout.getChildAt(j);
-                            if (button instanceof Button) {
-                                button.setRotation(0); // 按钮本身不旋转，只旋转父容器
-                            }
-                        }
-                    }
-                }
-            }
+        // 获取旋转容器并设置旋转角度
+        FrameLayout rotationContainer = (FrameLayout) readerContainer.getChildAt(0);
+        if (rotationContainer != null) {
+            rotationContainer.setRotation(rotationAngle);
         }
         
         // 更新旋转按钮文本
@@ -1006,11 +993,23 @@ public class MainActivity extends AppCompatActivity {
     private void toggleControls() {
         controlsVisible = !controlsVisible;
         
-        // 获取所有控制元素（跳过第一个pdfImageView）
-        for (int i = 1; i < readerContainer.getChildCount(); i++) {
-            View child = readerContainer.getChildAt(i);
-            if (child != null) {
-                child.setVisibility(controlsVisible ? View.VISIBLE : View.GONE);
+        // 获取旋转容器
+        FrameLayout rotationContainer = (FrameLayout) readerContainer.getChildAt(0);
+        if (rotationContainer == null) return;
+        
+        // 控制栏是第二个子视图（索引1）
+        if (rotationContainer.getChildCount() > 1) {
+            View topBar = rotationContainer.getChildAt(1);
+            if (topBar != null) {
+                topBar.setVisibility(controlsVisible ? View.VISIBLE : View.GONE);
+            }
+        }
+        
+        // 底部栏是第三个子视图（索引2）
+        if (rotationContainer.getChildCount() > 2) {
+            View bottomBar = rotationContainer.getChildAt(2);
+            if (bottomBar != null) {
+                bottomBar.setVisibility(controlsVisible ? View.VISIBLE : View.GONE);
             }
         }
     }
@@ -1208,12 +1207,16 @@ public class MainActivity extends AppCompatActivity {
             if (pageTextView != null) {
                 pageTextView.setTextColor(getTextColor());
             }
-            if (readerContainer != null && readerContainer.getChildCount() > 1) {
-                LinearLayout topBar = (LinearLayout) readerContainer.getChildAt(1);
+            
+            // 更新顶部控制栏背景色
+            FrameLayout rotationContainer = (FrameLayout) readerContainer.getChildAt(0);
+            if (rotationContainer != null && rotationContainer.getChildCount() > 1) {
+                LinearLayout topBar = (LinearLayout) rotationContainer.getChildAt(1);
                 if (topBar != null) {
                     topBar.setBackgroundColor(getStatusBarColor());
                 }
             }
+            
             displayCurrentPage();
         }
     }
