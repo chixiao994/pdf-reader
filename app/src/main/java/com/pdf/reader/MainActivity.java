@@ -55,7 +55,7 @@ public class MainActivity extends AppCompatActivity {
     private FrameLayout readerContainer;
     private ImageView pdfImageView;
     private TextView pageTextView;
-    private Button nightModeBtn, halfPageBtn, prevBtn, nextBtn, openFileBtn, refreshBtn, jumpBtn;
+    private Button nightModeBtn, halfPageBtn, prevBtn, nextBtn, openFileBtn, refreshBtn, jumpBtn, rotateBtn;
     
     // PDF相关
     private PdfRenderer pdfRenderer;
@@ -69,6 +69,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean halfPageMode = false;
     private boolean leftPage = false;
     private boolean controlsVisible = true; // 控制栏是否可见
+    private int rotationAngle = 0; // 旋转角度：0, 90, 180, 270
     
     // 存储
     private SharedPreferences prefs;
@@ -189,12 +190,14 @@ public class MainActivity extends AppCompatActivity {
     private void loadSettings() {
         nightMode = prefs.getBoolean("night_mode", false);
         halfPageMode = prefs.getBoolean("half_page", false);
+        rotationAngle = prefs.getInt("rotation_angle", 0); // 加载旋转角度
     }
     
     private void saveSettings() {
         prefs.edit()
             .putBoolean("night_mode", nightMode)
             .putBoolean("half_page", halfPageMode)
+            .putInt("rotation_angle", rotationAngle) // 保存旋转角度
             .apply();
     }
     
@@ -805,6 +808,8 @@ public class MainActivity extends AppCompatActivity {
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT));
         readerContainer.setBackgroundColor(getBackgroundColor());
+        // 应用旋转
+        readerContainer.setRotation(rotationAngle);
         
         // PDF显示区域 - 添加触摸监听用于翻页和隐藏控制栏
         pdfImageView = new ImageView(this);
@@ -815,20 +820,48 @@ public class MainActivity extends AppCompatActivity {
         pdfImageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
         pdfImageView.setBackgroundColor(getBackgroundColor());
         
-        // 添加触摸监听器
+        // 添加触摸监听器 - 需要根据旋转调整触摸区域
         pdfImageView.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
                 if (event.getAction() == MotionEvent.ACTION_DOWN) {
                     float x = event.getX();
+                    float y = event.getY();
                     float width = v.getWidth();
+                    float height = v.getHeight();
+                    
+                    // 根据旋转角度调整触摸区域
+                    float adjustedX, adjustedY;
+                    
+                    switch (rotationAngle) {
+                        case 90:
+                            adjustedX = height - y;
+                            adjustedY = x;
+                            width = height;
+                            height = v.getWidth();
+                            break;
+                        case 180:
+                            adjustedX = width - x;
+                            adjustedY = height - y;
+                            break;
+                        case 270:
+                            adjustedX = y;
+                            adjustedY = width - x;
+                            width = height;
+                            height = v.getWidth();
+                            break;
+                        default:
+                            adjustedX = x;
+                            adjustedY = y;
+                            break;
+                    }
                     
                     // 点击左侧区域 (宽度1/3)：下一页
-                    if (x < width / 3) {
+                    if (adjustedX < width / 3) {
                         goToNextPage();
                     }
                     // 点击右侧区域 (宽度2/3-3/3)：上一页
-                    else if (x > width * 2 / 3) {
+                    else if (adjustedX > width * 2 / 3) {
                         goToPrevPage();
                     }
                     // 点击中间区域：切换控制栏显示/隐藏
@@ -840,7 +873,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
         
-        // 创建顶部控制栏（简化版，不显示书名）
+        // 创建顶部控制栏
         LinearLayout topBar = createReaderTopBar();
         topBar.setId(View.generateViewId());
         
@@ -867,6 +900,7 @@ public class MainActivity extends AppCompatActivity {
         prevParams.rightMargin = 20;
         prevParams.bottomMargin = 80;
         prevBtn.setLayoutParams(prevParams);
+        prevBtn.setRotation(rotationAngle);
         
         // 下一页按钮 (左下角)
         nextBtn = new Button(this);
@@ -882,6 +916,7 @@ public class MainActivity extends AppCompatActivity {
         nextParams.leftMargin = 20;
         nextParams.bottomMargin = 80;
         nextBtn.setLayoutParams(nextParams);
+        nextBtn.setRotation(rotationAngle);
         
         // 跳转按钮 (中间)
         jumpBtn = new Button(this);
@@ -896,6 +931,7 @@ public class MainActivity extends AppCompatActivity {
         jumpParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         jumpParams.bottomMargin = 80;
         jumpBtn.setLayoutParams(jumpParams);
+        jumpBtn.setRotation(rotationAngle);
         
         // 底部页码显示布局参数
         FrameLayout.LayoutParams pageParams = new FrameLayout.LayoutParams(
@@ -904,6 +940,7 @@ public class MainActivity extends AppCompatActivity {
         pageParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         pageParams.bottomMargin = 20;
         bottomPageText.setLayoutParams(pageParams);
+        bottomPageText.setRotation(rotationAngle);
         
         // 添加所有视图到容器
         readerContainer.addView(pdfImageView);
@@ -932,6 +969,7 @@ public class MainActivity extends AppCompatActivity {
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT);
         topBar.setLayoutParams(params);
+        topBar.setRotation(rotationAngle);
         
         // 返回按钮
         Button backBtn = new Button(this);
@@ -942,9 +980,6 @@ public class MainActivity extends AppCompatActivity {
             closePdf();
             showFileList();
         });
-        
-        // 只显示返回按钮和功能按钮，不显示书名
-        // 移除书名显示的TextView
         
         // 夜间模式按钮
         Button nightBtn = new Button(this);
@@ -960,6 +995,13 @@ public class MainActivity extends AppCompatActivity {
         halfPageBtn.setTextColor(Color.WHITE);
         halfPageBtn.setOnClickListener(v -> toggleHalfPageMode());
         
+        // 旋转按钮
+        rotateBtn = new Button(this);
+        rotateBtn.setText("旋转 " + rotationAngle + "°");
+        rotateBtn.setBackgroundColor(Color.parseColor("#3700B3"));
+        rotateBtn.setTextColor(Color.WHITE);
+        rotateBtn.setOnClickListener(v -> rotateView());
+        
         // 创建一个占位的TextView，让按钮靠右对齐
         TextView spacer = new TextView(this);
         spacer.setLayoutParams(new LinearLayout.LayoutParams(
@@ -969,8 +1011,28 @@ public class MainActivity extends AppCompatActivity {
         topBar.addView(spacer);
         topBar.addView(nightBtn);
         topBar.addView(halfPageBtn);
+        topBar.addView(rotateBtn);
         
         return topBar;
+    }
+    
+    private void rotateView() {
+        // 旋转角度：0 -> 90 -> 180 -> 270 -> 0
+        rotationAngle = (rotationAngle + 90) % 360;
+        
+        // 更新旋转按钮文本
+        if (rotateBtn != null) {
+            rotateBtn.setText("旋转 " + rotationAngle + "°");
+        }
+        
+        // 保存设置
+        saveSettings();
+        
+        // 重新显示当前页面以应用旋转
+        if (pdfRenderer != null) {
+            // 重新创建阅读器视图以应用旋转
+            showReaderView();
+        }
     }
     
     private void toggleControls() {
@@ -1060,6 +1122,22 @@ public class MainActivity extends AppCompatActivity {
         return invertedBitmap;
     }
     
+    // 旋转图片的方法
+    private Bitmap rotateBitmap(Bitmap bitmap, int degrees) {
+        if (degrees == 0 || bitmap == null) {
+            return bitmap;
+        }
+        
+        Matrix matrix = new Matrix();
+        matrix.postRotate(degrees);
+        
+        // 创建旋转后的Bitmap
+        Bitmap rotatedBitmap = Bitmap.createBitmap(
+            bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+        
+        return rotatedBitmap;
+    }
+    
     private void displayCurrentPage() {
         if (pdfRenderer == null) return;
         
@@ -1073,6 +1151,13 @@ public class MainActivity extends AppCompatActivity {
             // 获取屏幕尺寸
             int screenWidth = getResources().getDisplayMetrics().widthPixels;
             int screenHeight = getResources().getDisplayMetrics().heightPixels;
+            
+            // 根据旋转角度调整屏幕尺寸
+            if (rotationAngle == 90 || rotationAngle == 270) {
+                int temp = screenWidth;
+                screenWidth = screenHeight;
+                screenHeight = temp;
+            }
             
             // 计算保持长宽比的缩放比例
             float scale = Math.min(
@@ -1111,6 +1196,9 @@ public class MainActivity extends AppCompatActivity {
             if (nightMode) {
                 bitmap = invertColors(bitmap);
             }
+            
+            // 旋转图片
+            bitmap = rotateBitmap(bitmap, rotationAngle);
             
             // 设置图片到ImageView
             pdfImageView.setImageBitmap(bitmap);
