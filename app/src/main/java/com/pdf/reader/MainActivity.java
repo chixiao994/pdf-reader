@@ -1168,119 +1168,119 @@ public class MainActivity extends AppCompatActivity {
         return rotatedBitmap;
     }
     
-        // 创建双页Bitmap的方法（居中显示，两页间不留空隙）
-        private Bitmap createDoublePageBitmap(int leftPageNum, int rightPageNum) {
-            try {
-                // 获取屏幕尺寸
-                int screenWidth = getResources().getDisplayMetrics().widthPixels;
-                int screenHeight = getResources().getDisplayMetrics().heightPixels;
-                
-                // 如果旋转了90度，交换宽高
-                if (isRotated) {
-                    int temp = screenWidth;
-                    screenWidth = screenHeight;
-                    screenHeight = temp;
-                }
-                
-                // 创建一个足够大的Bitmap来容纳两页（居中显示）
-                Bitmap doubleBitmap = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888);
-                Canvas canvas = new Canvas(doubleBitmap);
-                
-                // 设置画布背景色
-                canvas.drawColor(getBackgroundColor());
-                
-                // 计算统一的缩放比例，确保两页高度一致
-                float unifiedScale = 1.0f;
-                int unifiedScaledHeight = 0;
-                int leftScaledWidth = 0;
-                int rightScaledWidth = 0;
-                
-                // 获取两页的原始尺寸
-                int leftPageWidth = 0, leftPageHeight = 0;
-                int rightPageWidth = 0, rightPageHeight = 0;
-                
-                if (leftPageNum < totalPages) {
-                    PdfRenderer.Page leftPage = pdfRenderer.openPage(leftPageNum);
-                    leftPageWidth = leftPage.getWidth();
-                    leftPageHeight = leftPage.getHeight();
-                    leftPage.close();
-                }
-                
-                if (rightPageNum < totalPages) {
-                    PdfRenderer.Page rightPage = pdfRenderer.openPage(rightPageNum);
-                    rightPageWidth = rightPage.getWidth();
-                    rightPageHeight = rightPage.getHeight();
-                    rightPage.close();
-                }
-                
-                // 计算统一的缩放比例
-                // 原则：1. 两页高度一致 2. 总宽度不超过屏幕宽度 3. 高度不超过屏幕高度
-                
-                // 计算两页的平均高度
-                int maxPageHeight = Math.max(leftPageHeight, rightPageHeight);
-                
-                // 计算缩放比例：高度不超过屏幕高度的95%
-                float scaleByHeight = (float) (screenHeight * 0.95) / maxPageHeight;
-                
-                // 计算缩放比例：总宽度不超过屏幕宽度的95%
-                int totalPageWidth = leftPageWidth + rightPageWidth;
-                float scaleByWidth = (float) (screenWidth * 0.95) / totalPageWidth;
-                
-                // 取较小的缩放比例，确保两页都能完整显示
-                unifiedScale = Math.min(scaleByHeight, scaleByWidth);
-                
-                // 计算缩放后的尺寸
-                unifiedScaledHeight = (int) (maxPageHeight * unifiedScale);
-                leftScaledWidth = (int) (leftPageWidth * unifiedScale);
-                rightScaledWidth = (int) (rightPageWidth * unifiedScale);
-                
-                // 计算居中位置
-                int totalScaledWidth = leftScaledWidth + rightScaledWidth;
-                int startX = (screenWidth - totalScaledWidth) / 2;
-                int startY = (screenHeight - unifiedScaledHeight) / 2;
-                
-                // 绘制左页
-                if (leftPageNum < totalPages) {
-                    PdfRenderer.Page leftPage = pdfRenderer.openPage(leftPageNum);
-                    Bitmap leftBitmap = Bitmap.createBitmap(leftScaledWidth, unifiedScaledHeight, Bitmap.Config.ARGB_8888);
-                    leftPage.render(leftBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                    leftPage.close();
-                    
-                    // 夜间模式下反转图片颜色
-                    if (nightMode) {
-                        leftBitmap = invertColors(leftBitmap);
-                    }
-                    
-                    canvas.drawBitmap(leftBitmap, startX, startY, null);
-                }
-                
-                // 绘制右页（紧贴左页，不留空隙）
-                if (rightPageNum < totalPages) {
-                    PdfRenderer.Page rightPage = pdfRenderer.openPage(rightPageNum);
-                    Bitmap rightBitmap = Bitmap.createBitmap(rightScaledWidth, unifiedScaledHeight, Bitmap.Config.ARGB_8888);
-                    rightPage.render(rightBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                    rightPage.close();
-                    
-                    // 夜间模式下反转图片颜色
-                    if (nightMode) {
-                        rightBitmap = invertColors(rightBitmap);
-                    }
-                    
-                    canvas.drawBitmap(rightBitmap, startX + leftScaledWidth, startY, null);
-                }
-                
-                // 如果旋转了90度，旋转整个双页图
-                if (isRotated) {
-                    doubleBitmap = rotateBitmap90(doubleBitmap);
-                }
-                
-                return doubleBitmap;
-                
-            } catch (Exception e) {
-                e.printStackTrace();
-                return null;
+    // 创建双页Bitmap的方法（居中显示，两页间不留空隙）
+    private Bitmap createDoublePageBitmap(int leftPageNum, int rightPageNum) {
+        try {
+            // 获取屏幕尺寸
+            int screenWidth = getResources().getDisplayMetrics().widthPixels;
+            int screenHeight = getResources().getDisplayMetrics().heightPixels;
+            
+            // 如果旋转了90度，交换宽高
+            if (isRotated) {
+                int temp = screenWidth;
+                screenWidth = screenHeight;
+                screenHeight = temp;
             }
-        }           
+            
+            // 创建一个足够大的Bitmap来容纳两页（居中显示）
+            Bitmap doubleBitmap = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888);
+            Canvas canvas = new Canvas(doubleBitmap);
+            
+            // 设置画布背景色
+            canvas.drawColor(getBackgroundColor());
+            
+            // 计算统一的缩放比例，确保两页高度一致
+            float unifiedScale = 1.0f;
+            int unifiedScaledHeight = 0;
+            int leftScaledWidth = 0;
+            int rightScaledWidth = 0;
+            
+            // 获取两页的原始尺寸
+            int leftPageWidth = 0, leftPageHeight = 0;
+            int rightPageWidth = 0, rightPageHeight = 0;
+            
+            if (leftPageNum < totalPages) {
+                PdfRenderer.Page leftPage = pdfRenderer.openPage(leftPageNum);
+                leftPageWidth = leftPage.getWidth();
+                leftPageHeight = leftPage.getHeight();
+                leftPage.close();
+            }
+            
+            if (rightPageNum < totalPages) {
+                PdfRenderer.Page rightPage = pdfRenderer.openPage(rightPageNum);
+                rightPageWidth = rightPage.getWidth();
+                rightPageHeight = rightPage.getHeight();
+                rightPage.close();
+            }
+            
+            // 计算统一的缩放比例
+            // 原则：1. 两页高度一致 2. 总宽度不超过屏幕宽度 3. 高度不超过屏幕高度
+            
+            // 计算两页的平均高度
+            int maxPageHeight = Math.max(leftPageHeight, rightPageHeight);
+            
+            // 计算缩放比例：高度不超过屏幕高度的95%
+            float scaleByHeight = (float) (screenHeight * 0.95) / maxPageHeight;
+            
+            // 计算缩放比例：总宽度不超过屏幕宽度的95%
+            int totalPageWidth = leftPageWidth + rightPageWidth;
+            float scaleByWidth = (float) (screenWidth * 0.95) / totalPageWidth;
+            
+            // 取较小的缩放比例，确保两页都能完整显示
+            unifiedScale = Math.min(scaleByHeight, scaleByWidth);
+            
+            // 计算缩放后的尺寸
+            unifiedScaledHeight = (int) (maxPageHeight * unifiedScale);
+            leftScaledWidth = (int) (leftPageWidth * unifiedScale);
+            rightScaledWidth = (int) (rightPageWidth * unifiedScale);
+            
+            // 计算居中位置
+            int totalScaledWidth = leftScaledWidth + rightScaledWidth;
+            int startX = (screenWidth - totalScaledWidth) / 2;
+            int startY = (screenHeight - unifiedScaledHeight) / 2;
+            
+            // 绘制左页
+            if (leftPageNum < totalPages) {
+                PdfRenderer.Page leftPage = pdfRenderer.openPage(leftPageNum);
+                Bitmap leftBitmap = Bitmap.createBitmap(leftScaledWidth, unifiedScaledHeight, Bitmap.Config.ARGB_8888);
+                leftPage.render(leftBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                leftPage.close();
+                
+                // 夜间模式下反转图片颜色
+                if (nightMode) {
+                    leftBitmap = invertColors(leftBitmap);
+                }
+                
+                canvas.drawBitmap(leftBitmap, startX, startY, null);
+            }
+            
+            // 绘制右页（紧贴左页，不留空隙）
+            if (rightPageNum < totalPages) {
+                PdfRenderer.Page rightPage = pdfRenderer.openPage(rightPageNum);
+                Bitmap rightBitmap = Bitmap.createBitmap(rightScaledWidth, unifiedScaledHeight, Bitmap.Config.ARGB_8888);
+                rightPage.render(rightBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                rightPage.close();
+                
+                // 夜间模式下反转图片颜色
+                if (nightMode) {
+                    rightBitmap = invertColors(rightBitmap);
+                }
+                
+                canvas.drawBitmap(rightBitmap, startX + leftScaledWidth, startY, null);
+            }
+            
+            // 如果旋转了90度，旋转整个双页图
+            if (isRotated) {
+                doubleBitmap = rotateBitmap90(doubleBitmap);
+            }
+            
+            return doubleBitmap;
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }           
 
     private void displayCurrentPage() {
         if (pdfRenderer == null) return;
