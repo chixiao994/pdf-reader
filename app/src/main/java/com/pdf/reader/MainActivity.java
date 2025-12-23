@@ -1194,34 +1194,8 @@ public class MainActivity extends AppCompatActivity {
             int maxScaledHeight = 0;
             Bitmap rightBitmap = null;
             Bitmap leftBitmap = null;
-            
-            // 准备右页（第1页）
-            if (rightPageNum < totalPages) {
-                PdfRenderer.Page rightPage = pdfRenderer.openPage(rightPageNum);
-                int pageWidth = rightPage.getWidth();
-                int pageHeight = rightPage.getHeight();
-                
-                // 计算单页缩放比例（半屏宽度）
-                float scale = Math.min(
-                    (float) screenWidth / 2 / pageWidth,
-                    (float) screenHeight / pageHeight
-                );
-                
-                int scaledWidth = (int) (pageWidth * scale);
-                int scaledHeight = (int) (pageHeight * scale);
-                
-                // 创建右页Bitmap
-                rightBitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888);
-                rightPage.render(rightBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                rightPage.close();
-                
-                totalScaledWidth += scaledWidth;
-                if (scaledHeight > maxScaledHeight) {
-                    maxScaledHeight = scaledHeight;
-                }
-            }
-            
-            // 准备左页（第2页）
+
+            // 准备左页（第1页）
             if (leftPageNum < totalPages) {
                 PdfRenderer.Page leftPage = pdfRenderer.openPage(leftPageNum);
                 int pageWidth = leftPage.getWidth();
@@ -1247,23 +1221,38 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
             
+            // 准备右页（第2页）
+            if (rightPageNum < totalPages) {
+                PdfRenderer.Page rightPage = pdfRenderer.openPage(rightPageNum);
+                int pageWidth = rightPage.getWidth();
+                int pageHeight = rightPage.getHeight();
+                
+                // 计算单页缩放比例（半屏宽度）
+                float scale = Math.min(
+                    (float) screenWidth / 2 / pageWidth,
+                    (float) screenHeight / pageHeight
+                );
+                
+                int scaledWidth = (int) (pageWidth * scale);
+                int scaledHeight = (int) (pageHeight * scale);
+                
+                // 创建右页Bitmap
+                rightBitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888);
+                rightPage.render(rightBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                rightPage.close();
+                
+                totalScaledWidth += scaledWidth;
+                if (scaledHeight > maxScaledHeight) {
+                    maxScaledHeight = scaledHeight;
+                }
+            }
+            
             // 计算居中位置
             int startX = (screenWidth - totalScaledWidth) / 2;
             int startY = (screenHeight - maxScaledHeight) / 2;
             
-            // 绘制右页（居中显示，紧贴左页）
+            // === 修改这里：先绘制左页，再绘制右页 ===
             int currentX = startX;
-            if (rightBitmap != null) {
-                // 夜间模式下反转图片颜色
-                if (nightMode) {
-                    rightBitmap = invertColors(rightBitmap);
-                }
-                
-                canvas.drawBitmap(rightBitmap, currentX, startY, null);
-                currentX += rightBitmap.getWidth();
-            }
-            
-            // 绘制左页（紧贴右页，不留空隙）
             if (leftBitmap != null) {
                 // 夜间模式下反转图片颜色
                 if (nightMode) {
@@ -1271,6 +1260,17 @@ public class MainActivity extends AppCompatActivity {
                 }
                 
                 canvas.drawBitmap(leftBitmap, currentX, startY, null);
+                currentX += leftBitmap.getWidth();
+            }
+            
+            // 绘制右页（紧贴左页，不留空隙）
+            if (rightBitmap != null) {
+                // 夜间模式下反转图片颜色
+                if (nightMode) {
+                    rightBitmap = invertColors(rightBitmap);
+                }
+                
+                canvas.drawBitmap(rightBitmap, currentX, startY, null);
             }
             
             // 如果旋转了90度，旋转整个双页图
@@ -1284,8 +1284,8 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
             return null;
         }
-    }
-    
+    }            
+
     private void displayCurrentPage() {
         if (pdfRenderer == null) return;
         
@@ -1298,19 +1298,19 @@ public class MainActivity extends AppCompatActivity {
                     basePage--; // 如果是奇数页，减1变成偶数页
                 }
                 
-                int rightPageNum = basePage;     // 右页
-                int leftPageNum = basePage + 1;  // 左页
+                int leftPageNum = basePage;     // 左页
+                int rightPageNum = basePage + 1;  // 右页
                 
                 // 确保页码在有效范围内
-                if (rightPageNum >= totalPages) {
-                    rightPageNum = totalPages - 1;
-                }
                 if (leftPageNum >= totalPages) {
                     leftPageNum = totalPages - 1;
                 }
+                if (rightPageNum >= totalPages) {
+                    rightPageNum = totalPages - 1;
+                }
                 
                 // 创建双页Bitmap
-                Bitmap doubleBitmap = createDoublePageBitmap(rightPageNum, leftPageNum);
+                Bitmap doubleBitmap = createDoublePageBitmap(leftPageNum, rightPageNum);
                 
                 if (doubleBitmap != null) {
                     // 设置图片到ImageView
@@ -1318,9 +1318,9 @@ public class MainActivity extends AppCompatActivity {
                     
                     // 更新页码显示
                     if (leftPageNum < totalPages) {
-                        pageTextView.setText((rightPageNum + 1) + "," + (leftPageNum + 1) + "/" + totalPages);
+                        pageTextView.setText((leftPageNum + 1) + "," + (rightPageNum + 1) + "/" + totalPages);
                     } else {
-                        pageTextView.setText((rightPageNum + 1) + "/" + totalPages);
+                        pageTextView.setText((leftPageNum + 1) + "/" + totalPages);
                     }
                 }
                 
