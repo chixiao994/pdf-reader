@@ -950,7 +950,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout topBar = new LinearLayout(this);
         topBar.setOrientation(LinearLayout.HORIZONTAL);
         topBar.setBackgroundColor(getStatusBarColor()); // 日间卡其色，夜间黑色
-        topBar.setPadding(10, 10, 10, 10);
+        topBar.setPadding(5, 5, 5, 5); // 缩小内边距
         
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -963,6 +963,8 @@ public class MainActivity extends AppCompatActivity {
         backBtn.setText("返回");
         backBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         backBtn.setTextColor(Color.WHITE);
+        backBtn.setPadding(8, 5, 8, 5); // 缩小按钮内边距
+        backBtn.setTextSize(12); // 减小文字大小
         backBtn.setOnClickListener(v -> {
             closePdf();
             showFileList();
@@ -973,6 +975,8 @@ public class MainActivity extends AppCompatActivity {
         nightBtn.setText(nightMode ? "日间" : "夜间");
         nightBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         nightBtn.setTextColor(Color.WHITE);
+        nightBtn.setPadding(8, 5, 8, 5); // 缩小按钮内边距
+        nightBtn.setTextSize(12); // 减小文字大小
         nightBtn.setOnClickListener(v -> toggleNightMode());
         
         // 整页/半页按钮
@@ -980,6 +984,8 @@ public class MainActivity extends AppCompatActivity {
         halfPageBtn.setText(halfPageMode ? "整页" : "半页");
         halfPageBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         halfPageBtn.setTextColor(Color.WHITE);
+        halfPageBtn.setPadding(8, 5, 8, 5); // 缩小按钮内边距
+        halfPageBtn.setTextSize(12); // 减小文字大小
         halfPageBtn.setOnClickListener(v -> toggleHalfPageMode());
         
         // 单页/双页按钮
@@ -987,6 +993,8 @@ public class MainActivity extends AppCompatActivity {
         pageModeBtn.setText(doublePageMode ? "单页" : "双页");
         pageModeBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         pageModeBtn.setTextColor(Color.WHITE);
+        pageModeBtn.setPadding(8, 5, 8, 5); // 缩小按钮内边距
+        pageModeBtn.setTextSize(12); // 减小文字大小
         pageModeBtn.setOnClickListener(v -> toggleDoublePageMode());
         
         // 旋转按钮
@@ -994,12 +1002,27 @@ public class MainActivity extends AppCompatActivity {
         rotateBtn.setText(isRotated ? "转回" : "旋转");
         rotateBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         rotateBtn.setTextColor(Color.WHITE);
+        rotateBtn.setPadding(8, 5, 8, 5); // 缩小按钮内边距
+        rotateBtn.setTextSize(12); // 减小文字大小
         rotateBtn.setOnClickListener(v -> toggleRotation());
         
         // 创建一个占位的TextView，让按钮靠右对齐
         TextView spacer = new TextView(this);
         spacer.setLayoutParams(new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+        
+        // 使用更紧凑的布局
+        LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        buttonParams.setMargins(2, 0, 2, 0); // 设置按钮之间的外边距为2像素
+        
+        // 设置按钮的布局参数
+        backBtn.setLayoutParams(buttonParams);
+        nightBtn.setLayoutParams(buttonParams);
+        halfPageBtn.setLayoutParams(buttonParams);
+        pageModeBtn.setLayoutParams(buttonParams);
+        rotateBtn.setLayoutParams(buttonParams);
         
         topBar.addView(backBtn);
         topBar.addView(spacer);
