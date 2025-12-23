@@ -950,7 +950,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout topBar = new LinearLayout(this);
         topBar.setOrientation(LinearLayout.HORIZONTAL);
         topBar.setBackgroundColor(getStatusBarColor()); // 日间卡其色，夜间黑色
-        topBar.setPadding(10, 5, 10, 5); // 进一步减小左右内边距
+        topBar.setPadding(0, 5, 0, 5); // 去除左右内边距，让按钮完全占满
         
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -958,35 +958,18 @@ public class MainActivity extends AppCompatActivity {
         params.gravity = Gravity.TOP;
         topBar.setLayoutParams(params);
         
-        // 创建按钮容器，居中显示
-        LinearLayout buttonContainer = new LinearLayout(this);
-        buttonContainer.setOrientation(LinearLayout.HORIZONTAL);
-        buttonContainer.setGravity(Gravity.CENTER); // 居中对齐
-        
-        // 设置容器参数，使其在父布局中居中
-        LinearLayout.LayoutParams containerParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        containerParams.gravity = Gravity.CENTER; // 居中
-        buttonContainer.setLayoutParams(containerParams);
-        
-        // 创建统一的按钮参数，设置紧凑的宽度
+        // 创建所有按钮的平均分配参数
         LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, // 使用WRAP_CONTENT
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        btnParams.weight = 0; // 不占用额外空间
-        btnParams.rightMargin = 0; // 按钮间的最小间距
-        btnParams.leftMargin = 0;
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f); // 使用权重平均分配
         
         // 返回按钮
         Button backBtn = new Button(this);
         backBtn.setText("返回");
         backBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         backBtn.setTextColor(Color.WHITE);
-        backBtn.setTextSize(14);
-        backBtn.setMinWidth(0); // 允许按钮宽度根据内容调整
-        backBtn.setMinimumWidth(0); // 清除最小宽度限制
-        backBtn.setPadding(10, 5, 10, 5);
+        backBtn.setTextSize(12);
+        backBtn.setPadding(0, 5, 0, 5); // 减少内边距
+        backBtn.setAllCaps(false); // 禁用大写转换
         backBtn.setLayoutParams(btnParams);
         backBtn.setOnClickListener(v -> {
             closePdf();
@@ -998,10 +981,9 @@ public class MainActivity extends AppCompatActivity {
         nightBtn.setText(nightMode ? "日间" : "夜间");
         nightBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         nightBtn.setTextColor(Color.WHITE);
-        nightBtn.setTextSize(14);
-        nightBtn.setMinWidth(0);
-        nightBtn.setMinimumWidth(0);
-        nightBtn.setPadding(10, 5, 10, 5);
+        nightBtn.setTextSize(12);
+        nightBtn.setPadding(0, 5, 0, 5);
+        nightBtn.setAllCaps(false);
         nightBtn.setLayoutParams(btnParams);
         nightBtn.setOnClickListener(v -> toggleNightMode());
         
@@ -1010,10 +992,9 @@ public class MainActivity extends AppCompatActivity {
         halfPageBtn.setText(halfPageMode ? "整页" : "半页");
         halfPageBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         halfPageBtn.setTextColor(Color.WHITE);
-        halfPageBtn.setTextSize(14);
-        halfPageBtn.setMinWidth(0);
-        halfPageBtn.setMinimumWidth(0);
-        halfPageBtn.setPadding(10, 5, 10, 5);
+        halfPageBtn.setTextSize(12);
+        halfPageBtn.setPadding(0, 5, 0, 5);
+        halfPageBtn.setAllCaps(false);
         halfPageBtn.setLayoutParams(btnParams);
         halfPageBtn.setOnClickListener(v -> toggleHalfPageMode());
         
@@ -1022,34 +1003,29 @@ public class MainActivity extends AppCompatActivity {
         pageModeBtn.setText(doublePageMode ? "单页" : "双页");
         pageModeBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         pageModeBtn.setTextColor(Color.WHITE);
-        pageModeBtn.setTextSize(14);
-        pageModeBtn.setMinWidth(0);
-        pageModeBtn.setMinimumWidth(0);
-        pageModeBtn.setPadding(10, 5, 10, 5);
+        pageModeBtn.setTextSize(12);
+        pageModeBtn.setPadding(0, 5, 0, 5);
+        pageModeBtn.setAllCaps(false);
         pageModeBtn.setLayoutParams(btnParams);
         pageModeBtn.setOnClickListener(v -> toggleDoublePageMode());
         
-        // 旋转按钮 - 使用更短的文字
+        // 旋转按钮
         rotateBtn = new Button(this);
-        rotateBtn.setText(isRotated ? "转回" : "旋转");
+        rotateBtn.setText(isRotated ? "转正" : "旋转");
         rotateBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         rotateBtn.setTextColor(Color.WHITE);
-        rotateBtn.setTextSize(14);
-        rotateBtn.setMinWidth(0);
-        rotateBtn.setMinimumWidth(0);
-        rotateBtn.setPadding(10, 5, 10, 5);
+        rotateBtn.setTextSize(12);
+        rotateBtn.setPadding(0, 5, 0, 5);
+        rotateBtn.setAllCaps(false);
         rotateBtn.setLayoutParams(btnParams);
         rotateBtn.setOnClickListener(v -> toggleRotation());
         
-        // 将所有按钮添加到容器中
-        buttonContainer.addView(backBtn);
-        buttonContainer.addView(nightBtn);
-        buttonContainer.addView(halfPageBtn);
-        buttonContainer.addView(pageModeBtn);
-        buttonContainer.addView(rotateBtn);
-        
-        // 将按钮容器添加到顶部栏
-        topBar.addView(buttonContainer);
+        // 将所有按钮添加到顶部栏
+        topBar.addView(backBtn);
+        topBar.addView(nightBtn);
+        topBar.addView(halfPageBtn);
+        topBar.addView(pageModeBtn);
+        topBar.addView(rotateBtn);
         
         return topBar;
     }
