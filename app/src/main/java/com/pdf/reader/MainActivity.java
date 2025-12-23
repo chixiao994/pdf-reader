@@ -950,7 +950,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout topBar = new LinearLayout(this);
         topBar.setOrientation(LinearLayout.HORIZONTAL);
         topBar.setBackgroundColor(getStatusBarColor()); // 日间卡其色，夜间黑色
-        topBar.setPadding(8, 8, 8, 8);
+        topBar.setPadding(10, 10, 10, 10);
         
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -991,7 +991,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 旋转按钮
         rotateBtn = new Button(this);
-        rotateBtn.setText(isRotated ? "转回" : "旋转90°");
+        rotateBtn.setText(isRotated ? "转回" : "旋转");
         rotateBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         rotateBtn.setTextColor(Color.WHITE);
         rotateBtn.setOnClickListener(v -> toggleRotation());
@@ -1017,7 +1017,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 更新旋转按钮文本
         if (rotateBtn != null) {
-            rotateBtn.setText(isRotated ? "转回" : "旋转90°");
+            rotateBtn.setText(isRotated ? "转回" : "旋转");
         }
         
         // 保存设置
