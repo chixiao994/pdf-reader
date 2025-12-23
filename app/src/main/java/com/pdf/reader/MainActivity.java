@@ -950,7 +950,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout topBar = new LinearLayout(this);
         topBar.setOrientation(LinearLayout.HORIZONTAL);
         topBar.setBackgroundColor(getStatusBarColor()); // 日间卡其色，夜间黑色
-        topBar.setPadding(10, 10, 10, 10); // 进一步减小左右内边距
+        topBar.setPadding(10, 5, 10, 5); // 进一步减小左右内边距
         
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -983,10 +983,10 @@ public class MainActivity extends AppCompatActivity {
         backBtn.setText("返回");
         backBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         backBtn.setTextColor(Color.WHITE);
-        backBtn.setTextSize(12);
+        backBtn.setTextSize(14);
         backBtn.setMinWidth(0); // 允许按钮宽度根据内容调整
         backBtn.setMinimumWidth(0); // 清除最小宽度限制
-        backBtn.setPadding(10, 10, 10, 10);
+        backBtn.setPadding(10, 5, 10, 5);
         backBtn.setLayoutParams(btnParams);
         backBtn.setOnClickListener(v -> {
             closePdf();
@@ -998,10 +998,10 @@ public class MainActivity extends AppCompatActivity {
         nightBtn.setText(nightMode ? "日间" : "夜间");
         nightBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         nightBtn.setTextColor(Color.WHITE);
-        nightBtn.setTextSize(12);
+        nightBtn.setTextSize(14);
         nightBtn.setMinWidth(0);
         nightBtn.setMinimumWidth(0);
-        nightBtn.setPadding(10, 10, 10, 10);
+        nightBtn.setPadding(10, 5, 10, 5);
         nightBtn.setLayoutParams(btnParams);
         nightBtn.setOnClickListener(v -> toggleNightMode());
         
@@ -1010,10 +1010,10 @@ public class MainActivity extends AppCompatActivity {
         halfPageBtn.setText(halfPageMode ? "整页" : "半页");
         halfPageBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         halfPageBtn.setTextColor(Color.WHITE);
-        halfPageBtn.setTextSize(12);
+        halfPageBtn.setTextSize(14);
         halfPageBtn.setMinWidth(0);
         halfPageBtn.setMinimumWidth(0);
-        halfPageBtn.setPadding(10, 10, 10, 10);
+        halfPageBtn.setPadding(10, 5, 10, 5);
         halfPageBtn.setLayoutParams(btnParams);
         halfPageBtn.setOnClickListener(v -> toggleHalfPageMode());
         
@@ -1022,10 +1022,10 @@ public class MainActivity extends AppCompatActivity {
         pageModeBtn.setText(doublePageMode ? "单页" : "双页");
         pageModeBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         pageModeBtn.setTextColor(Color.WHITE);
-        pageModeBtn.setTextSize(12);
+        pageModeBtn.setTextSize(14);
         pageModeBtn.setMinWidth(0);
         pageModeBtn.setMinimumWidth(0);
-        pageModeBtn.setPadding(10, 10, 10, 10);
+        pageModeBtn.setPadding(10, 5, 10, 5);
         pageModeBtn.setLayoutParams(btnParams);
         pageModeBtn.setOnClickListener(v -> toggleDoublePageMode());
         
@@ -1034,10 +1034,10 @@ public class MainActivity extends AppCompatActivity {
         rotateBtn.setText(isRotated ? "转回" : "旋转");
         rotateBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         rotateBtn.setTextColor(Color.WHITE);
-        rotateBtn.setTextSize(12);
+        rotateBtn.setTextSize(14);
         rotateBtn.setMinWidth(0);
         rotateBtn.setMinimumWidth(0);
-        rotateBtn.setPadding(10, 10, 10, 10);
+        rotateBtn.setPadding(10, 5, 10, 5);
         rotateBtn.setLayoutParams(btnParams);
         rotateBtn.setOnClickListener(v -> toggleRotation());
         
