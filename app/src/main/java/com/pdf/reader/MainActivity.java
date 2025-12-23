@@ -950,7 +950,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout topBar = new LinearLayout(this);
         topBar.setOrientation(LinearLayout.HORIZONTAL);
         topBar.setBackgroundColor(getStatusBarColor()); // 日间卡其色，夜间黑色
-        topBar.setPadding(8, 5, 8, 5); // 进一步减小左右内边距
+        topBar.setPadding(10, 10, 10, 10); // 进一步减小左右内边距
         
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -986,7 +986,7 @@ public class MainActivity extends AppCompatActivity {
         backBtn.setTextSize(12);
         backBtn.setMinWidth(0); // 允许按钮宽度根据内容调整
         backBtn.setMinimumWidth(0); // 清除最小宽度限制
-        backBtn.setPadding(8, 5, 8, 5);
+        backBtn.setPadding(10, 10, 10, 10);
         backBtn.setLayoutParams(btnParams);
         backBtn.setOnClickListener(v -> {
             closePdf();
@@ -1001,7 +1001,7 @@ public class MainActivity extends AppCompatActivity {
         nightBtn.setTextSize(12);
         nightBtn.setMinWidth(0);
         nightBtn.setMinimumWidth(0);
-        nightBtn.setPadding(8, 5, 8, 5);
+        nightBtn.setPadding(10, 10, 10, 10);
         nightBtn.setLayoutParams(btnParams);
         nightBtn.setOnClickListener(v -> toggleNightMode());
         
@@ -1013,7 +1013,7 @@ public class MainActivity extends AppCompatActivity {
         halfPageBtn.setTextSize(12);
         halfPageBtn.setMinWidth(0);
         halfPageBtn.setMinimumWidth(0);
-        halfPageBtn.setPadding(8, 5, 8, 5);
+        halfPageBtn.setPadding(10, 10, 10, 10);
         halfPageBtn.setLayoutParams(btnParams);
         halfPageBtn.setOnClickListener(v -> toggleHalfPageMode());
         
@@ -1025,19 +1025,19 @@ public class MainActivity extends AppCompatActivity {
         pageModeBtn.setTextSize(12);
         pageModeBtn.setMinWidth(0);
         pageModeBtn.setMinimumWidth(0);
-        pageModeBtn.setPadding(8, 5, 8, 5);
+        pageModeBtn.setPadding(10, 10, 10, 10);
         pageModeBtn.setLayoutParams(btnParams);
         pageModeBtn.setOnClickListener(v -> toggleDoublePageMode());
         
         // 旋转按钮 - 使用更短的文字
         rotateBtn = new Button(this);
-        rotateBtn.setText(isRotated ? "转正" : "旋转");
+        rotateBtn.setText(isRotated ? "转回" : "旋转");
         rotateBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         rotateBtn.setTextColor(Color.WHITE);
         rotateBtn.setTextSize(12);
         rotateBtn.setMinWidth(0);
         rotateBtn.setMinimumWidth(0);
-        rotateBtn.setPadding(8, 5, 8, 5);
+        rotateBtn.setPadding(10, 10, 10, 10);
         rotateBtn.setLayoutParams(btnParams);
         rotateBtn.setOnClickListener(v -> toggleRotation());
         
