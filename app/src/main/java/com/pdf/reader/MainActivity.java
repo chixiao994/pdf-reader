@@ -964,7 +964,7 @@ public class MainActivity extends AppCompatActivity {
         backBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         backBtn.setTextColor(Color.WHITE);
         backBtn.setTextSize(12); // 减小文字大小
-        backBtn.setPadding(8, 5, 8, 5); // 减小内边距
+        backBtn.setPadding(5, 5, 5, 5); // 减小内边距
         backBtn.setOnClickListener(v -> {
             closePdf();
             showFileList();
@@ -976,7 +976,7 @@ public class MainActivity extends AppCompatActivity {
         nightBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         nightBtn.setTextColor(Color.WHITE);
         nightBtn.setTextSize(12);
-        nightBtn.setPadding(8, 5, 8, 5);
+        nightBtn.setPadding(5, 5, 5, 5);
         nightBtn.setOnClickListener(v -> toggleNightMode());
         
         // 整页/半页按钮 - 减小宽度
@@ -985,7 +985,7 @@ public class MainActivity extends AppCompatActivity {
         halfPageBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         halfPageBtn.setTextColor(Color.WHITE);
         halfPageBtn.setTextSize(12);
-        halfPageBtn.setPadding(8, 5, 8, 5);
+        halfPageBtn.setPadding(5, 5, 5, 5);
         halfPageBtn.setOnClickListener(v -> toggleHalfPageMode());
         
         // 单页/双页按钮 - 减小宽度
@@ -994,7 +994,7 @@ public class MainActivity extends AppCompatActivity {
         pageModeBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         pageModeBtn.setTextColor(Color.WHITE);
         pageModeBtn.setTextSize(12);
-        pageModeBtn.setPadding(8, 5, 8, 5);
+        pageModeBtn.setPadding(5, 5, 5, 5);
         pageModeBtn.setOnClickListener(v -> toggleDoublePageMode());
         
         // 旋转按钮 - 减小宽度并缩短文字
@@ -1003,7 +1003,7 @@ public class MainActivity extends AppCompatActivity {
         rotateBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         rotateBtn.setTextColor(Color.WHITE);
         rotateBtn.setTextSize(12);
-        rotateBtn.setPadding(8, 5, 8, 5);
+        rotateBtn.setPadding(5, 5, 5, 5);
         rotateBtn.setOnClickListener(v -> toggleRotation());
         
         // 为每个按钮设置固定宽度，确保都能显示完整
