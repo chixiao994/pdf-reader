@@ -19,6 +19,7 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.PorterDuffColorFilter;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.Build;
@@ -71,6 +72,14 @@ public class MainActivity extends AppCompatActivity {
     private boolean leftPage = false;
     private boolean controlsVisible = true; // 控制栏是否可见
     private boolean isRotated = false; // 是否旋转90度
+    
+    // 缩放相关变量
+    private float scaleFactor = 1.0f;
+    private float lastScaleFactor = 1.0f;
+    private Matrix matrix = new Matrix();
+    private long lastTouchTime = 0;
+    private static final int DOUBLE_TAP_TIME_THRESHOLD = 300; // 双击时间阈值（毫秒）
+    private float initialDistance = -1f;
     
     // 存储
     private SharedPreferences prefs;
@@ -818,51 +827,125 @@ public class MainActivity extends AppCompatActivity {
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT);
         pdfImageView.setLayoutParams(imageParams);
-        pdfImageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        pdfImageView.setScaleType(ImageView.ScaleType.MATRIX); // 改为MATRIX以支持缩放
         pdfImageView.setBackgroundColor(getBackgroundColor());
         
-        // 添加触摸监听器 - 根据旋转状态调整触摸区域
+        // 重置缩放参数
+        scaleFactor = 1.0f;
+        lastScaleFactor = 1.0f;
+        matrix.reset();
+        
+        // 添加触摸监听器 - 支持单指翻页、两指缩放、双击恢复
         pdfImageView.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
-                if (event.getAction() == MotionEvent.ACTION_DOWN) {
-                    float x = event.getX();
-                    float width = v.getWidth();
-                    
-                    // 如果旋转了90度，调整触摸区域
-                    if (isRotated) {
-                        // 旋转后，原来的左右变成了上下
-                        float height = v.getHeight();
-                        float y = event.getY();
+                int action = event.getActionMasked();
+                
+                // 处理多点触控（两指缩放）
+                switch (action) {
+                    case MotionEvent.ACTION_POINTER_DOWN:
+                        // 开始两指触摸
+                        if (event.getPointerCount() == 2) {
+                            // 计算初始距离
+                            float x1 = event.getX(0);
+                            float y1 = event.getY(0);
+                            float x2 = event.getX(1);
+                            float y2 = event.getY(1);
+                            initialDistance = (float) Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+                        }
+                        break;
                         
-                        // 点击上部区域 (高度1/3)：下一页
-                        if (y < height / 3) {
-                            goToNextPage();
+                    case MotionEvent.ACTION_MOVE:
+                        // 处理两指缩放
+                        if (event.getPointerCount() == 2 && initialDistance > 0) {
+                            // 计算当前距离
+                            float x1 = event.getX(0);
+                            float y1 = event.getY(0);
+                            float x2 = event.getX(1);
+                            float y2 = event.getY(1);
+                            float currentDistance = (float) Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+                            
+                            // 计算缩放比例
+                            if (Math.abs(currentDistance - initialDistance) > 10f) { // 防止误触
+                                scaleFactor = currentDistance / initialDistance * lastScaleFactor;
+                                
+                                // 限制缩放范围（0.5倍到5倍）
+                                scaleFactor = Math.max(0.5f, Math.min(scaleFactor, 5.0f));
+                                
+                                // 应用缩放
+                                applyScale();
+                            }
                         }
-                        // 点击下部区域 (高度2/3-3/3)：上一页
-                        else if (y > height * 2 / 3) {
-                            goToPrevPage();
+                        break;
+                        
+                    case MotionEvent.ACTION_POINTER_UP:
+                        // 结束两指触摸
+                        if (event.getPointerCount() == 2) {
+                            lastScaleFactor = scaleFactor;
+                            initialDistance = -1f;
                         }
-                        // 点击中间区域：切换控制栏显示/隐藏
-                        else {
-                            toggleControls();
+                        break;
+                        
+                    case MotionEvent.ACTION_UP:
+                        // 处理单指点击
+                        if (event.getPointerCount() == 1) {
+                            float x = event.getX();
+                            float width = v.getWidth();
+                            
+                            // 处理双击中间区域
+                            if (event.getAction() == MotionEvent.ACTION_UP) {
+                                long currentTime = System.currentTimeMillis();
+                                if (currentTime - lastTouchTime < DOUBLE_TAP_TIME_THRESHOLD) {
+                                    // 双击事件
+                                    // 检查是否点击中间区域（宽度1/3到2/3之间）
+                                    if (x > width / 3 && x < width * 2 / 3) {
+                                        // 双击中间区域，恢复缩放
+                                        resetScale();
+                                        return true;
+                                    }
+                                }
+                                lastTouchTime = currentTime;
+                            }
+                            
+                            // 原有的单指翻页逻辑（只有在没有缩放的情况下才生效）
+                            if (Math.abs(scaleFactor - 1.0f) < 0.01f) { // 基本没有缩放时
+                                if (isRotated) {
+                                    // 旋转后，原来的左右变成了上下
+                                    float height = v.getHeight();
+                                    float y = event.getY();
+                                    
+                                    // 点击上部区域 (高度1/3)：下一页
+                                    if (y < height / 3) {
+                                        goToNextPage();
+                                    }
+                                    // 点击下部区域 (高度2/3-3/3)：上一页
+                                    else if (y > height * 2 / 3) {
+                                        goToPrevPage();
+                                    }
+                                    // 点击中间区域：切换控制栏显示/隐藏
+                                    else {
+                                        toggleControls();
+                                    }
+                                } else {
+                                    // 正常竖屏模式
+                                    // 点击左侧区域 (宽度1/3)：下一页
+                                    if (x < width / 3) {
+                                        goToNextPage();
+                                    }
+                                    // 点击右侧区域 (宽度2/3-3/3)：上一页
+                                    else if (x > width * 2 / 3) {
+                                        goToPrevPage();
+                                    }
+                                    // 点击中间区域：切换控制栏显示/隐藏
+                                    else {
+                                        toggleControls();
+                                    }
+                                }
+                            }
                         }
-                    } else {
-                        // 正常竖屏模式
-                        // 点击左侧区域 (宽度1/3)：下一页
-                        if (x < width / 3) {
-                            goToNextPage();
-                        }
-                        // 点击右侧区域 (宽度2/3-3/3)：上一页
-                        else if (x > width * 2 / 3) {
-                            goToPrevPage();
-                        }
-                        // 点击中间区域：切换控制栏显示/隐藏
-                        else {
-                            toggleControls();
-                        }
-                    }
+                        break;
                 }
+                
                 return true;
             }
         });
@@ -946,6 +1029,34 @@ public class MainActivity extends AppCompatActivity {
         displayCurrentPage();
     }
     
+    // 缩放相关的方法
+    private void applyScale() {
+        // 保存当前图片的Bitmap
+        BitmapDrawable drawable = (BitmapDrawable) pdfImageView.getDrawable();
+        if (drawable == null) return;
+        
+        // 计算缩放中心点（屏幕中心）
+        float centerX = pdfImageView.getWidth() / 2f;
+        float centerY = pdfImageView.getHeight() / 2f;
+        
+        // 重置矩阵
+        matrix.reset();
+        // 应用缩放（以中心点为缩放中心）
+        matrix.postScale(scaleFactor, scaleFactor, centerX, centerY);
+        // 应用矩阵到ImageView
+        pdfImageView.setImageMatrix(matrix);
+        pdfImageView.invalidate(); // 刷新显示
+    }
+    
+    private void resetScale() {
+        // 恢复原始大小
+        scaleFactor = 1.0f;
+        lastScaleFactor = 1.0f;
+        matrix.reset();
+        pdfImageView.setImageMatrix(matrix);
+        pdfImageView.invalidate(); // 刷新显示
+    }
+    
     private LinearLayout createReaderTopBar() {
         LinearLayout topBar = new LinearLayout(this);
         topBar.setOrientation(LinearLayout.HORIZONTAL);
@@ -1011,7 +1122,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 旋转按钮
         rotateBtn = new Button(this);
-        rotateBtn.setText(isRotated ? "转正" : "旋转");
+        rotateBtn.setText(isRotated ? "转回" : "旋转");
         rotateBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         rotateBtn.setTextColor(Color.WHITE);
         rotateBtn.setTextSize(12);
@@ -1408,6 +1519,12 @@ public class MainActivity extends AppCompatActivity {
                 
                 // 设置图片到ImageView
                 pdfImageView.setImageBitmap(bitmap);
+                
+                // 重置缩放参数
+                scaleFactor = 1.0f;
+                lastScaleFactor = 1.0f;
+                matrix.reset();
+                pdfImageView.setImageMatrix(matrix);
             }
             
             // 保存阅读位置
@@ -1420,6 +1537,11 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void goToPrevPage() {
+        // 翻页时重置缩放
+        if (Math.abs(scaleFactor - 1.0f) > 0.01f) {
+            resetScale();
+        }
+        
         if (doublePageMode) { // 双页模式
             // 双页模式下，一次后退两页
             if (currentPage > 1) {
@@ -1451,6 +1573,11 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void goToNextPage() {
+        // 翻页时重置缩放
+        if (Math.abs(scaleFactor - 1.0f) > 0.01f) {
+            resetScale();
+        }
+        
         if (doublePageMode) { // 双页模式
             // 双页模式下，一次前进两页
             if (currentPage < totalPages - 1) {
