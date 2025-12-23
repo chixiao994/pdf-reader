@@ -950,7 +950,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout topBar = new LinearLayout(this);
         topBar.setOrientation(LinearLayout.HORIZONTAL);
         topBar.setBackgroundColor(getStatusBarColor()); // 日间卡其色，夜间黑色
-        topBar.setPadding(5, 5, 5, 5); // 减小内边距
+        topBar.setPadding(2, 5, 2, 5); // 减小内边距
         
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
