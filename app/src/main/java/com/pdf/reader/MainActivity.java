@@ -279,14 +279,14 @@ public class MainActivity extends AppCompatActivity {
         TextView noPermissionText = new TextView(this);
         noPermissionText.setText("📂 存储权限未授予\n\n" +
                                "无法自动扫描PDF文件\n\n" +
-                               "请点击下方按钮手动选择PDF文件");
+                               "请点击下方手动选择PDF文件");
         noPermissionText.setTextSize(16);
         noPermissionText.setGravity(android.view.Gravity.CENTER);
         noPermissionText.setTextColor(getTextColor());
         noPermissionText.setPadding(0, 50, 0, 50);
         fileListLayout.addView(noPermissionText);
         
-        // 添加选择文件按钮
+        // 添加选择文件
         openFileBtn = new Button(this);
         openFileBtn.setText("选择PDF文件");
         openFileBtn.setBackgroundColor(Color.parseColor("#4CAF50"));
@@ -313,7 +313,7 @@ public class MainActivity extends AppCompatActivity {
         fileListLayout.setPadding(20, 20, 20, 20);
         fileListLayout.setBackgroundColor(getBackgroundColor());
         
-        // 添加"继续阅读"按钮（如果存在上次阅读的文件）
+        // 添加"继续阅读"（如果存在上次阅读的文件）
         addContinueReadingButton();
         
         // 扫描PDF文件
@@ -393,7 +393,7 @@ public class MainActivity extends AppCompatActivity {
     private void scanPdfFiles() {
         fileListLayout.removeAllViews();
         
-        // 添加"继续阅读"按钮
+        // 添加"继续阅读"
         addContinueReadingButton();
         
         // 检查权限
@@ -580,7 +580,7 @@ public class MainActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 fileListLayout.removeAllViews();
                 
-                // 添加"继续阅读"按钮
+                // 添加"继续阅读"
                 addContinueReadingButton();
                 
                 if (pdfFiles.isEmpty()) {
@@ -880,7 +880,7 @@ public class MainActivity extends AppCompatActivity {
         pageTextView.setPadding(10, 5, 10, 5);
         pageTextView.setGravity(Gravity.CENTER);
         
-        // 上一页按钮 (右下角)
+        // 上一页 (右下角)
         prevBtn = new Button(this);
         prevBtn.setText("上一页");
         prevBtn.setBackgroundColor(Color.parseColor("#6200EE"));
@@ -950,86 +950,98 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout topBar = new LinearLayout(this);
         topBar.setOrientation(LinearLayout.HORIZONTAL);
         topBar.setBackgroundColor(getStatusBarColor()); // 日间卡其色，夜间黑色
-        topBar.setPadding(5, 5, 5, 5); // 缩小内边距
+        topBar.setPadding(5, 5, 5, 5); // 减小内边距
         
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT);
+                LinearLayout.LayoutParams.WRAP_CONTENT);
         params.gravity = Gravity.TOP;
         topBar.setLayoutParams(params);
         
-        // 返回按钮
+        // 返回按钮 - 减小宽度
         Button backBtn = new Button(this);
         backBtn.setText("返回");
         backBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         backBtn.setTextColor(Color.WHITE);
-        backBtn.setPadding(8, 5, 8, 5); // 缩小按钮内边距
         backBtn.setTextSize(12); // 减小文字大小
+        backBtn.setPadding(8, 5, 8, 5); // 减小内边距
         backBtn.setOnClickListener(v -> {
             closePdf();
             showFileList();
         });
         
-        // 夜间模式按钮
+        // 夜间模式按钮 - 减小宽度
         Button nightBtn = new Button(this);
         nightBtn.setText(nightMode ? "日间" : "夜间");
         nightBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         nightBtn.setTextColor(Color.WHITE);
-        nightBtn.setPadding(8, 5, 8, 5); // 缩小按钮内边距
-        nightBtn.setTextSize(12); // 减小文字大小
+        nightBtn.setTextSize(12);
+        nightBtn.setPadding(8, 5, 8, 5);
         nightBtn.setOnClickListener(v -> toggleNightMode());
         
-        // 整页/半页按钮
+        // 整页/半页按钮 - 减小宽度
         halfPageBtn = new Button(this);
         halfPageBtn.setText(halfPageMode ? "整页" : "半页");
         halfPageBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         halfPageBtn.setTextColor(Color.WHITE);
-        halfPageBtn.setPadding(8, 5, 8, 5); // 缩小按钮内边距
-        halfPageBtn.setTextSize(12); // 减小文字大小
+        halfPageBtn.setTextSize(12);
+        halfPageBtn.setPadding(8, 5, 8, 5);
         halfPageBtn.setOnClickListener(v -> toggleHalfPageMode());
         
-        // 单页/双页按钮
+        // 单页/双页按钮 - 减小宽度
         pageModeBtn = new Button(this);
         pageModeBtn.setText(doublePageMode ? "单页" : "双页");
         pageModeBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         pageModeBtn.setTextColor(Color.WHITE);
-        pageModeBtn.setPadding(8, 5, 8, 5); // 缩小按钮内边距
-        pageModeBtn.setTextSize(12); // 减小文字大小
+        pageModeBtn.setTextSize(12);
+        pageModeBtn.setPadding(8, 5, 8, 5);
         pageModeBtn.setOnClickListener(v -> toggleDoublePageMode());
         
-        // 旋转按钮
+        // 旋转按钮 - 减小宽度并缩短文字
         rotateBtn = new Button(this);
         rotateBtn.setText(isRotated ? "转回" : "旋转");
         rotateBtn.setBackgroundColor(Color.parseColor("#3700B3"));
         rotateBtn.setTextColor(Color.WHITE);
-        rotateBtn.setPadding(8, 5, 8, 5); // 缩小按钮内边距
-        rotateBtn.setTextSize(12); // 减小文字大小
+        rotateBtn.setTextSize(12);
+        rotateBtn.setPadding(8, 5, 8, 5);
         rotateBtn.setOnClickListener(v -> toggleRotation());
+        
+        // 为每个按钮设置固定宽度，确保都能显示完整
+        LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        btnParams.weight = 0; // 不占用额外空间
+        btnParams.rightMargin = 0; // 按钮间的小间距
+        
+        backBtn.setLayoutParams(btnParams);
+        nightBtn.setLayoutParams(btnParams);
+        halfPageBtn.setLayoutParams(btnParams);
+        pageModeBtn.setLayoutParams(btnParams);
+        rotateBtn.setLayoutParams(btnParams);
         
         // 创建一个占位的TextView，让按钮靠右对齐
         TextView spacer = new TextView(this);
-        spacer.setLayoutParams(new LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
+        LinearLayout.LayoutParams spacerParams = new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        spacer.setLayoutParams(spacerParams);
         
-        // 使用更紧凑的布局
-        LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(
+        // 创建一个容器来放置所有功能按钮，确保它们不会分散
+        LinearLayout buttonsContainer = new LinearLayout(this);
+        buttonsContainer.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams containerParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
-        buttonParams.setMargins(0, 0, 0, 0); // 设置按钮之间的外边距为2像素
+        buttonsContainer.setLayoutParams(containerParams);
         
-        // 设置按钮的布局参数
-        backBtn.setLayoutParams(buttonParams);
-        nightBtn.setLayoutParams(buttonParams);
-        halfPageBtn.setLayoutParams(buttonParams);
-        pageModeBtn.setLayoutParams(buttonParams);
-        rotateBtn.setLayoutParams(buttonParams);
+        // 将所有功能按钮添加到容器中
+        buttonsContainer.addView(nightBtn);
+        buttonsContainer.addView(halfPageBtn);
+        buttonsContainer.addView(pageModeBtn);
+        buttonsContainer.addView(rotateBtn);
         
         topBar.addView(backBtn);
         topBar.addView(spacer);
-        topBar.addView(nightBtn);
-        topBar.addView(halfPageBtn);
-        topBar.addView(pageModeBtn);
-        topBar.addView(rotateBtn);
+        topBar.addView(buttonsContainer);
         
         return topBar;
     }
