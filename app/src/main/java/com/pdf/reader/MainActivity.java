@@ -1015,7 +1015,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
-        buttonParams.setMargins(2, 0, 2, 0); // 设置按钮之间的外边距为2像素
+        buttonParams.setMargins(0, 0, 0, 0); // 设置按钮之间的外边距为2像素
         
         // 设置按钮的布局参数
         backBtn.setLayoutParams(buttonParams);
