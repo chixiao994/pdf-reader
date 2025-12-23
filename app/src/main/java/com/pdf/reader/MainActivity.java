@@ -1294,15 +1294,15 @@ public class MainActivity extends AppCompatActivity {
                     basePage--; // 如果是奇数页，减1变成偶数页
                 }
                 
-                int leftPageNum = basePage;     // 左页
-                int rightPageNum = basePage + 1;  // 右页
+                int rightPageNum = basePage;     // 右页
+                int leftPageNum = basePage + 1;  // 左页
                 
                 // 确保页码在有效范围内
-                if (leftPageNum >= totalPages) {
-                    leftPageNum = totalPages - 1;
-                }
                 if (rightPageNum >= totalPages) {
                     rightPageNum = totalPages - 1;
+                }
+                if (leftPageNum >= totalPages) {
+                    leftPageNum = totalPages - 1;
                 }
                 
                 // 创建双页Bitmap
