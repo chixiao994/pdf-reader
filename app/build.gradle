@@ -3,63 +3,64 @@ plugins {
 }
 
 android {
-    namespace 'com.pdf.reader'  // 🔧 修复的关键：必须指定namespace
+    namespace 'com.pdf.reader'
     compileSdk 33
     
     defaultConfig {
         applicationId "com.pdf.reader"
         minSdk 21
         targetSdk 33
-        versionCode 12  // 内部版本号
-        versionName "1.0.12"  // 用户可见版本
+        versionCode 12        // 对应1.0.12
+        versionName "1.0.12"  // 显示版本号
         
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        
-        // 支持中文
+        // 支持中文和英文
         resConfigs "zh", "en"
         
-        // 启用矢量图支持
+        // 启用矢量图支持（不影响PDF渲染）
         vectorDrawables.useSupportLibrary = true
     }
     
     buildTypes {
         release {
-            minifyEnabled true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            minifyEnabled false  // 保持不混淆，调试阶段
             
-            // 启用资源压缩
-            shrinkResources true
-            
-            // 签名配置（发布时需要换成正式密钥）
-            signingConfig signingConfigs.debug
+            // 如需发布，可添加签名配置
+            // signingConfig signingConfigs.release
         }
         
         debug {
+            // 调试版本添加后缀，方便同时安装
             applicationIdSuffix ".debug"
             versionNameSuffix "-debug"
         }
     }
     
+    // ✅ 关键：保持Java 1.8兼容性
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17  // 📌 确保是Java 17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-    
-    buildFeatures {
-        viewBinding true  // 启用ViewBinding（可选）
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
 }
 
 dependencies {
-    // AndroidX核心库
+    // 基础UI库（与原配置一致）
     implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'androidx.core:core-ktx:1.10.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    
-    // Material Design组件
     implementation 'com.google.android.material:material:1.9.0'
     
-    // 测试库
+    // ✅ PDF阅读器核心依赖
+    implementation 'androidx.core:core:1.10.0'         // Android核心扩展
+    implementation 'androidx.activity:activity:1.7.2'  // Activity兼容
+    
+    // ✅ 权限请求库（简化权限处理）
+    implementation 'com.guolindev.permissionx:permissionx:1.7.1'
+    
+    // ✅ 文件选择与存储兼容库
+    implementation 'androidx.documentfile:documentfile:1.0.1'
+    
+    // 布局相关（可选）
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    
+    // 测试库（可选）
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
