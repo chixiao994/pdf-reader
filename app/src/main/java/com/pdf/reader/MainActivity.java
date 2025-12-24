@@ -380,7 +380,7 @@ public class MainActivity extends AppCompatActivity {
         topBar.setPadding(20, 20, 20, 20);
         
         TextView title = new TextView(this);
-        title.setText("PDF阅读器 v1.0.8"); // 版本号改为1.0.8
+        title.setText("PDF阅读器 v1.0.13"); // 版本号改为1.0.13
         title.setTextColor(nightMode ? Color.WHITE : Color.BLACK); // 根据夜间模式调整文字颜色
         title.setTextSize(20);
         title.setLayoutParams(new LinearLayout.LayoutParams(
