@@ -3,26 +3,25 @@ plugins {
 }
 
 android {
+    namespace 'com.pdf.reader'  // 🔧 修复的关键：必须指定namespace
     compileSdk 33
-    buildToolsVersion "33.0.0"
-
+    
     defaultConfig {
         applicationId "com.pdf.reader"
         minSdk 21
         targetSdk 33
-        versionCode 12  // 版本代码，每次更新+1
-        versionName "1.0.12"  // 版本名称
+        versionCode 12  // 内部版本号
+        versionName "1.0.12"  // 用户可见版本
         
-        // 支持中文和其他语言
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        
+        // 支持中文
         resConfigs "zh", "en"
         
         // 启用矢量图支持
         vectorDrawables.useSupportLibrary = true
-        
-        // 启用多dex支持（如果方法数超过65535）
-        multiDexEnabled true
     }
-
+    
     buildTypes {
         release {
             minifyEnabled true
@@ -31,48 +30,23 @@ android {
             // 启用资源压缩
             shrinkResources true
             
-            // 签名配置（您需要创建自己的密钥库）
-            signingConfig signingConfigs.debug  // 开发阶段使用debug签名
+            // 签名配置（发布时需要换成正式密钥）
+            signingConfig signingConfigs.debug
         }
+        
         debug {
             applicationIdSuffix ".debug"
             versionNameSuffix "-debug"
         }
     }
     
-    // 启用视图绑定（可选）
-    buildFeatures {
-        viewBinding true
-    }
-    
-    // Java版本
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17  // 📌 确保是Java 17
+        targetCompatibility JavaVersion.VERSION_17
     }
     
-    // 打包选项
-    packagingOptions {
-        exclude 'META-INF/DEPENDENCIES'
-        exclude 'META-INF/LICENSE'
-        exclude 'META-INF/LICENSE.txt'
-        exclude 'META-INF/license.txt'
-        exclude 'META-INF/NOTICE'
-        exclude 'META-INF/NOTICE.txt'
-        exclude 'META-INF/notice.txt'
-        exclude 'META-INF/ASL2.0'
-        exclude 'META-INF/*.kotlin_module'
-    }
-    
-    // 命名输出APK
-    applicationVariants.all { variant ->
-        variant.outputs.all { output ->
-            def formattedDate = new Date().format('yyyyMMdd')
-            def versionCode = variant.versionCode
-            def versionName = variant.versionName
-            
-            outputFileName = "PDFReader_v${versionName}_${formattedDate}_${variant.buildType.name}.apk"
-        }
+    buildFeatures {
+        viewBinding true  // 启用ViewBinding（可选）
     }
 }
 
@@ -85,16 +59,7 @@ dependencies {
     // Material Design组件
     implementation 'com.google.android.material:material:1.9.0'
     
-    // PDF渲染库（Android原生）
-    // 注意：PdfRenderer是Android系统API，不需要额外依赖
-    
-    // 权限请求库（可选，简化权限请求）
-    implementation 'com.guolindev.permissionx:permissionx:1.7.1'
-    
-    // 多dex支持
-    implementation 'androidx.multidex:multidex:2.0.1'
-    
-    // 测试依赖
+    // 测试库
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
