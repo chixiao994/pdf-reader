@@ -884,6 +884,9 @@ public class MainActivity extends AppCompatActivity {
                         // 触摸结束
                         mode = NONE;
                         
+                        // 居中显示（如果图片小于视图）
+                        centerImage();
+                        
                         // 如果不是缩放状态，处理单指点击翻页
                         if (scaleFactor <= 1.01f) { // 基本没有缩放时
                             float x = event.getX();
@@ -1063,6 +1066,44 @@ public class MainActivity extends AppCompatActivity {
         point.set(x / 2, y / 2);
     }
     
+    // 居中图片方法
+    private void centerImage() {
+        if (pdfImageView == null) return;
+        
+        BitmapDrawable drawable = (BitmapDrawable) pdfImageView.getDrawable();
+        if (drawable == null) return;
+        
+        Bitmap bitmap = drawable.getBitmap();
+        if (bitmap == null) return;
+        
+        int viewWidth = pdfImageView.getWidth();
+        int viewHeight = pdfImageView.getHeight();
+        int bitmapWidth = bitmap.getWidth();
+        int bitmapHeight = bitmap.getHeight();
+        
+        // 获取当前矩阵值
+        float[] values = new float[9];
+        matrix.getValues(values);
+        float scale = values[Matrix.MSCALE_X];
+        
+        // 计算缩放后的尺寸
+        float scaledWidth = bitmapWidth * scale;
+        float scaledHeight = bitmapHeight * scale;
+        
+        // 如果图片小于视图，居中显示
+        if (scaledWidth <= viewWidth || scaledHeight <= viewHeight) {
+            float dx = (viewWidth - scaledWidth) / 2f;
+            float dy = (viewHeight - scaledHeight) / 2f;
+            
+            values[Matrix.MTRANS_X] = dx;
+            values[Matrix.MTRANS_Y] = dy;
+            matrix.setValues(values);
+            
+            pdfImageView.setImageMatrix(matrix);
+            pdfImageView.invalidate();
+        }
+    }
+    
     // 限制拖动范围，防止图片被拖出边界
     private void limitDrag() {
         // 获取图片的实际边界
@@ -1089,7 +1130,7 @@ public class MainActivity extends AppCompatActivity {
         float scaledWidth = bitmapWidth * scale;
         float scaledHeight = bitmapHeight * scale;
         
-        // 限制横向拖动
+        // 限制横向位置
         if (scaledWidth > viewWidth) {
             // 图片宽度大于视图宽度，限制左右边界
             if (transX > 0) {
@@ -1102,7 +1143,7 @@ public class MainActivity extends AppCompatActivity {
             transX = (viewWidth - scaledWidth) / 2;
         }
         
-        // 限制纵向拖动
+        // 限制纵向位置
         if (scaledHeight > viewHeight) {
             // 图片高度大于视图高度，限制上下边界
             if (transY > 0) {
@@ -1119,14 +1160,18 @@ public class MainActivity extends AppCompatActivity {
         values[Matrix.MTRANS_X] = transX;
         values[Matrix.MTRANS_Y] = transY;
         matrix.setValues(values);
+        
+        // 更新ImageView
+        pdfImageView.setImageMatrix(matrix);
     }
     
     private void resetScale() {
         // 恢复原始大小和位置
         scaleFactor = 1.0f;
         matrix.reset();
-        pdfImageView.setImageMatrix(matrix);
-        pdfImageView.invalidate();
+        
+        // 居中显示
+        centerImage();
     }
     
     private LinearLayout createReaderTopBar() {
@@ -1520,6 +1565,9 @@ public class MainActivity extends AppCompatActivity {
                     } else {
                         pageTextView.setText((leftPageNum + 1) + "/" + totalPages);
                     }
+                    
+                    // 居中显示
+                    centerImage();
                 }
                 
             } else { // 单页模式（可能包含半页模式）
@@ -1592,10 +1640,10 @@ public class MainActivity extends AppCompatActivity {
                 // 设置图片到ImageView
                 pdfImageView.setImageBitmap(bitmap);
                 
-                // 重置缩放参数
+                // 重置缩放参数并居中显示
                 scaleFactor = 1.0f;
                 matrix.reset();
-                pdfImageView.setImageMatrix(matrix);
+                centerImage();
             }
             
             // 保存阅读位置
