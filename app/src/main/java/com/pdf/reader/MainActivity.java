@@ -132,6 +132,20 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
         // 检查是否应该自动打开上次阅读的文件
         checkAutoOpenLastFile();
+        
+        // 如果正在阅读界面，重新显示当前页面（解决从后台返回时显示空白的问题）
+        if (pdfRenderer != null && pdfImageView != null) {
+            // 延迟一小段时间确保布局完成
+            pdfImageView.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    // 强制重新绘制
+                    pdfImageView.invalidate();
+                    // 重新居中显示
+                    centerImage();
+                }
+            }, 200);
+        }
     }
     
     private void checkAutoOpenLastFile() {
@@ -380,7 +394,7 @@ public class MainActivity extends AppCompatActivity {
         topBar.setPadding(20, 20, 20, 20);
         
         TextView title = new TextView(this);
-        title.setText("PDF阅读器 v1.0.13"); // 版本号改为1.0.13
+        title.setText("PDF阅读器 v1.0.14"); // 版本号改为1.0.14
         title.setTextColor(nightMode ? Color.WHITE : Color.BLACK); // 根据夜间模式调整文字颜色
         title.setTextSize(20);
         title.setLayoutParams(new LinearLayout.LayoutParams(
@@ -1048,8 +1062,13 @@ public class MainActivity extends AppCompatActivity {
         
         mainLayout.addView(readerContainer);
         
-        // 显示当前页面
-        displayCurrentPage();
+        // 延迟显示当前页面，确保布局完成
+        pdfImageView.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                displayCurrentPage();
+            }
+        }, 100);
     }
     
     // 计算两指距离
@@ -1069,6 +1088,18 @@ public class MainActivity extends AppCompatActivity {
     // 居中图片方法
     private void centerImage() {
         if (pdfImageView == null) return;
+        
+        // 检查视图是否已经测量完成
+        if (pdfImageView.getWidth() == 0 || pdfImageView.getHeight() == 0) {
+            // 视图还没有测量完成，延迟重试
+            pdfImageView.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    centerImage();
+                }
+            }, 50);
+            return;
+        }
         
         BitmapDrawable drawable = (BitmapDrawable) pdfImageView.getDrawable();
         if (drawable == null) return;
@@ -1596,8 +1627,16 @@ public class MainActivity extends AppCompatActivity {
                         pageTextView.setText((leftPageNum + 1) + "/" + totalPages);
                     }
                     
-                    // 居中显示
-                    centerImage();
+                    // 立即显示图片，然后延迟居中
+                    pdfImageView.invalidate();
+                    
+                    // 延迟执行居中，确保布局完成
+                    pdfImageView.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            centerImage();
+                        }
+                    }, 100);
                 }
                 
             } else { // 单页模式（可能包含半页模式）
@@ -1686,10 +1725,20 @@ public class MainActivity extends AppCompatActivity {
                 // 设置图片到ImageView
                 pdfImageView.setImageBitmap(bitmap);
                 
-                // 重置缩放参数并居中显示
+                // 立即显示图片
+                pdfImageView.invalidate();
+                
+                // 重置缩放参数
                 scaleFactor = 1.0f;
                 matrix.reset();
-                centerImage();
+                
+                // 延迟执行居中，确保布局完成
+                pdfImageView.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        centerImage();
+                    }
+                }, 100);
             }
             
             // 保存阅读位置
