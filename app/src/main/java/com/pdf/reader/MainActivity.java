@@ -76,8 +76,8 @@ public class MainActivity extends AppCompatActivity {
     
     // 缩放相关变量 - 增强版
     private float scaleFactor = 1.0f;
-    private float minScale = 0.5f;
-    private float maxScale = 5.0f;
+    private float minScale = 0.1f; // 减小最小缩放比例，允许更小的缩放
+    private float maxScale = 10.0f; // 增加最大缩放比例，允许更大的放大
     private Matrix matrix = new Matrix();
     private Matrix savedMatrix = new Matrix();
     private PointF startPoint = new PointF();
@@ -89,6 +89,11 @@ public class MainActivity extends AppCompatActivity {
     private static final int ZOOM = 2;
     private long lastClickTime = 0;
     private static final int DOUBLE_TAP_TIME_THRESHOLD = 300; // 双击时间阈值（毫秒）
+    
+    // 高清渲染相关变量
+    private boolean needHighResRender = false; // 是否需要高清渲染
+    private float highResScaleThreshold = 1.5f; // 高清渲染阈值（大于此值使用高清）
+    private Bitmap currentDisplayBitmap = null; // 当前显示的位图
     
     // 存储
     private SharedPreferences prefs;
@@ -146,6 +151,13 @@ public class MainActivity extends AppCompatActivity {
                 }
             }, 200);
         }
+    }
+    
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // 保存当前阅读位置
+        saveReadingPosition();
     }
     
     private void checkAutoOpenLastFile() {
@@ -394,7 +406,7 @@ public class MainActivity extends AppCompatActivity {
         topBar.setPadding(20, 20, 20, 20);
         
         TextView title = new TextView(this);
-        title.setText("PDF阅读器 v1.0.14"); // 版本号改为1.0.14
+        title.setText("PDF阅读器 v1.0.15"); // 版本号更新为1.0.15
         title.setTextColor(nightMode ? Color.WHITE : Color.BLACK); // 根据夜间模式调整文字颜色
         title.setTextSize(20);
         title.setLayoutParams(new LinearLayout.LayoutParams(
@@ -688,6 +700,9 @@ public class MainActivity extends AppCompatActivity {
             // 保存为最后打开的文件
             saveLastOpenedFile(filePath);
             
+            // 重置缩放参数
+            resetScale();
+            
             // 切换到阅读界面
             showReaderView();
             
@@ -898,6 +913,9 @@ public class MainActivity extends AppCompatActivity {
                         // 触摸结束
                         mode = NONE;
                         
+                        // 检查是否需要高清渲染
+                        checkAndUpdateHighResRender();
+                        
                         // 居中显示（如果图片小于视图）
                         centerImage();
                         
@@ -1044,6 +1062,21 @@ public class MainActivity extends AppCompatActivity {
         jumpParams.bottomMargin = 80;
         jumpBtn.setLayoutParams(jumpParams);
         
+        // 高清渲染按钮
+        Button hdBtn = new Button(this);
+        hdBtn.setText("高清模式: " + (needHighResRender ? "开" : "关"));
+        hdBtn.setBackgroundColor(Color.parseColor("#FF9800")); // 橙色
+        hdBtn.setTextColor(Color.WHITE);
+        hdBtn.setOnClickListener(v -> toggleHighResMode());
+        
+        FrameLayout.LayoutParams hdParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        hdParams.gravity = Gravity.TOP | Gravity.RIGHT;
+        hdParams.rightMargin = 20;
+        hdParams.topMargin = 100;
+        hdBtn.setLayoutParams(hdParams);
+        
         // 底部页码显示布局参数
         FrameLayout.LayoutParams pageParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -1058,6 +1091,7 @@ public class MainActivity extends AppCompatActivity {
         readerContainer.addView(prevBtn);
         readerContainer.addView(nextBtn);
         readerContainer.addView(jumpBtn);
+        readerContainer.addView(hdBtn);
         readerContainer.addView(pageTextView);
         
         mainLayout.addView(readerContainer);
@@ -1215,8 +1249,40 @@ public class MainActivity extends AppCompatActivity {
         scaleFactor = 1.0f;
         matrix.reset();
         
+        // 重置高清渲染标志
+        needHighResRender = false;
+        
         // 居中显示
         centerImage();
+    }
+    
+    private void checkAndUpdateHighResRender() {
+        // 检查当前缩放比例是否超过阈值，如果超过则使用高清渲染
+        boolean shouldUseHighRes = scaleFactor > highResScaleThreshold;
+        
+        if (shouldUseHighRes != needHighResRender) {
+            needHighResRender = shouldUseHighRes;
+            // 重新渲染当前页面以应用新的渲染质量
+            if (pdfRenderer != null) {
+                displayCurrentPage();
+            }
+        }
+    }
+    
+    private void toggleHighResMode() {
+        // 切换高清渲染模式
+        needHighResRender = !needHighResRender;
+        
+        // 更新按钮文本
+        View hdBtn = readerContainer.getChildAt(5);
+        if (hdBtn instanceof Button) {
+            ((Button) hdBtn).setText("高清模式: " + (needHighResRender ? "开" : "关"));
+        }
+        
+        // 重新渲染当前页面
+        if (pdfRenderer != null) {
+            displayCurrentPage();
+        }
     }
     
     private LinearLayout createReaderTopBar() {
@@ -1365,7 +1431,8 @@ public class MainActivity extends AppCompatActivity {
         View prevBtn = readerContainer.getChildAt(2);
         View nextBtn = readerContainer.getChildAt(3);
         View jumpBtn = readerContainer.getChildAt(4);
-        View pageText = readerContainer.getChildAt(5);
+        View hdBtn = readerContainer.getChildAt(5);
+        View pageText = readerContainer.getChildAt(6);
         
         if (controlsVisible) {
             // 显示控制元素
@@ -1373,6 +1440,7 @@ public class MainActivity extends AppCompatActivity {
             prevBtn.setVisibility(View.VISIBLE);
             nextBtn.setVisibility(View.VISIBLE);
             jumpBtn.setVisibility(View.VISIBLE);
+            hdBtn.setVisibility(View.VISIBLE);
             pageText.setVisibility(View.VISIBLE);
         } else {
             // 隐藏控制元素
@@ -1380,6 +1448,7 @@ public class MainActivity extends AppCompatActivity {
             prevBtn.setVisibility(View.GONE);
             nextBtn.setVisibility(View.GONE);
             jumpBtn.setVisibility(View.GONE);
+            hdBtn.setVisibility(View.GONE);
             pageText.setVisibility(View.GONE);
         }
     }
@@ -1460,7 +1529,48 @@ public class MainActivity extends AppCompatActivity {
         return rotatedBitmap;
     }
     
-    // 创建双页Bitmap的方法（居中显示，两页间不留空隙）
+    // 创建高清Bitmap的方法
+    private Bitmap createHighResBitmap(int pageNum, float renderScale) {
+        try {
+            PdfRenderer.Page page = pdfRenderer.openPage(pageNum);
+            
+            // 获取页面原始尺寸
+            int pageWidth = page.getWidth();
+            int pageHeight = page.getHeight();
+            
+            // 根据当前缩放比例计算渲染尺寸
+            // 高清渲染：使用更高的分辨率
+            int renderWidth = (int)(pageWidth * renderScale);
+            int renderHeight = (int)(pageHeight * renderScale);
+            
+            // 限制最大尺寸，避免内存溢出
+            int maxDimension = 4096; // 最大尺寸限制
+            if (renderWidth > maxDimension || renderHeight > maxDimension) {
+                float scale = Math.min((float)maxDimension / renderWidth, (float)maxDimension / renderHeight);
+                renderWidth = (int)(renderWidth * scale);
+                renderHeight = (int)(renderHeight * scale);
+            }
+            
+            // 确保尺寸至少为1
+            renderWidth = Math.max(renderWidth, 1);
+            renderHeight = Math.max(renderHeight, 1);
+            
+            // 创建高分辨率Bitmap
+            Bitmap highResBitmap = Bitmap.createBitmap(renderWidth, renderHeight, Bitmap.Config.ARGB_8888);
+            
+            // 渲染页面到高分辨率Bitmap
+            page.render(highResBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+            page.close();
+            
+            return highResBitmap;
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+    
+    // 创建双页Bitmap的方法（支持高清渲染）
     private Bitmap createDoublePageBitmap(int leftPageNum, int rightPageNum) {
         try {
             // 获取屏幕尺寸
@@ -1474,14 +1584,14 @@ public class MainActivity extends AppCompatActivity {
                 screenHeight = temp;
             }
             
-            // 创建一个足够大的Bitmap来容纳两页（居中显示）
+            // 创建足够大的Bitmap来容纳两页
             Bitmap doubleBitmap = Bitmap.createBitmap(screenWidth, screenHeight, Bitmap.Config.ARGB_8888);
             Canvas canvas = new Canvas(doubleBitmap);
             
             // 设置画布背景色
             canvas.drawColor(getBackgroundColor());
             
-            // 计算统一的缩放比例，确保两页高度一致
+            // 计算统一的缩放比例
             float unifiedScale = 1.0f;
             int unifiedScaledHeight = 0;
             int leftScaledWidth = 0;
@@ -1505,23 +1615,21 @@ public class MainActivity extends AppCompatActivity {
                 rightPage.close();
             }
             
-            // 计算统一的缩放比例
-            // 原则：1. 两页高度一致 2. 总宽度不超过屏幕宽度 3. 高度不超过屏幕高度
-            
-            // 计算两页的平均高度
+            // 计算统一缩放比例
             int maxPageHeight = Math.max(leftPageHeight, rightPageHeight);
-            
-            // 计算缩放比例：高度不超过屏幕高度的95%
             float scaleByHeight = (float) (screenHeight * 0.95) / maxPageHeight;
-            
-            // 计算缩放比例：总宽度不超过屏幕宽度的95%
             int totalPageWidth = leftPageWidth + rightPageWidth;
             float scaleByWidth = (float) (screenWidth * 0.95) / totalPageWidth;
-            
-            // 取较小的缩放比例，确保两页都能完整显示
             unifiedScale = Math.min(scaleByHeight, scaleByWidth);
             
-            // 计算缩放后的尺寸
+            // 应用高清渲染增强
+            float renderScale = unifiedScale;
+            if (needHighResRender) {
+                // 高清模式下增加渲染分辨率
+                renderScale *= Math.max(scaleFactor, 2.0f);
+            }
+            
+            // 计算缩放后尺寸
             unifiedScaledHeight = (int) (maxPageHeight * unifiedScale);
             leftScaledWidth = (int) (leftPageWidth * unifiedScale);
             rightScaledWidth = (int) (rightPageWidth * unifiedScale);
@@ -1531,50 +1639,42 @@ public class MainActivity extends AppCompatActivity {
             int startX = (screenWidth - totalScaledWidth) / 2;
             int startY = (screenHeight - unifiedScaledHeight) / 2;
             
-            // 绘制左页
+            // 绘制左页（使用高清渲染）
             if (leftPageNum < totalPages) {
-                PdfRenderer.Page leftPage = pdfRenderer.openPage(leftPageNum);
-                // 提高渲染质量：使用更大的Bitmap
-                Bitmap leftBitmap = Bitmap.createBitmap(
-                    (int)(leftPageWidth * unifiedScale * 2),  // 提高分辨率
-                    (int)(leftPageHeight * unifiedScale * 2),
-                    Bitmap.Config.ARGB_8888
-                );
-                leftPage.render(leftBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                leftPage.close();
-                
-                // 缩放回合适的尺寸
-                leftBitmap = Bitmap.createScaledBitmap(leftBitmap, leftScaledWidth, unifiedScaledHeight, true);
-                
-                // 夜间模式下反转图片颜色
-                if (nightMode) {
-                    leftBitmap = invertColors(leftBitmap);
+                Bitmap leftBitmap = createHighResBitmap(leftPageNum, renderScale);
+                if (leftBitmap != null) {
+                    // 缩放到显示尺寸
+                    leftBitmap = Bitmap.createScaledBitmap(leftBitmap, leftScaledWidth, unifiedScaledHeight, true);
+                    
+                    // 夜间模式下反转颜色
+                    if (nightMode) {
+                        leftBitmap = invertColors(leftBitmap);
+                    }
+                    
+                    canvas.drawBitmap(leftBitmap, startX, startY, null);
+                    if (!leftBitmap.isRecycled()) {
+                        leftBitmap.recycle();
+                    }
                 }
-                
-                canvas.drawBitmap(leftBitmap, startX, startY, null);
             }
             
             // 绘制右页（紧贴左页，不留空隙）
             if (rightPageNum < totalPages) {
-                PdfRenderer.Page rightPage = pdfRenderer.openPage(rightPageNum);
-                // 提高渲染质量：使用更大的Bitmap
-                Bitmap rightBitmap = Bitmap.createBitmap(
-                    (int)(rightPageWidth * unifiedScale * 2),  // 提高分辨率
-                    (int)(rightPageHeight * unifiedScale * 2),
-                    Bitmap.Config.ARGB_8888
-                );
-                rightPage.render(rightBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                rightPage.close();
-                
-                // 缩放回合适的尺寸
-                rightBitmap = Bitmap.createScaledBitmap(rightBitmap, rightScaledWidth, unifiedScaledHeight, true);
-                
-                // 夜间模式下反转图片颜色
-                if (nightMode) {
-                    rightBitmap = invertColors(rightBitmap);
+                Bitmap rightBitmap = createHighResBitmap(rightPageNum, renderScale);
+                if (rightBitmap != null) {
+                    // 缩放到显示尺寸
+                    rightBitmap = Bitmap.createScaledBitmap(rightBitmap, rightScaledWidth, unifiedScaledHeight, true);
+                    
+                    // 夜间模式下反转颜色
+                    if (nightMode) {
+                        rightBitmap = invertColors(rightBitmap);
+                    }
+                    
+                    canvas.drawBitmap(rightBitmap, startX + leftScaledWidth, startY, null);
+                    if (!rightBitmap.isRecycled()) {
+                        rightBitmap.recycle();
+                    }
                 }
-                
-                canvas.drawBitmap(rightBitmap, startX + leftScaledWidth, startY, null);
             }
             
             // 如果旋转了90度，旋转整个双页图
@@ -1588,15 +1688,19 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
             return null;
         }
-    }           
-
+    }
+    
     private void displayCurrentPage() {
         if (pdfRenderer == null) return;
         
         try {
+            // 回收之前的Bitmap
+            if (currentDisplayBitmap != null && !currentDisplayBitmap.isRecycled()) {
+                currentDisplayBitmap.recycle();
+                currentDisplayBitmap = null;
+            }
+            
             if (doublePageMode) { // 双页模式
-                // 双页模式下，currentPage代表当前显示的右页页码
-                // 确保页码为偶数，以保证右1左2，右3左4，右5左6的顺序
                 int basePage = currentPage;
                 if (basePage % 2 != 0) {
                     basePage--; // 如果是奇数页，减1变成偶数页
@@ -1615,6 +1719,7 @@ public class MainActivity extends AppCompatActivity {
                 
                 // 创建双页Bitmap
                 Bitmap doubleBitmap = createDoublePageBitmap(leftPageNum, rightPageNum);
+                currentDisplayBitmap = doubleBitmap;
                 
                 if (doubleBitmap != null) {
                     // 设置图片到ImageView
@@ -1640,11 +1745,11 @@ public class MainActivity extends AppCompatActivity {
                 }
                 
             } else { // 单页模式（可能包含半页模式）
-                PdfRenderer.Page page = pdfRenderer.openPage(currentPage);
-                
                 // 获取页面原始尺寸
+                PdfRenderer.Page page = pdfRenderer.openPage(currentPage);
                 int pageWidth = page.getWidth();
                 int pageHeight = page.getHeight();
+                page.close();
                 
                 // 获取屏幕尺寸
                 int screenWidth = getResources().getDisplayMetrics().widthPixels;
@@ -1658,79 +1763,79 @@ public class MainActivity extends AppCompatActivity {
                 }
                 
                 // 计算保持长宽比的缩放比例
-                float scale = Math.min(
+                float displayScale = Math.min(
                     (float) screenWidth / pageWidth,
                     (float) screenHeight / pageHeight
                 );
                 
                 // 半页模式下，重新计算缩放比例使宽度撑满
                 if (halfPageMode) {
-                    // 半页模式：半页宽度应该撑满屏幕宽度
-                    scale = Math.min(
+                    displayScale = Math.min(
                         (float) screenWidth / (pageWidth / 2),  // 半页宽度撑满
                         (float) screenHeight / pageHeight
                     );
                 }
                 
-                // 提高渲染质量：使用更高的分辨率（2倍）
-                int highResWidth = (int)(pageWidth * scale * 2);
-                int highResHeight = (int)(pageHeight * scale * 2);
+                // 计算渲染比例（考虑高清模式）
+                float renderScale = displayScale;
+                if (needHighResRender) {
+                    // 高清模式下，根据当前缩放比例增加渲染分辨率
+                    renderScale *= Math.max(scaleFactor, 2.0f);
+                } else if (scaleFactor > highResScaleThreshold) {
+                    // 自动高清模式：当缩放超过阈值时自动使用高清渲染
+                    renderScale *= scaleFactor;
+                }
                 
-                // 创建高分辨率的Bitmap
-                Bitmap highResBitmap = Bitmap.createBitmap(
-                    Math.max(highResWidth, 1),  // 确保宽度至少为1
-                    Math.max(highResHeight, 1), // 确保高度至少为1
-                    Bitmap.Config.ARGB_8888
-                );
+                // 创建高清Bitmap
+                Bitmap highResBitmap = createHighResBitmap(currentPage, renderScale);
                 
-                // 渲染页面到高分辨率Bitmap
-                page.render(highResBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-                page.close();
+                if (highResBitmap == null) {
+                    Toast.makeText(this, "渲染页面失败", Toast.LENGTH_SHORT).show();
+                    return;
+                }
                 
                 // 计算最终显示尺寸
-                int scaledWidth = (int) (pageWidth * scale);
-                int scaledHeight = (int) (pageHeight * scale);
+                int scaledWidth = (int) (pageWidth * displayScale);
+                int scaledHeight = (int) (pageHeight * displayScale);
                 
-                // 从高分辨率Bitmap缩放到显示尺寸（保持清晰度）
-                Bitmap bitmap = Bitmap.createScaledBitmap(highResBitmap, scaledWidth, scaledHeight, true);
+                // 从高清Bitmap缩放到显示尺寸
+                Bitmap displayBitmap = Bitmap.createScaledBitmap(highResBitmap, scaledWidth, scaledHeight, true);
                 
-                // 释放高分辨率Bitmap的内存
-                if (!highResBitmap.isRecycled() && highResBitmap != bitmap) {
+                // 释放高清Bitmap
+                if (!highResBitmap.isRecycled() && highResBitmap != displayBitmap) {
                     highResBitmap.recycle();
                 }
                 
                 // 半页模式下，进行裁剪
                 if (halfPageMode) {
                     if (leftPage) {
-                        bitmap = Bitmap.createBitmap(bitmap, 0, 0, scaledWidth / 2, scaledHeight);
+                        displayBitmap = Bitmap.createBitmap(displayBitmap, 0, 0, scaledWidth / 2, scaledHeight);
                         pageTextView.setText((currentPage + 1) + "/" + totalPages + " (左)");
                     } else {
-                        bitmap = Bitmap.createBitmap(bitmap, scaledWidth / 2, 0, scaledWidth / 2, scaledHeight);
+                        displayBitmap = Bitmap.createBitmap(displayBitmap, scaledWidth / 2, 0, scaledWidth / 2, scaledHeight);
                         pageTextView.setText((currentPage + 1) + "/" + totalPages + " (右)");
                     }
                 } else {
                     pageTextView.setText((currentPage + 1) + "/" + totalPages);
                 }
                 
-                // 夜间模式下反转图片颜色（黑白反转）
+                // 夜间模式下反转图片颜色
                 if (nightMode) {
-                    bitmap = invertColors(bitmap);
+                    displayBitmap = invertColors(displayBitmap);
                 }
                 
                 // 如果旋转了90度，旋转图片
                 if (isRotated) {
-                    bitmap = rotateBitmap90(bitmap);
+                    displayBitmap = rotateBitmap90(displayBitmap);
                 }
                 
+                currentDisplayBitmap = displayBitmap;
+                
                 // 设置图片到ImageView
-                pdfImageView.setImageBitmap(bitmap);
+                pdfImageView.setImageBitmap(displayBitmap);
                 
                 // 立即显示图片
                 pdfImageView.invalidate();
-                
-                // 重置缩放参数
-                scaleFactor = 1.0f;
-                matrix.reset();
                 
                 // 延迟执行居中，确保布局完成
                 pdfImageView.postDelayed(new Runnable() {
@@ -1757,7 +1862,6 @@ public class MainActivity extends AppCompatActivity {
         }
         
         if (doublePageMode) { // 双页模式
-            // 双页模式下，一次后退两页
             if (currentPage > 1) {
                 currentPage -= 2;
             } else {
@@ -1766,15 +1870,12 @@ public class MainActivity extends AppCompatActivity {
             }
         } else if (halfPageMode) { // 半页模式
             if (leftPage) {
-                // 当前是左半页，上一页应该是同页的右半部分
                 leftPage = false;
             } else {
-                // 当前是右半页，上一页应该是上一页的左半部分
                 if (currentPage > 0) {
                     currentPage--;
                     leftPage = true;
                 } else {
-                    // 已经是第0页的右半页，没有上一页了
                     Toast.makeText(this, "已经是第一页", Toast.LENGTH_SHORT).show();
                 }
             }
@@ -1793,7 +1894,6 @@ public class MainActivity extends AppCompatActivity {
         }
         
         if (doublePageMode) { // 双页模式
-            // 双页模式下，一次前进两页
             if (currentPage < totalPages - 1) {
                 currentPage += 2;
                 if (currentPage >= totalPages) {
@@ -1804,16 +1904,13 @@ public class MainActivity extends AppCompatActivity {
             }
         } else if (halfPageMode) { // 半页模式
             if (leftPage) {
-                // 当前是左半页，下一页应该是下一页的右半部分
                 if (currentPage < totalPages - 1) {
                     currentPage++;
                     leftPage = false;
                 } else {
-                    // 已经是最后一页的左半页，没有下一页了
                     Toast.makeText(this, "已经是最后一页", Toast.LENGTH_SHORT).show();
                 }
             } else {
-                // 当前是右半页，下一页应该是同页的左半部分
                 leftPage = true;
             }
         } else { // 单页模式
@@ -1859,12 +1956,20 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void closePdf() {
+        // 回收当前显示的Bitmap
+        if (currentDisplayBitmap != null && !currentDisplayBitmap.isRecycled()) {
+            currentDisplayBitmap.recycle();
+            currentDisplayBitmap = null;
+        }
+        
         if (pdfRenderer != null) {
             pdfRenderer.close();
+            pdfRenderer = null;
         }
         if (fileDescriptor != null) {
             try {
                 fileDescriptor.close();
+                fileDescriptor = null;
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -1923,4 +2028,4 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
-}
+                        }
