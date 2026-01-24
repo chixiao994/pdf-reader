@@ -76,8 +76,8 @@ public class MainActivity extends AppCompatActivity {
     
     // 缩放相关变量 - 增强版
     private float scaleFactor = 1.0f;
-    private float minScale = 0.3f; // 缩小更多以查看整体
-    private float maxScale = 8.0f; // 放大更多以查看细节
+    private float minScale = 0.5f;
+    private float maxScale = 5.0f;
     private Matrix matrix = new Matrix();
     private Matrix savedMatrix = new Matrix();
     private PointF startPoint = new PointF();
@@ -89,12 +89,6 @@ public class MainActivity extends AppCompatActivity {
     private static final int ZOOM = 2;
     private long lastClickTime = 0;
     private static final int DOUBLE_TAP_TIME_THRESHOLD = 300; // 双击时间阈值（毫秒）
-    
-    // 高清渲染相关
-    private Bitmap currentHighResBitmap; // 当前页面的高清位图
-    private float currentRenderScale = 1.0f; // 当前渲染的缩放比例
-    private static final float HIGH_RES_FACTOR = 3.0f; // 高清渲染因子（3倍原始分辨率）
-    private static final int MAX_BITMAP_SIZE = 4096; // 最大位图尺寸（防止内存溢出）
     
     // 存储
     private SharedPreferences prefs;
@@ -400,7 +394,7 @@ public class MainActivity extends AppCompatActivity {
         topBar.setPadding(20, 20, 20, 20);
         
         TextView title = new TextView(this);
-        title.setText("PDF阅读器 v1.0.15"); // 版本号更新为1.0.15
+        title.setText("PDF阅读器 v1.0.14"); // 版本号改为1.0.14
         title.setTextColor(nightMode ? Color.WHITE : Color.BLACK); // 根据夜间模式调整文字颜色
         title.setTextSize(20);
         title.setLayoutParams(new LinearLayout.LayoutParams(
@@ -982,25 +976,6 @@ public class MainActivity extends AppCompatActivity {
                                 
                                 // 缩放后限制位置
                                 limitDrag();
-                                
-                                // 当缩放比例较大时，考虑重新渲染高清图像
-                                if (scaleFactor > 2.0f && currentHighResBitmap != null) {
-                                    // 如果当前的高清图像分辨率不够，重新渲染
-                                    float desiredResolution = Math.max(
-                                        v.getWidth() * scaleFactor / currentRenderScale,
-                                        v.getHeight() * scaleFactor / currentRenderScale
-                                    );
-                                    
-                                    if (desiredResolution > currentHighResBitmap.getWidth() * 0.8) {
-                                        // 重新渲染更高清的图像
-                                        new Thread(new Runnable() {
-                                            @Override
-                                            public void run() {
-                                                renderHighResolutionPage(currentPage, scaleFactor * 1.5f);
-                                            }
-                                        }).start();
-                                    }
-                                }
                             }
                         }
                         break;
@@ -1318,123 +1293,14 @@ public class MainActivity extends AppCompatActivity {
         rotateBtn.setLayoutParams(btnParams);
         rotateBtn.setOnClickListener(v -> toggleRotation());
         
-        // 高清渲染开关按钮
-        Button hdBtn = new Button(this);
-        hdBtn.setText("高清渲染");
-        hdBtn.setBackgroundColor(Color.parseColor("#4CAF50")); // 绿色表示已开启
-        hdBtn.setTextColor(Color.WHITE);
-        hdBtn.setTextSize(12);
-        hdBtn.setPadding(0, 5, 0, 5);
-        hdBtn.setAllCaps(false);
-        hdBtn.setLayoutParams(btnParams);
-        hdBtn.setOnClickListener(v -> {
-            Toast.makeText(MainActivity.this, "高清渲染已开启 (v1.0.15)", Toast.LENGTH_SHORT).show();
-            // 重新渲染当前页面的高清版本
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    renderHighResolutionPage(currentPage, HIGH_RES_FACTOR);
-                }
-            }).start();
-        });
-        
         // 将所有按钮添加到顶部栏
         topBar.addView(backBtn);
         topBar.addView(nightBtn);
         topBar.addView(halfPageBtn);
         topBar.addView(pageModeBtn);
         topBar.addView(rotateBtn);
-        topBar.addView(hdBtn);
         
         return topBar;
-    }
-    
-    // 渲染高清页面（后台线程）
-    private void renderHighResolutionPage(final int pageNumber, final float renderScale) {
-        if (pdfRenderer == null || pageNumber < 0 || pageNumber >= totalPages) {
-            return;
-        }
-        
-        try {
-            PdfRenderer.Page page = pdfRenderer.openPage(pageNumber);
-            
-            // 获取页面原始尺寸
-            int pageWidth = page.getWidth();
-            int pageHeight = page.getHeight();
-            
-            // 计算高清渲染尺寸
-            int highResWidth = (int) (pageWidth * renderScale);
-            int highResHeight = (int) (pageHeight * renderScale);
-            
-            // 限制最大尺寸，防止内存溢出
-            highResWidth = Math.min(highResWidth, MAX_BITMAP_SIZE);
-            highResHeight = Math.min(highResHeight, MAX_BITMAP_SIZE);
-            
-            // 创建高清Bitmap
-            Bitmap highResBitmap = Bitmap.createBitmap(
-                highResWidth, 
-                highResHeight, 
-                Bitmap.Config.ARGB_8888
-            );
-            
-            // 渲染页面到高清Bitmap
-            page.render(highResBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-            page.close();
-            
-            // 夜间模式下反转图片颜色
-            if (nightMode) {
-                highResBitmap = invertColors(highResBitmap);
-            }
-            
-            // 如果旋转了90度，旋转图片
-            if (isRotated) {
-                highResBitmap = rotateBitmap90(highResBitmap);
-            }
-            
-            // 保存高清Bitmap和渲染比例
-            synchronized (this) {
-                if (currentHighResBitmap != null && !currentHighResBitmap.isRecycled()) {
-                    currentHighResBitmap.recycle();
-                }
-                currentHighResBitmap = highResBitmap;
-                currentRenderScale = renderScale;
-            }
-            
-            // 回到UI线程更新显示
-            runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    if (currentPage == pageNumber && pdfImageView != null) {
-                        // 获取当前矩阵
-                        float[] values = new float[9];
-                        matrix.getValues(values);
-                        float currentScale = values[Matrix.MSCALE_X];
-                        float transX = values[Matrix.MTRANS_X];
-                        float transY = values[Matrix.MTRANS_Y];
-                        
-                        // 设置高清图像
-                        pdfImageView.setImageBitmap(highResBitmap);
-                        
-                        // 重新应用当前的缩放和位移
-                        matrix.reset();
-                        matrix.postScale(currentScale, currentScale);
-                        matrix.postTranslate(transX, transY);
-                        pdfImageView.setImageMatrix(matrix);
-                        
-                        // 更新显示
-                        pdfImageView.invalidate();
-                        
-                        Toast.makeText(MainActivity.this, 
-                            "已加载高清渲染 (" + highResWidth + "x" + highResHeight + ")", 
-                            Toast.LENGTH_SHORT).show();
-                    }
-                }
-            });
-            
-        } catch (Exception e) {
-            Log.e("PDF_DEBUG", "高清渲染失败: " + e.getMessage());
-            e.printStackTrace();
-        }
     }
     
     private void toggleRotation() {
@@ -1655,9 +1521,6 @@ public class MainActivity extends AppCompatActivity {
             // 取较小的缩放比例，确保两页都能完整显示
             unifiedScale = Math.min(scaleByHeight, scaleByWidth);
             
-            // 使用高清渲染因子提高分辨率
-            float highResScale = unifiedScale * HIGH_RES_FACTOR;
-            
             // 计算缩放后的尺寸
             unifiedScaledHeight = (int) (maxPageHeight * unifiedScale);
             leftScaledWidth = (int) (leftPageWidth * unifiedScale);
@@ -1671,17 +1534,10 @@ public class MainActivity extends AppCompatActivity {
             // 绘制左页
             if (leftPageNum < totalPages) {
                 PdfRenderer.Page leftPage = pdfRenderer.openPage(leftPageNum);
-                // 使用高清渲染
-                int highResLeftWidth = (int) (leftPageWidth * highResScale);
-                int highResLeftHeight = (int) (leftPageHeight * highResScale);
-                
-                // 限制最大尺寸
-                highResLeftWidth = Math.min(highResLeftWidth, MAX_BITMAP_SIZE);
-                highResLeftHeight = Math.min(highResLeftHeight, MAX_BITMAP_SIZE);
-                
+                // 提高渲染质量：使用更大的Bitmap
                 Bitmap leftBitmap = Bitmap.createBitmap(
-                    highResLeftWidth, 
-                    highResLeftHeight,
+                    (int)(leftPageWidth * unifiedScale * 2),  // 提高分辨率
+                    (int)(leftPageHeight * unifiedScale * 2),
                     Bitmap.Config.ARGB_8888
                 );
                 leftPage.render(leftBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
@@ -1701,17 +1557,10 @@ public class MainActivity extends AppCompatActivity {
             // 绘制右页（紧贴左页，不留空隙）
             if (rightPageNum < totalPages) {
                 PdfRenderer.Page rightPage = pdfRenderer.openPage(rightPageNum);
-                // 使用高清渲染
-                int highResRightWidth = (int) (rightPageWidth * highResScale);
-                int highResRightHeight = (int) (rightPageHeight * highResScale);
-                
-                // 限制最大尺寸
-                highResRightWidth = Math.min(highResRightWidth, MAX_BITMAP_SIZE);
-                highResRightHeight = Math.min(highResRightHeight, MAX_BITMAP_SIZE);
-                
+                // 提高渲染质量：使用更大的Bitmap
                 Bitmap rightBitmap = Bitmap.createBitmap(
-                    highResRightWidth, 
-                    highResRightHeight,
+                    (int)(rightPageWidth * unifiedScale * 2),  // 提高分辨率
+                    (int)(rightPageHeight * unifiedScale * 2),
                     Bitmap.Config.ARGB_8888
                 );
                 rightPage.render(rightBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
@@ -1823,14 +1672,9 @@ public class MainActivity extends AppCompatActivity {
                     );
                 }
                 
-                // 使用高清渲染：初始渲染就使用较高分辨率
-                float highResScale = scale * HIGH_RES_FACTOR;
-                int highResWidth = (int)(pageWidth * highResScale);
-                int highResHeight = (int)(pageHeight * highResScale);
-                
-                // 限制最大尺寸
-                highResWidth = Math.min(highResWidth, MAX_BITMAP_SIZE);
-                highResHeight = Math.min(highResHeight, MAX_BITMAP_SIZE);
+                // 提高渲染质量：使用更高的分辨率（2倍）
+                int highResWidth = (int)(pageWidth * scale * 2);
+                int highResHeight = (int)(pageHeight * scale * 2);
                 
                 // 创建高分辨率的Bitmap
                 Bitmap highResBitmap = Bitmap.createBitmap(
@@ -1850,13 +1694,9 @@ public class MainActivity extends AppCompatActivity {
                 // 从高分辨率Bitmap缩放到显示尺寸（保持清晰度）
                 Bitmap bitmap = Bitmap.createScaledBitmap(highResBitmap, scaledWidth, scaledHeight, true);
                 
-                // 保存高清Bitmap
-                synchronized (this) {
-                    if (currentHighResBitmap != null && !currentHighResBitmap.isRecycled()) {
-                        currentHighResBitmap.recycle();
-                    }
-                    currentHighResBitmap = highResBitmap;
-                    currentRenderScale = highResScale;
+                // 释放高分辨率Bitmap的内存
+                if (!highResBitmap.isRecycled() && highResBitmap != bitmap) {
+                    highResBitmap.recycle();
                 }
                 
                 // 半页模式下，进行裁剪
@@ -2019,14 +1859,6 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void closePdf() {
-        // 清理高清Bitmap
-        synchronized (this) {
-            if (currentHighResBitmap != null && !currentHighResBitmap.isRecycled()) {
-                currentHighResBitmap.recycle();
-                currentHighResBitmap = null;
-            }
-        }
-        
         if (pdfRenderer != null) {
             pdfRenderer.close();
         }
@@ -2091,4 +1923,4 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
-}
+                    }
