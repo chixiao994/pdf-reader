@@ -987,14 +987,17 @@ public class MainActivity extends AppCompatActivity {
                                 if (scaleFactor > 2.0f && currentHighResBitmap != null) {
                                     // 如果当前的高清图像分辨率不够，重新渲染
                                     float desiredResolution = Math.max(
-                                        pdfImageView.getWidth() * scaleFactor / currentRenderScale,
-                                        pdfImageView.getHeight() * scaleFactor / currentRenderScale
+                                        v.getWidth() * scaleFactor / currentRenderScale,
+                                        v.getHeight() * scaleFactor / currentRenderScale
                                     );
                                     
                                     if (desiredResolution > currentHighResBitmap.getWidth() * 0.8) {
                                         // 重新渲染更高清的图像
-                                        new Thread(() -> {
-                                            renderHighResolutionPage(currentPage, scaleFactor * 1.5f);
+                                        new Thread(new Runnable() {
+                                            @Override
+                                            public void run() {
+                                                renderHighResolutionPage(currentPage, scaleFactor * 1.5f);
+                                            }
                                         }).start();
                                     }
                                 }
@@ -1327,8 +1330,11 @@ public class MainActivity extends AppCompatActivity {
         hdBtn.setOnClickListener(v -> {
             Toast.makeText(MainActivity.this, "高清渲染已开启 (v1.0.15)", Toast.LENGTH_SHORT).show();
             // 重新渲染当前页面的高清版本
-            new Thread(() -> {
-                renderHighResolutionPage(currentPage, HIGH_RES_FACTOR);
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    renderHighResolutionPage(currentPage, HIGH_RES_FACTOR);
+                }
             }).start();
         });
         
@@ -1395,30 +1401,33 @@ public class MainActivity extends AppCompatActivity {
             }
             
             // 回到UI线程更新显示
-            runOnUiThread(() -> {
-                if (currentPage == pageNumber && pdfImageView != null) {
-                    // 获取当前矩阵
-                    float[] values = new float[9];
-                    matrix.getValues(values);
-                    float currentScale = values[Matrix.MSCALE_X];
-                    float transX = values[Matrix.MTRANS_X];
-                    float transY = values[Matrix.MTRANS_Y];
-                    
-                    // 设置高清图像
-                    pdfImageView.setImageBitmap(highResBitmap);
-                    
-                    // 重新应用当前的缩放和位移
-                    matrix.reset();
-                    matrix.postScale(currentScale, currentScale);
-                    matrix.postTranslate(transX, transY);
-                    pdfImageView.setImageMatrix(matrix);
-                    
-                    // 更新显示
-                    pdfImageView.invalidate();
-                    
-                    Toast.makeText(MainActivity.this, 
-                        "已加载高清渲染 (" + highResWidth + "x" + highResHeight + ")", 
-                        Toast.LENGTH_SHORT).show();
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    if (currentPage == pageNumber && pdfImageView != null) {
+                        // 获取当前矩阵
+                        float[] values = new float[9];
+                        matrix.getValues(values);
+                        float currentScale = values[Matrix.MSCALE_X];
+                        float transX = values[Matrix.MTRANS_X];
+                        float transY = values[Matrix.MTRANS_Y];
+                        
+                        // 设置高清图像
+                        pdfImageView.setImageBitmap(highResBitmap);
+                        
+                        // 重新应用当前的缩放和位移
+                        matrix.reset();
+                        matrix.postScale(currentScale, currentScale);
+                        matrix.postTranslate(transX, transY);
+                        pdfImageView.setImageMatrix(matrix);
+                        
+                        // 更新显示
+                        pdfImageView.invalidate();
+                        
+                        Toast.makeText(MainActivity.this, 
+                            "已加载高清渲染 (" + highResWidth + "x" + highResHeight + ")", 
+                            Toast.LENGTH_SHORT).show();
+                    }
                 }
             });
             
@@ -2082,4 +2091,4 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
-    }
+}
