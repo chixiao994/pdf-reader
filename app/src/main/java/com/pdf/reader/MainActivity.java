@@ -29,7 +29,6 @@ import android.os.Environment;
 import android.os.ParcelFileDescriptor;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
-import android.provider.Settings;
 import android.text.InputType;
 import android.util.Log;
 import android.view.Gravity;
@@ -95,13 +94,11 @@ public class MainActivity extends AppCompatActivity {
     private SharedPreferences prefs;
     private static final String LAST_OPENED_FILE = "last_opened_file"; // 存储最后打开的文件路径
     private static final String AUTO_OPEN_LAST_FILE = "auto_open_last_file"; // 是否自动打开最后文件
-    private static final String PERMISSION_GRANTED = "permission_granted"; // 权限状态
+    private static final String FIRST_RUN = "first_run"; // 是否首次运行
     
     // 权限请求码
     private static final int PERMISSION_REQUEST_CODE = 100;
     private static final int FILE_PICKER_REQUEST_CODE = 101;
-    private static final int DOCUMENT_TREE_REQUEST_CODE = 102; // 新增：访问文件夹权限
-    private static final int APP_SETTINGS_REQUEST_CODE = 103; // 应用设置页面
     
     // 颜色常量
     private static final int DAY_MODE_BG = Color.WHITE;
@@ -123,30 +120,60 @@ public class MainActivity extends AppCompatActivity {
         prefs = getSharedPreferences("pdf_reader", MODE_PRIVATE);
         loadSettings();
         
-        // 创建界面
-        createMainLayout();
-        
-        // 检查并请求权限
-        checkAndRequestPermissions();
+        // 检查是否是首次运行
+        boolean firstRun = prefs.getBoolean(FIRST_RUN, true);
+        if (firstRun) {
+            // 首次运行，标记为非首次运行
+            prefs.edit().putBoolean(FIRST_RUN, false).apply();
+            
+            // 创建界面
+            createMainLayout();
+            
+            // 首次运行时请求权限
+            requestPermissionsOnFirstRun();
+        } else {
+            // 不是首次运行，直接检查是否有上次阅读的文件
+            checkAutoOpenLastFile();
+        }
     }
     
-    private void goBackToFileList() {
-        closePdf();
-        
-        // 检查权限状态，决定显示哪个界面
+    private void requestPermissionsOnFirstRun() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+            if (checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) 
                     != PackageManager.PERMISSION_GRANTED) {
-                // 没有权限，显示无权限的文件列表界面
-                showFileListWithoutScan();
+                
+                // 显示解释对话框
+                new AlertDialog.Builder(this)
+                    .setTitle("需要存储权限")
+                    .setMessage("PDF阅读器需要访问您的存储空间来扫描和读取PDF文件。\n\n" +
+                               "权限将用于：\n" +
+                               "• 扫描PDF文件\n" +
+                               "• 打开您选择的PDF文件\n" +
+                               "• 保存您的阅读进度")
+                    .setPositiveButton("允许", (dialog, which) -> {
+                        requestPermissions(new String[]{
+                            Manifest.permission.READ_EXTERNAL_STORAGE
+                        }, PERMISSION_REQUEST_CODE);
+                    })
+                    .setNegativeButton("不允许", (dialog, which) -> {
+                        // 显示文件列表（只能通过文件选择器选择文件）
+                        showFileListWithoutScan();
+                    })
+                    .setCancelable(false)
+                    .show();
             } else {
-                // 有权限，显示正常的文件列表
+                // 已经有权限，显示文件列表
                 showFileList();
             }
         } else {
             // Android 6.0以下直接显示文件列表
             showFileList();
         }
+    }
+    
+    private void goBackToFileList() {
+        closePdf();
+        showFileList();
     }
     
     @Override
@@ -155,160 +182,8 @@ public class MainActivity extends AppCompatActivity {
             // 正在阅读PDF，返回文件列表
             goBackToFileList();
         } else {
-            // 已经在文件列表界面，正常返回
+            // 已经在文件列表界面，退出应用
             super.onBackPressed();
-        }
-    }
-    
-    private void checkAndRequestPermissions() {
-        // 检查是否已授予权限
-        boolean hasPermission = prefs.getBoolean(PERMISSION_GRANTED, false);
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
-                    != PackageManager.PERMISSION_GRANTED) {
-                
-                // 如果用户之前拒绝了权限，但还没选择"不再询问"
-                if (shouldShowRequestPermissionRationale(Manifest.permission.READ_EXTERNAL_STORAGE)) {
-                    // 显示解释对话框，让用户理解为什么需要权限
-                    showPermissionExplanationDialog();
-                } else if (!hasPermission) {
-                    // 第一次请求权限，显示权限选择对话框
-                    showPermissionChoiceDialog();
-                } else {
-                    // 用户之前拒绝了并选择了"不再询问"，引导用户去设置
-                    showPermissionDeniedDialog();
-                }
-            } else {
-                // 已经有权限
-                prefs.edit().putBoolean(PERMISSION_GRANTED, true).apply();
-                showFileList();
-            }
-        } else {
-            // Android 6.0以下直接显示文件列表
-            showFileList();
-        }
-    }
-    
-    private void showPermissionExplanationDialog() {
-        new AlertDialog.Builder(this)
-            .setTitle("需要存储权限")
-            .setMessage("PDF阅读器需要访问您的存储空间来扫描和读取PDF文件。\n\n" +
-                       "权限将用于：\n" +
-                       "• 扫描Download文件夹中的PDF文件\n" +
-                       "• 打开您选择的PDF文件\n" +
-                       "• 保存您的阅读进度\n\n" +
-                       "您可以选择以下权限选项：")
-            .setPositiveButton("允许", (dialog, which) -> {
-                // 请求权限
-                requestPermission();
-            })
-            .setNegativeButton("不允许", (dialog, which) -> {
-                // 记录用户拒绝了权限
-                prefs.edit().putBoolean(PERMISSION_GRANTED, false).apply();
-                // 显示文件列表（只能通过文件选择器选择文件）
-                showFileListWithoutScan();
-            })
-            .setNeutralButton("仅本次允许", (dialog, which) -> {
-                // 请求权限，但不标记为永久允许
-                requestPermission();
-            })
-            .show();
-    }
-    
-    private void showPermissionChoiceDialog() {
-        new AlertDialog.Builder(this)
-            .setTitle("存储权限请求")
-            .setMessage("为了提供更好的阅读体验，需要访问您的存储空间。\n\n" +
-                       "请选择权限选项：")
-            .setPositiveButton("始终允许", (dialog, which) -> {
-                // 记录用户希望永久允许
-                prefs.edit().putBoolean(PERMISSION_GRANTED, true).apply();
-                // 请求权限
-                requestPermission();
-            })
-            .setNegativeButton("仅本次允许", (dialog, which) -> {
-                // 不记录永久允许，只请求本次权限
-                requestPermission();
-            })
-            .setNeutralButton("不允许", (dialog, which) -> {
-                // 记录用户拒绝了权限
-                prefs.edit().putBoolean(PERMISSION_GRANTED, false).apply();
-                showFileListWithoutScan();
-            })
-            .show();
-    }
-    
-    private void showPermissionDeniedDialog() {
-        new AlertDialog.Builder(this)
-            .setTitle("权限被拒绝")
-            .setMessage("您之前拒绝了存储权限，并且选择了\"不再询问\"。\n\n" +
-                       "为了正常使用PDF阅读功能，您需要在系统设置中手动授予权限。\n\n" +
-                       "是否前往设置页面授予权限？")
-            .setPositiveButton("去设置", (dialog, which) -> {
-                // 跳转到应用设置页面
-                openAppSettings();
-            })
-            .setNegativeButton("稍后再说", (dialog, which) -> {
-                showFileListWithoutScan();
-            })
-            .show();
-    }
-    
-    private void requestPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            requestPermissions(new String[]{
-                Manifest.permission.READ_EXTERNAL_STORAGE
-            }, PERMISSION_REQUEST_CODE);
-        }
-    }
-    
-    private void openAppSettings() {
-        Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-        Uri uri = Uri.fromParts("package", getPackageName(), null);
-        intent.setData(uri);
-        startActivityForResult(intent, APP_SETTINGS_REQUEST_CODE);
-    }
-    
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        
-        if (resultCode == RESULT_OK && data != null) {
-            Uri uri = data.getData();
-            if (uri != null) {
-                // 调试信息
-                Log.d("PDF_DEBUG", "URI Scheme: " + uri.getScheme());
-                Log.d("PDF_DEBUG", "URI Path: " + uri.getPath());
-                
-                if (requestCode == FILE_PICKER_REQUEST_CODE) {
-                    // 对于Android 11+，尝试获取持久化访问权限
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-                        try {
-                            final int takeFlags = data.getFlags() & 
-                                (Intent.FLAG_GRANT_READ_URI_PERMISSION | 
-                                 Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-                            getContentResolver().takePersistableUriPermission(uri, takeFlags);
-                        } catch (SecurityException e) {
-                            Log.e("PDF_DEBUG", "无法获取持久化权限", e);
-                        }
-                    }
-                    
-                    // 方法1：尝试获取真实路径
-                    String filePath = getRealPathFromUri(uri);
-                    Log.d("PDF_DEBUG", "Real Path: " + filePath);
-                    
-                    if (filePath != null && new File(filePath).exists()) {
-                        openPdfFile(filePath);
-                    } else {
-                        // 方法2：使用URI直接打开（复制临时文件）
-                        openPdfFromUri(uri);
-                    }
-                }
-            }
-        } else if (requestCode == APP_SETTINGS_REQUEST_CODE) {
-            // 从设置页面返回，重新检查权限
-            checkAndRequestPermissions();
         }
     }
     
@@ -317,59 +192,22 @@ public class MainActivity extends AppCompatActivity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == PERMISSION_REQUEST_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // 权限已授予
-                Toast.makeText(this, "存储权限已授予", Toast.LENGTH_SHORT).show();
-                
-                // 如果用户之前选择了"始终允许"，记录这个选择
-                if (prefs.getBoolean(PERMISSION_GRANTED, false)) {
-                    // 已经记录为永久允许
-                } else {
-                    // 这次是临时允许，询问用户是否希望永久允许
-                    showPermanentPermissionDialog();
-                }
-                
+                // 权限已授予，显示文件列表
                 showFileList();
             } else {
-                // 权限被拒绝
-                Toast.makeText(this, "存储权限被拒绝", Toast.LENGTH_SHORT).show();
-                
-                // 检查用户是否选择了"不再询问"
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    if (!shouldShowRequestPermissionRationale(Manifest.permission.READ_EXTERNAL_STORAGE)) {
-                        // 用户选择了"不再询问"
-                        prefs.edit().putBoolean(PERMISSION_GRANTED, false).apply();
-                        showPermissionDeniedDialog();
-                    } else {
-                        // 用户只是取消了，显示权限选择
-                        showPermissionChoiceDialog();
-                    }
-                } else {
-                    showFileListWithoutScan();
-                }
+                // 权限被拒绝，显示无权限的文件列表
+                showFileListWithoutScan();
             }
         }
-    }
-    
-    private void showPermanentPermissionDialog() {
-        new AlertDialog.Builder(this)
-            .setTitle("权限设置")
-            .setMessage("您已经授予了本次权限。是否希望以后都自动授予此权限？")
-            .setPositiveButton("是，始终允许", (dialog, which) -> {
-                prefs.edit().putBoolean(PERMISSION_GRANTED, true).apply();
-                Toast.makeText(this, "已设置为始终允许", Toast.LENGTH_SHORT).show();
-            })
-            .setNegativeButton("否，每次询问", (dialog, which) -> {
-                prefs.edit().putBoolean(PERMISSION_GRANTED, false).apply();
-                Toast.makeText(this, "下次使用时将再次询问", Toast.LENGTH_SHORT).show();
-            })
-            .show();
     }
     
     @Override
     protected void onResume() {
         super.onResume();
-        // 检查是否应该自动打开上次阅读的文件
-        checkAutoOpenLastFile();
+        // 检查是否应该自动打开上次阅读的文件（从后台返回时）
+        if (pdfRenderer == null) { // 如果不在阅读界面
+            checkAutoOpenLastFile();
+        }
         
         // 如果正在阅读界面，重新显示当前页面（解决从后台返回时显示空白的问题）
         if (pdfRenderer != null && pdfImageView != null) {
@@ -383,25 +221,6 @@ public class MainActivity extends AppCompatActivity {
                     centerImage();
                 }
             }, 200);
-        }
-        
-        // 检查权限状态（用户可能从设置页面修改了权限）
-        if (pdfRenderer == null) { // 只在文件列表界面检查
-            checkPermissionStatus();
-        }
-    }
-    
-    private void checkPermissionStatus() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
-                    == PackageManager.PERMISSION_GRANTED) {
-                // 权限已授予，确保状态正确
-                if (!prefs.getBoolean(PERMISSION_GRANTED, false)) {
-                    // 权限已授予但未记录，询问是否永久允许
-                    showPermanentPermissionDialog();
-                }
-                prefs.edit().putBoolean(PERMISSION_GRANTED, true).apply();
-            }
         }
     }
     
@@ -417,15 +236,33 @@ public class MainActivity extends AppCompatActivity {
                 new android.os.Handler().postDelayed(() -> {
                     // 检查当前是否已经在阅读界面
                     if (pdfRenderer == null) {
-                        Toast.makeText(this, "正在打开上次阅读的文档...", Toast.LENGTH_SHORT).show();
+                        // 先创建主布局
+                        createMainLayout();
+                        // 打开上次阅读的文件
                         openPdfFile(lastOpenedFile);
                     }
-                }, 500);
+                }, 100);
+                return; // 如果自动打开了文件，就不显示文件列表
             } else {
                 // 文件不存在或不可读，清除记录
                 prefs.edit().remove(LAST_OPENED_FILE).apply();
                 Log.d("PDF_DEBUG", "上次打开的文件不存在或不可读: " + lastOpenedFile);
             }
+        }
+        
+        // 如果没有自动打开文件，显示文件列表
+        createMainLayout();
+        
+        // 检查权限并显示相应的文件列表
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+                    != PackageManager.PERMISSION_GRANTED) {
+                showFileListWithoutScan();
+            } else {
+                showFileList();
+            }
+        } else {
+            showFileList();
         }
     }
     
@@ -535,14 +372,6 @@ public class MainActivity extends AppCompatActivity {
         openFileBtn.setOnClickListener(v -> choosePdfFile());
         fileListLayout.addView(openFileBtn);
         
-        // 添加权限管理按钮
-        Button permissionBtn = new Button(this);
-        permissionBtn.setText("管理权限");
-        permissionBtn.setBackgroundColor(Color.parseColor("#FF5722"));
-        permissionBtn.setTextColor(Color.WHITE);
-        permissionBtn.setOnClickListener(v -> checkAndRequestPermissions());
-        fileListLayout.addView(permissionBtn);
-        
         // 设置文件列表背景
         fileListLayout.setBackgroundColor(getBackgroundColor());
         
@@ -611,7 +440,7 @@ public class MainActivity extends AppCompatActivity {
         topBar.setPadding(20, 20, 20, 20);
         
         TextView title = new TextView(this);
-        title.setText("PDF阅读器 v1.0.14"); // 版本号改为1.0.14
+        title.setText("简帙阅读器 v1.0.15"); // 版本号改为1.0.15
         title.setTextColor(nightMode ? Color.WHITE : Color.BLACK); // 根据夜间模式调整文字颜色
         title.setTextSize(20);
         title.setLayoutParams(new LinearLayout.LayoutParams(
@@ -632,36 +461,11 @@ public class MainActivity extends AppCompatActivity {
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
         
-        // 添加权限管理按钮到顶部栏
-        Button permBtn = new Button(this);
-        permBtn.setText("权限");
-        permBtn.setBackgroundColor(Color.parseColor("#FF5722"));
-        permBtn.setTextColor(Color.WHITE);
-        permBtn.setOnClickListener(v -> showPermissionManagementDialog());
-        
         topBar.addView(title);
         topBar.addView(nightModeBtn);
         topBar.addView(refreshBtn);
-        topBar.addView(permBtn);
         
         return topBar;
-    }
-    
-    private void showPermissionManagementDialog() {
-        new AlertDialog.Builder(this)
-            .setTitle("权限管理")
-            .setMessage("当前存储权限状态：" + 
-                       (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) 
-                        == PackageManager.PERMISSION_GRANTED ? "已授予" : "未授予") + 
-                       "\n\n请选择操作：")
-            .setPositiveButton("重新请求权限", (dialog, which) -> {
-                checkAndRequestPermissions();
-            })
-            .setNegativeButton("前往设置", (dialog, which) -> {
-                openAppSettings();
-            })
-            .setNeutralButton("关闭", null)
-            .show();
     }
     
     private void scanPdfFiles() {
@@ -1477,7 +1281,7 @@ public class MainActivity extends AppCompatActivity {
         LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f); // 使用权重平均分配
         
-        // 返回按钮 - 修改为使用 goBackToFileList() 方法
+        // 返回按钮 - 使用 goBackToFileList() 方法
         Button backBtn = new Button(this);
         backBtn.setText("返回");
         backBtn.setBackgroundColor(Color.parseColor("#3700B3"));
@@ -1486,7 +1290,7 @@ public class MainActivity extends AppCompatActivity {
         backBtn.setPadding(0, 5, 0, 5); // 减少内边距
         backBtn.setAllCaps(false); // 禁用大写转换
         backBtn.setLayoutParams(btnParams);
-        backBtn.setOnClickListener(v -> goBackToFileList()); // 使用统一的方法
+        backBtn.setOnClickListener(v -> goBackToFileList());
         
         // 夜间模式按钮
         Button nightBtn = new Button(this);
@@ -2111,6 +1915,45 @@ public class MainActivity extends AppCompatActivity {
     }
     
     @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        
+        if (resultCode == RESULT_OK && data != null) {
+            Uri uri = data.getData();
+            if (uri != null) {
+                // 调试信息
+                Log.d("PDF_DEBUG", "URI Scheme: " + uri.getScheme());
+                Log.d("PDF_DEBUG", "URI Path: " + uri.getPath());
+                
+                if (requestCode == FILE_PICKER_REQUEST_CODE) {
+                    // 对于Android 11+，尝试获取持久化访问权限
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                        try {
+                            final int takeFlags = data.getFlags() & 
+                                (Intent.FLAG_GRANT_READ_URI_PERMISSION | 
+                                 Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                            getContentResolver().takePersistableUriPermission(uri, takeFlags);
+                        } catch (SecurityException e) {
+                            Log.e("PDF_DEBUG", "无法获取持久化权限", e);
+                        }
+                    }
+                    
+                    // 方法1：尝试获取真实路径
+                    String filePath = getRealPathFromUri(uri);
+                    Log.d("PDF_DEBUG", "Real Path: " + filePath);
+                    
+                    if (filePath != null && new File(filePath).exists()) {
+                        openPdfFile(filePath);
+                    } else {
+                        // 方法2：使用URI直接打开（复制临时文件）
+                        openPdfFromUri(uri);
+                    }
+                }
+            }
+        }
+    }
+    
+    @Override
     protected void onDestroy() {
         super.onDestroy();
         closePdf();
@@ -2123,4 +1966,4 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
-}
+            }
