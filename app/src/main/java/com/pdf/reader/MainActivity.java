@@ -122,6 +122,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 检查是否是首次运行
         boolean firstRun = prefs.getBoolean(FIRST_RUN, true);
+        
         if (firstRun) {
             // 首次运行，标记为非首次运行
             prefs.edit().putBoolean(FIRST_RUN, false).apply();
@@ -157,7 +158,7 @@ public class MainActivity extends AppCompatActivity {
                     })
                     .setNegativeButton("不允许", (dialog, which) -> {
                         // 显示文件列表（只能通过文件选择器选择文件）
-                        showFileListWithoutScan();
+                        showFileList();
                     })
                     .setCancelable(false)
                     .show();
@@ -195,8 +196,8 @@ public class MainActivity extends AppCompatActivity {
                 // 权限已授予，显示文件列表
                 showFileList();
             } else {
-                // 权限被拒绝，显示无权限的文件列表
-                showFileListWithoutScan();
+                // 权限被拒绝，显示文件列表（可以手动选择文件）
+                showFileList();
             }
         }
     }
@@ -252,18 +253,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 如果没有自动打开文件，显示文件列表
         createMainLayout();
-        
-        // 检查权限并显示相应的文件列表
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
-                    != PackageManager.PERMISSION_GRANTED) {
-                showFileListWithoutScan();
-            } else {
-                showFileList();
-            }
-        } else {
-            showFileList();
-        }
+        showFileList();
     }
     
     private void loadSettings() {
@@ -343,42 +333,6 @@ public class MainActivity extends AppCompatActivity {
         return nightMode ? NIGHT_MODE_BG : DAY_MODE_BG;
     }
     
-    private void showFileListWithoutScan() {
-        mainLayout.removeAllViews();
-        
-        // 创建顶部栏
-        LinearLayout topBar = createTopBar();
-        
-        // 创建文件列表区域
-        fileListLayout = new LinearLayout(this);
-        fileListLayout.setOrientation(LinearLayout.VERTICAL);
-        fileListLayout.setPadding(20, 20, 20, 20);
-        
-        TextView noPermissionText = new TextView(this);
-        noPermissionText.setText("📂 存储权限未授予\n\n" +
-                               "无法自动扫描PDF文件\n\n" +
-                               "请点击下方手动选择PDF文件");
-        noPermissionText.setTextSize(16);
-        noPermissionText.setGravity(android.view.Gravity.CENTER);
-        noPermissionText.setTextColor(getTextColor());
-        noPermissionText.setPadding(0, 50, 0, 50);
-        fileListLayout.addView(noPermissionText);
-        
-        // 添加选择文件
-        openFileBtn = new Button(this);
-        openFileBtn.setText("选择PDF文件");
-        openFileBtn.setBackgroundColor(Color.parseColor("#4CAF50"));
-        openFileBtn.setTextColor(Color.WHITE);
-        openFileBtn.setOnClickListener(v -> choosePdfFile());
-        fileListLayout.addView(openFileBtn);
-        
-        // 设置文件列表背景
-        fileListLayout.setBackgroundColor(getBackgroundColor());
-        
-        mainLayout.addView(topBar);
-        mainLayout.addView(fileListLayout);
-    }
-    
     private void showFileList() {
         mainLayout.removeAllViews();
         
@@ -400,7 +354,6 @@ public class MainActivity extends AppCompatActivity {
         mainLayout.addView(topBar);
         mainLayout.addView(fileListLayout);
     }
-    
     private void addContinueReadingButton() {
         String lastOpenedFile = prefs.getString(LAST_OPENED_FILE, null);
         if (lastOpenedFile != null && !lastOpenedFile.isEmpty()) {
@@ -475,11 +428,13 @@ public class MainActivity extends AppCompatActivity {
         addContinueReadingButton();
         
         // 检查权限
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
-                != PackageManager.PERMISSION_GRANTED) {
-            Toast.makeText(this, "需要存储权限来扫描文件", Toast.LENGTH_SHORT).show();
-            showFileListWithoutScan();
-            return;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE)
+                    != PackageManager.PERMISSION_GRANTED) {
+                // 没有权限，显示文件选择器选项
+                addFileChooserOptions();
+                return;
+            }
         }
         
         try {
@@ -559,7 +514,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 选项1：选择单个PDF文件
         Button singleFileBtn = new Button(this);
-        singleFileBtn.setText("选择单个PDF文件");
+        singleFileBtn.setText("选择PDF文件");
         singleFileBtn.setBackgroundColor(Color.parseColor("#4CAF50"));
         singleFileBtn.setTextColor(Color.WHITE);
         singleFileBtn.setPadding(20, 30, 20, 30);
@@ -571,23 +526,7 @@ public class MainActivity extends AppCompatActivity {
         singleParams.bottomMargin = 10;
         singleFileBtn.setLayoutParams(singleParams);
         
-        // 选项2：扫描全盘PDF文件（Android 11+需要特殊权限）
-        Button scanAllBtn = new Button(this);
-        scanAllBtn.setText("扫描全盘PDF文件");
-        scanAllBtn.setBackgroundColor(Color.parseColor("#2196F3"));
-        scanAllBtn.setTextColor(Color.WHITE);
-        scanAllBtn.setPadding(20, 30, 20, 30);
-        scanAllBtn.setOnClickListener(v -> scanAllPdfFiles());
-        
-        LinearLayout.LayoutParams scanParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        scanParams.bottomMargin = 10;
-        scanAllBtn.setLayoutParams(scanParams);
-        
         optionsLayout.addView(singleFileBtn);
-        optionsLayout.addView(scanAllBtn);
-        
         fileListLayout.addView(optionsLayout);
     }
     
@@ -614,88 +553,6 @@ public class MainActivity extends AppCompatActivity {
                     FILE_PICKER_REQUEST_CODE);
         } catch (android.content.ActivityNotFoundException ex) {
             Toast.makeText(this, "未找到文件管理器", Toast.LENGTH_SHORT).show();
-        }
-    }
-    
-    private void scanAllPdfFiles() {
-        fileListLayout.removeAllViews();
-        
-        TextView scanningText = new TextView(this);
-        scanningText.setText("正在扫描全盘PDF文件，请稍候...");
-        scanningText.setTextSize(16);
-        scanningText.setGravity(android.view.Gravity.CENTER);
-        scanningText.setTextColor(getTextColor());
-        scanningText.setPadding(0, 50, 0, 50);
-        fileListLayout.addView(scanningText);
-        
-        // 在新线程中扫描文件，避免阻塞UI
-        new Thread(() -> {
-            List<File> pdfFiles = new ArrayList<>();
-            
-            try {
-                // 从常见的几个目录开始扫描
-                String[] scanPaths = {
-                    Environment.getExternalStorageDirectory().getAbsolutePath(),
-                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).getAbsolutePath(),
-                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS).getAbsolutePath(),
-                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM).getAbsolutePath(),
-                    Environment.getDataDirectory().getAbsolutePath()
-                };
-                
-                for (String path : scanPaths) {
-                    try {
-                        scanDirectoryForPdf(new File(path), pdfFiles);
-                    } catch (SecurityException e) {
-                        Log.e("PDF_DEBUG", "无法访问目录: " + path);
-                    }
-                }
-                
-            } catch (Exception e) {
-                Log.e("PDF_DEBUG", "扫描错误: " + e.getMessage());
-            }
-            
-            // 回到UI线程显示结果
-            runOnUiThread(() -> {
-                fileListLayout.removeAllViews();
-                
-                // 添加"继续阅读"
-                addContinueReadingButton();
-                
-                if (pdfFiles.isEmpty()) {
-                    showNoFilesMessage();
-                } else {
-                    for (File file : pdfFiles) {
-                        addFileButton(file);
-                    }
-                }
-                
-                addFileChooserOptions();
-            });
-            
-        }).start();
-    }
-    
-    private void scanDirectoryForPdf(File directory, List<File> pdfFiles) {
-        if (directory == null || !directory.exists() || !directory.canRead()) {
-            return;
-        }
-        
-        File[] files = directory.listFiles();
-        if (files == null) {
-            return;
-        }
-        
-        for (File file : files) {
-            if (file.isDirectory()) {
-                // 递归扫描子目录，但避免系统目录和隐藏目录
-                if (!file.getName().startsWith(".") && 
-                    !file.getName().equals("Android") &&
-                    !file.getName().equals("lost+found")) {
-                    scanDirectoryForPdf(file, pdfFiles);
-                }
-            } else if (file.isFile() && file.getName().toLowerCase().endsWith(".pdf")) {
-                pdfFiles.add(file);
-            }
         }
     }
     
@@ -1966,4 +1823,4 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
-            }
+}    
