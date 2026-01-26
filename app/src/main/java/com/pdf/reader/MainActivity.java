@@ -1598,16 +1598,16 @@ public class MainActivity extends AppCompatActivity {
             // 绘制左页
             if (leftPageNum < totalPages) {
                 PdfRenderer.Page leftPage = pdfRenderer.openPage(leftPageNum);
-                // 提高渲染质量：使用更大的Bitmap
+                // 提高渲染质量：使用更大的Bitmap（4倍分辨率）
                 Bitmap leftBitmap = Bitmap.createBitmap(
-                    (int)(leftPageWidth * unifiedScale * 2),  // 提高分辨率
-                    (int)(leftPageHeight * unifiedScale * 2),
+                    Math.max((int)(leftPageWidth * unifiedScale * 4), 1),  // 4倍分辨率，确保高质量
+                    Math.max((int)(leftPageHeight * unifiedScale * 4), 1),
                     Bitmap.Config.ARGB_8888
                 );
                 leftPage.render(leftBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                 leftPage.close();
                 
-                // 缩放回合适的尺寸
+                // 高质量缩放
                 leftBitmap = Bitmap.createScaledBitmap(leftBitmap, leftScaledWidth, unifiedScaledHeight, true);
                 
                 // 夜间模式下反转图片颜色
@@ -1621,16 +1621,16 @@ public class MainActivity extends AppCompatActivity {
             // 绘制右页（紧贴左页，不留空隙）
             if (rightPageNum < totalPages) {
                 PdfRenderer.Page rightPage = pdfRenderer.openPage(rightPageNum);
-                // 提高渲染质量：使用更大的Bitmap
+                // 提高渲染质量：使用更大的Bitmap（4倍分辨率）
                 Bitmap rightBitmap = Bitmap.createBitmap(
-                    (int)(rightPageWidth * unifiedScale * 2),  // 提高分辨率
-                    (int)(rightPageHeight * unifiedScale * 2),
+                    Math.max((int)(rightPageWidth * unifiedScale * 4), 1),  // 4倍分辨率，确保高质量
+                    Math.max((int)(rightPageHeight * unifiedScale * 4), 1),
                     Bitmap.Config.ARGB_8888
                 );
                 rightPage.render(rightBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                 rightPage.close();
                 
-                // 缩放回合适的尺寸
+                // 高质量缩放
                 rightBitmap = Bitmap.createScaledBitmap(rightBitmap, rightScaledWidth, unifiedScaledHeight, true);
                 
                 // 夜间模式下反转图片颜色
@@ -1736,18 +1736,18 @@ public class MainActivity extends AppCompatActivity {
                     );
                 }
                 
-                // 提高渲染质量：使用更高的分辨率（2倍）
-                int highResWidth = (int)(pageWidth * scale * 2);
-                int highResHeight = (int)(pageHeight * scale * 2);
+                // 提高渲染质量：使用更高的分辨率（4倍）确保放大后清晰
+                int highResWidth = Math.max((int)(pageWidth * scale * 4), 1);
+                int highResHeight = Math.max((int)(pageHeight * scale * 4), 1);
                 
-                // 创建高分辨率的Bitmap
+                // 创建高分辨率的Bitmap - 使用ARGB_8888确保最高质量
                 Bitmap highResBitmap = Bitmap.createBitmap(
-                    Math.max(highResWidth, 1),  // 确保宽度至少为1
-                    Math.max(highResHeight, 1), // 确保高度至少为1
+                    highResWidth,
+                    highResHeight,
                     Bitmap.Config.ARGB_8888
                 );
                 
-                // 渲染页面到高分辨率Bitmap
+                // 渲染页面到高分辨率Bitmap - 使用最高渲染模式
                 page.render(highResBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                 page.close();
                 
@@ -1755,7 +1755,7 @@ public class MainActivity extends AppCompatActivity {
                 int scaledWidth = (int) (pageWidth * scale);
                 int scaledHeight = (int) (pageHeight * scale);
                 
-                // 从高分辨率Bitmap缩放到显示尺寸（保持清晰度）
+                // 高质量缩放：使用双线性插值提高缩放质量
                 Bitmap bitmap = Bitmap.createScaledBitmap(highResBitmap, scaledWidth, scaledHeight, true);
                 
                 // 释放高分辨率Bitmap的内存
@@ -1763,7 +1763,7 @@ public class MainActivity extends AppCompatActivity {
                     highResBitmap.recycle();
                 }
                 
-                // 半页模式下，进行裁剪
+                // 半页模式下，进行高质量裁剪
                 if (halfPageMode) {
                     if (leftPage) {
                         bitmap = Bitmap.createBitmap(bitmap, 0, 0, scaledWidth / 2, scaledHeight);
@@ -1788,6 +1788,9 @@ public class MainActivity extends AppCompatActivity {
                 
                 // 设置图片到ImageView
                 pdfImageView.setImageBitmap(bitmap);
+                
+                // 启用硬件加速以提高绘制性能
+                pdfImageView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
                 
                 // 立即显示图片
                 pdfImageView.invalidate();
