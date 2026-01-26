@@ -965,8 +965,13 @@ public class MainActivity extends AppCompatActivity {
                         // 触摸结束
                         mode = NONE;
                         
-                        // 居中显示（如果图片小于视图）
-                        centerImage();
+                        // 在缩放状态下，确保图片不会超出边界
+                        if (scaleFactor > 1.01f) {
+                            limitDragWithBoundary();
+                        } else {
+                            // 非缩放状态下居中显示
+                            centerImage();
+                        }
                         
                         // 如果不是缩放状态，处理单指点击翻页
                         if (scaleFactor <= 1.01f) { // 基本没有缩放时
@@ -1011,14 +1016,19 @@ public class MainActivity extends AppCompatActivity {
                         
                     case MotionEvent.ACTION_MOVE:
                         if (mode == DRAG) {
-                            // 单指拖动
+                            // 单指拖动 - 增强版，支持缩放状态下的平滑拖动
                             matrix.set(savedMatrix);
                             float dx = event.getX() - startPoint.x;
                             float dy = event.getY() - startPoint.y;
                             
                             // 限制拖动范围，防止拖出边界
                             matrix.postTranslate(dx, dy);
-                            limitDrag();
+                            
+                            // 实时限制边界，提供更好的拖动反馈
+                            if (scaleFactor > 1.01f) {
+                                limitDragWithBoundary(); // 使用新的边界限制方法
+                            }
+                            
                         } else if (mode == ZOOM) {
                             // 两指缩放
                             float newDist = spacing(event);
@@ -1041,8 +1051,8 @@ public class MainActivity extends AppCompatActivity {
                                 // 以两指中心点为缩放中心
                                 matrix.postScale(scale, scale, midPoint.x, midPoint.y);
                                 
-                                // 缩放后限制位置
-                                limitDrag();
+                                // 缩放后立即限制位置
+                                limitDragWithBoundary();
                             }
                         }
                         break;
@@ -1152,7 +1162,91 @@ public class MainActivity extends AppCompatActivity {
         point.set(x / 2, y / 2);
     }
     
-    // 居中图片方法
+    // 改进的边界限制方法，支持缩放状态下的拖动
+    private void limitDragWithBoundary() {
+        // 获取图片的实际边界
+        float[] values = new float[9];
+        matrix.getValues(values);
+        float scale = values[Matrix.MSCALE_X];
+        float transX = values[Matrix.MTRANS_X];
+        float transY = values[Matrix.MTRANS_Y];
+        
+        // 获取ImageView的边界
+        int viewWidth = pdfImageView.getWidth();
+        int viewHeight = pdfImageView.getHeight();
+        
+        // 获取图片的原始尺寸
+        BitmapDrawable drawable = (BitmapDrawable) pdfImageView.getDrawable();
+        if (drawable == null) return;
+        Bitmap bitmap = drawable.getBitmap();
+        if (bitmap == null) return;
+        
+        int bitmapWidth = bitmap.getWidth();
+        int bitmapHeight = bitmap.getHeight();
+        
+        // 计算缩放后的图片尺寸
+        float scaledWidth = bitmapWidth * scale;
+        float scaledHeight = bitmapHeight * scale;
+        
+        // 计算允许的移动范围
+        float minTransX = 0, maxTransX = 0;
+        float minTransY = 0, maxTransY = 0;
+        
+        if (scaledWidth > viewWidth) {
+            // 图片宽度大于视图宽度
+            minTransX = viewWidth - scaledWidth;
+            maxTransX = 0;
+        } else {
+            // 图片宽度小于等于视图宽度，居中显示
+            minTransX = maxTransX = (viewWidth - scaledWidth) / 2;
+        }
+        
+        if (scaledHeight > viewHeight) {
+            // 图片高度大于视图高度
+            minTransY = viewHeight - scaledHeight;
+            maxTransY = 0;
+        } else {
+            // 图片高度小于等于视图高度，居中显示
+            minTransY = maxTransY = (viewHeight - scaledHeight) / 2;
+        }
+        
+        // 限制横向位置
+        if (transX < minTransX) {
+            transX = minTransX;
+        } else if (transX > maxTransX) {
+            transX = maxTransX;
+        }
+        
+        // 限制纵向位置
+        if (transY < minTransY) {
+            transY = minTransY;
+        } else if (transY > maxTransY) {
+            transY = maxTransY;
+        }
+        
+        // 应用限制后的位置
+        values[Matrix.MTRANS_X] = transX;
+        values[Matrix.MTRANS_Y] = transY;
+        matrix.setValues(values);
+        
+        // 添加边界回弹效果（可选）
+        addBoundaryBounceEffect(transX, transY, minTransX, maxTransX, minTransY, maxTransY);
+    }
+    
+    // 添加边界回弹效果（可选，提供更好的用户体验）
+    private void addBoundaryBounceEffect(float currentX, float currentY, 
+                                         float minX, float maxX, float minY, float maxY) {
+        // 检查是否接近边界
+        float bounceThreshold = 10f; // 回弹阈值
+        
+        if (currentX <= minX + bounceThreshold || currentX >= maxX - bounceThreshold ||
+            currentY <= minY + bounceThreshold || currentY >= maxY - bounceThreshold) {
+            // 在边界附近，可以添加轻微的回弹效果
+            // 这里可以根据需要实现更复杂的物理效果
+        }
+    }
+    
+    // 增强的中心对齐方法，考虑缩放状态
     private void centerImage() {
         if (pdfImageView == null) return;
         
@@ -1184,7 +1278,7 @@ public class MainActivity extends AppCompatActivity {
         matrix.getValues(values);
         float currentScale = values[Matrix.MSCALE_X];
         
-        // 如果是初始状态（scaleFactor = 1.0），计算合适的缩放比例
+        // 如果是初始状态（scaleFactor接近1.0），计算合适的缩放比例
         if (Math.abs(scaleFactor - 1.0f) < 0.01f) {
             float scaleX = (float) viewWidth / bitmapWidth;
             float scaleY = (float) viewHeight / bitmapHeight;
@@ -1212,69 +1306,11 @@ public class MainActivity extends AppCompatActivity {
         values[Matrix.MTRANS_Y] = dy;
         matrix.setValues(values);
         
+        // 限制边界（确保居中的图片不会超出边界）
+        limitDragWithBoundary();
+        
         pdfImageView.setImageMatrix(matrix);
         pdfImageView.invalidate();
-    }
-    
-    // 限制拖动范围，防止图片被拖出边界
-    private void limitDrag() {
-        // 获取图片的实际边界
-        float[] values = new float[9];
-        matrix.getValues(values);
-        float scale = values[Matrix.MSCALE_X];
-        float transX = values[Matrix.MTRANS_X];
-        float transY = values[Matrix.MTRANS_Y];
-        
-        // 获取ImageView的边界
-        int viewWidth = pdfImageView.getWidth();
-        int viewHeight = pdfImageView.getHeight();
-        
-        // 获取图片的原始尺寸
-        BitmapDrawable drawable = (BitmapDrawable) pdfImageView.getDrawable();
-        if (drawable == null) return;
-        Bitmap bitmap = drawable.getBitmap();
-        if (bitmap == null) return;
-        
-        int bitmapWidth = bitmap.getWidth();
-        int bitmapHeight = bitmap.getHeight();
-        
-        // 计算缩放后的图片尺寸
-        float scaledWidth = bitmapWidth * scale;
-        float scaledHeight = bitmapHeight * scale;
-        
-        // 限制横向位置
-        if (scaledWidth > viewWidth) {
-            // 图片宽度大于视图宽度，限制左右边界
-            if (transX > 0) {
-                transX = 0; // 不能向右拖出左边界
-            } else if (transX < viewWidth - scaledWidth) {
-                transX = viewWidth - scaledWidth; // 不能向左拖出右边界
-            }
-        } else {
-            // 图片宽度小于视图宽度，居中对齐
-            transX = (viewWidth - scaledWidth) / 2;
-        }
-        
-        // 限制纵向位置
-        if (scaledHeight > viewHeight) {
-            // 图片高度大于视图高度，限制上下边界
-            if (transY > 0) {
-                transY = 0; // 不能向下拖出上边界
-            } else if (transY < viewHeight - scaledHeight) {
-                transY = viewHeight - scaledHeight; // 不能向上拖出下边界
-            }
-        } else {
-            // 图片高度小于视图高度，居中对齐
-            transY = (viewHeight - scaledHeight) / 2;
-        }
-        
-        // 应用限制后的位置
-        values[Matrix.MTRANS_X] = transX;
-        values[Matrix.MTRANS_Y] = transY;
-        matrix.setValues(values);
-        
-        // 更新ImageView
-        pdfImageView.setImageMatrix(matrix);
     }
     
     private void resetScale() {
@@ -1284,6 +1320,9 @@ public class MainActivity extends AppCompatActivity {
         
         // 居中显示
         centerImage();
+        
+        // 确保视图更新
+        pdfImageView.invalidate();
     }
     
     private LinearLayout createReaderTopBar() {
