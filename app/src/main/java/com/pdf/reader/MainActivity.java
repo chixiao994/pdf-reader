@@ -100,13 +100,23 @@ public class MainActivity extends AppCompatActivity {
     private static final int PERMISSION_REQUEST_CODE = 100;
     private static final int FILE_PICKER_REQUEST_CODE = 101;
     
-    // 颜色常量
-    private static final int DAY_MODE_BG = Color.WHITE;
-    private static final int DAY_MODE_TEXT = Color.BLACK;
-    private static final int NIGHT_MODE_BG = Color.BLACK;
-    private static final int NIGHT_MODE_TEXT = Color.WHITE;
-    private static final int DAY_STATUS_BAR_COLOR = Color.parseColor("#F0E68C"); // 卡其色（日间）
-    private static final int NIGHT_STATUS_BAR_COLOR = Color.BLACK; // 黑色（夜间）
+    // 颜色常量 - 古籍风格配色
+    private static final int DAY_MODE_BG = Color.parseColor("#FFF8F0"); // 古籍纸色（米黄）
+    private static final int DAY_MODE_TEXT = Color.parseColor("#3E2723"); // 古籍墨色（深褐）
+    private static final int NIGHT_MODE_BG = Color.parseColor("#1A1A1A"); // 深灰背景
+    private static final int NIGHT_MODE_TEXT = Color.parseColor("#D7CCC8"); // 浅灰文字
+    
+    // 古籍风格按钮颜色
+    private static final int ANCIENT_RED = Color.parseColor("#8B4513"); // 古铜红褐色
+    private static final int ANCIENT_GOLD = Color.parseColor("#D4AF37"); // 古金色
+    private static final int ANCIENT_BROWN = Color.parseColor("#5D4037"); // 深褐色
+    private static final int ANCIENT_BEIGE = Color.parseColor("#D7CCC8"); // 米白色
+    private static final int ANCIENT_GREEN = Color.parseColor("#4E342E"); // 墨绿色
+    private static final int ANCIENT_PAPER = Color.parseColor("#FFF8F0"); // 古籍纸色
+    
+    // 状态栏颜色
+    private static final int DAY_STATUS_BAR_COLOR = Color.parseColor("#5D4037"); // 深褐色（古籍边框色）
+    private static final int NIGHT_STATUS_BAR_COLOR = Color.parseColor("#2C2C2C"); // 深灰色
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -364,6 +374,26 @@ public class MainActivity extends AppCompatActivity {
         return nightMode ? NIGHT_MODE_BG : DAY_MODE_BG;
     }
     
+    // 获取古籍风格的按钮背景色
+    private int getButtonBackgroundColor() {
+        return nightMode ? ANCIENT_GREEN : ANCIENT_BROWN;
+    }
+    
+    // 获取古籍风格的按钮文字色
+    private int getButtonTextColor() {
+        return nightMode ? ANCIENT_BEIGE : ANCIENT_GOLD;
+    }
+    
+    // 获取特殊功能的按钮背景色（如继续阅读、选择文件等）
+    private int getSpecialButtonBackgroundColor() {
+        return nightMode ? ANCIENT_RED : ANCIENT_RED;
+    }
+    
+    // 获取特殊功能的按钮文字色
+    private int getSpecialButtonTextColor() {
+        return Color.WHITE;
+    }
+    
     private void showFileListWithoutScan() {
         mainLayout.removeAllViews();
         
@@ -376,7 +406,7 @@ public class MainActivity extends AppCompatActivity {
         fileListLayout.setPadding(20, 20, 20, 20);
         
         TextView noPermissionText = new TextView(this);
-        noPermissionText.setText("📂 存储权限未授予\n\n" +
+        noPermissionText.setText("📜 存储权限未授予\n\n" +
                                "无法自动扫描PDF文件\n\n" +
                                "请点击下方手动选择PDF文件");
         noPermissionText.setTextSize(16);
@@ -385,12 +415,17 @@ public class MainActivity extends AppCompatActivity {
         noPermissionText.setPadding(0, 50, 0, 50);
         fileListLayout.addView(noPermissionText);
         
-        // 添加选择文件
+        // 添加选择文件按钮（古籍风格）
         openFileBtn = new Button(this);
         openFileBtn.setText("选择PDF文件");
-        openFileBtn.setBackgroundColor(Color.parseColor("#4CAF50"));
-        openFileBtn.setTextColor(Color.WHITE);
+        openFileBtn.setBackgroundColor(getSpecialButtonBackgroundColor());
+        openFileBtn.setTextColor(getSpecialButtonTextColor());
+        openFileBtn.setTextSize(14);
+        openFileBtn.setAllCaps(false);
         openFileBtn.setOnClickListener(v -> choosePdfFile());
+        
+        // 添加按钮样式
+        setupButtonStyle(openFileBtn, true);
         fileListLayout.addView(openFileBtn);
         
         // 设置文件列表背景
@@ -428,10 +463,10 @@ public class MainActivity extends AppCompatActivity {
             File file = new File(lastOpenedFile);
             if (file.exists() && file.canRead()) {
                 Button continueBtn = new Button(this);
-                continueBtn.setText("继续阅读: " + getShortFileName(file.getName()));
-                continueBtn.setBackgroundColor(Color.parseColor("#FF5722")); // 橙色
-                continueBtn.setTextColor(Color.WHITE);
-                continueBtn.setPadding(20, 30, 20, 30);
+                continueBtn.setText("📖 继续阅读: " + getShortFileName(file.getName()));
+                continueBtn.setBackgroundColor(getSpecialButtonBackgroundColor());
+                continueBtn.setTextColor(getSpecialButtonTextColor());
+                continueBtn.setTextSize(14);
                 continueBtn.setAllCaps(false);
                 
                 LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
@@ -439,6 +474,9 @@ public class MainActivity extends AppCompatActivity {
                         LinearLayout.LayoutParams.WRAP_CONTENT);
                 params.bottomMargin = 20;
                 continueBtn.setLayoutParams(params);
+                
+                // 添加按钮样式
+                setupButtonStyle(continueBtn, true);
                 
                 continueBtn.setOnClickListener(v -> openPdfFile(lastOpenedFile));
                 
@@ -448,8 +486,8 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private String getShortFileName(String fileName) {
-        if (fileName.length() > 25) {
-            return fileName.substring(0, 22) + "...";
+        if (fileName.length() > 20) {
+            return fileName.substring(0, 17) + "...";
         }
         return fileName;
     }
@@ -457,36 +495,60 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout createTopBar() {
         LinearLayout topBar = new LinearLayout(this);
         topBar.setOrientation(LinearLayout.HORIZONTAL);
-        topBar.setBackgroundColor(getStatusBarColor()); // 日间卡其色，夜间黑色
-        topBar.setPadding(20, 20, 20, 20);
+        topBar.setBackgroundColor(getStatusBarColor()); // 古籍边框色
+        topBar.setPadding(20, 15, 20, 15);
         
         TextView title = new TextView(this);
-        title.setText("PDF阅读器 v1.0.17"); // 版本号改为1.0.17
-        title.setTextColor(nightMode ? Color.WHITE : Color.BLACK); // 根据夜间模式调整文字颜色
-        title.setTextSize(20);
+        title.setText("简帙阅读器 v1.0.18"); // 版本号改为1.0.18，添加古籍图标
+        title.setTextColor(nightMode ? ANCIENT_BEIGE : ANCIENT_GOLD); // 古籍金色文字
+        title.setTextSize(18);
         title.setLayoutParams(new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
         
         nightModeBtn = new Button(this);
-        nightModeBtn.setText(nightMode ? "日间模式" : "夜间模式");
-        nightModeBtn.setBackgroundColor(Color.parseColor("#3700B3"));
-        nightModeBtn.setTextColor(Color.WHITE);
-        nightModeBtn.setOnClickListener(v -> toggleNightMode());
+        nightModeBtn.setText(nightMode ? "☀️ 日间" : "🌙 夜间");
+        nightModeBtn.setBackgroundColor(getButtonBackgroundColor());
+        nightModeBtn.setTextColor(getButtonTextColor());
+        nightModeBtn.setTextSize(12);
+        nightModeBtn.setAllCaps(false);
+        
+        // 添加按钮样式
+        setupButtonStyle(nightModeBtn, false);
         
         refreshBtn = new Button(this);
-        refreshBtn.setText("刷新");
-        refreshBtn.setBackgroundColor(Color.parseColor("#3700B3"));
-        refreshBtn.setTextColor(Color.WHITE);
-        refreshBtn.setOnClickListener(v -> scanPdfFiles());
+        refreshBtn.setText("🔄 刷新");
+        refreshBtn.setBackgroundColor(getButtonBackgroundColor());
+        refreshBtn.setTextColor(getButtonTextColor());
+        refreshBtn.setTextSize(12);
+        refreshBtn.setAllCaps(false);
         refreshBtn.setLayoutParams(new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
+        
+        // 添加按钮样式
+        setupButtonStyle(refreshBtn, false);
         
         topBar.addView(title);
         topBar.addView(nightModeBtn);
         topBar.addView(refreshBtn);
         
         return topBar;
+    }
+    
+    // 设置按钮样式（古籍风格）
+    private void setupButtonStyle(Button button, boolean isLarge) {
+        if (isLarge) {
+            button.setPadding(30, 20, 30, 20);
+            button.setTextSize(14);
+        } else {
+            button.setPadding(15, 10, 15, 10);
+            button.setTextSize(12);
+        }
+        
+        // 设置圆角（古籍边框效果）
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            button.setElevation(4); // 轻微阴影效果
+        }
     }
     
     private void scanPdfFiles() {
@@ -541,10 +603,10 @@ public class MainActivity extends AppCompatActivity {
             fileName += " (读到第" + (lastPage + 1) + "页)";
         }
         
-        fileBtn.setText(fileName);
-        fileBtn.setBackgroundColor(Color.parseColor("#6200EE"));
-        fileBtn.setTextColor(Color.WHITE);
-        fileBtn.setPadding(20, 30, 20, 30);
+        fileBtn.setText("📄 " + fileName);
+        fileBtn.setBackgroundColor(getButtonBackgroundColor());
+        fileBtn.setTextColor(getButtonTextColor());
+        fileBtn.setTextSize(14);
         fileBtn.setAllCaps(false);
         
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
@@ -552,6 +614,9 @@ public class MainActivity extends AppCompatActivity {
                 LinearLayout.LayoutParams.WRAP_CONTENT);
         params.bottomMargin = 10;
         fileBtn.setLayoutParams(params);
+        
+        // 添加按钮样式
+        setupButtonStyle(fileBtn, true);
         
         // 设置点击事件
         String filePath = file.getAbsolutePath();
@@ -562,7 +627,7 @@ public class MainActivity extends AppCompatActivity {
     
     private void showNoFilesMessage() {
         TextView noFilesText = new TextView(this);
-        noFilesText.setText("📂 未找到PDF文件\n\n" +
+        noFilesText.setText("📚 未找到PDF文件\n\n" +
                            "请将PDF文件放置在：\n" +
                            "手机存储 → Download文件夹\n\n" +
                            "或者使用下方选项选择文件");
@@ -580,10 +645,11 @@ public class MainActivity extends AppCompatActivity {
         
         // 选项1：选择单个PDF文件
         Button singleFileBtn = new Button(this);
-        singleFileBtn.setText("选择单个PDF文件");
-        singleFileBtn.setBackgroundColor(Color.parseColor("#4CAF50"));
-        singleFileBtn.setTextColor(Color.WHITE);
-        singleFileBtn.setPadding(20, 30, 20, 30);
+        singleFileBtn.setText("📂 选择单个PDF文件");
+        singleFileBtn.setBackgroundColor(getButtonBackgroundColor());
+        singleFileBtn.setTextColor(getButtonTextColor());
+        singleFileBtn.setTextSize(14);
+        singleFileBtn.setAllCaps(false);
         singleFileBtn.setOnClickListener(v -> choosePdfFile());
         
         LinearLayout.LayoutParams singleParams = new LinearLayout.LayoutParams(
@@ -592,12 +658,16 @@ public class MainActivity extends AppCompatActivity {
         singleParams.bottomMargin = 10;
         singleFileBtn.setLayoutParams(singleParams);
         
+        // 添加按钮样式
+        setupButtonStyle(singleFileBtn, true);
+        
         // 选项2：扫描全盘PDF文件（Android 11+需要特殊权限）
         Button scanAllBtn = new Button(this);
-        scanAllBtn.setText("扫描全盘PDF文件");
-        scanAllBtn.setBackgroundColor(Color.parseColor("#2196F3"));
-        scanAllBtn.setTextColor(Color.WHITE);
-        scanAllBtn.setPadding(20, 30, 20, 30);
+        scanAllBtn.setText("🔍 扫描全盘PDF文件");
+        scanAllBtn.setBackgroundColor(getButtonBackgroundColor());
+        scanAllBtn.setTextColor(getButtonTextColor());
+        scanAllBtn.setTextSize(14);
+        scanAllBtn.setAllCaps(false);
         scanAllBtn.setOnClickListener(v -> scanAllPdfFiles());
         
         LinearLayout.LayoutParams scanParams = new LinearLayout.LayoutParams(
@@ -605,6 +675,9 @@ public class MainActivity extends AppCompatActivity {
                 LinearLayout.LayoutParams.WRAP_CONTENT);
         scanParams.bottomMargin = 10;
         scanAllBtn.setLayoutParams(scanParams);
+        
+        // 添加按钮样式
+        setupButtonStyle(scanAllBtn, true);
         
         optionsLayout.addView(singleFileBtn);
         optionsLayout.addView(scanAllBtn);
@@ -642,7 +715,7 @@ public class MainActivity extends AppCompatActivity {
         fileListLayout.removeAllViews();
         
         TextView scanningText = new TextView(this);
-        scanningText.setText("正在扫描全盘PDF文件，请稍候...");
+        scanningText.setText("🔍 正在扫描全盘PDF文件，请稍候...");
         scanningText.setTextSize(16);
         scanningText.setGravity(android.view.Gravity.CENTER);
         scanningText.setTextColor(getTextColor());
@@ -1073,15 +1146,17 @@ public class MainActivity extends AppCompatActivity {
         pageTextView.setId(View.generateViewId());
         pageTextView.setTextColor(getTextColor());
         pageTextView.setTextSize(14);
-        pageTextView.setBackgroundColor(Color.parseColor("#80000000")); // 半透明背景
-        pageTextView.setPadding(10, 5, 10, 5);
+        pageTextView.setBackgroundColor(Color.parseColor("#805D4037")); // 半透明深褐色背景
+        pageTextView.setPadding(15, 8, 15, 8);
         pageTextView.setGravity(Gravity.CENTER);
         
         // 上一页 (右下角)
         prevBtn = new Button(this);
-        prevBtn.setText("上一页");
-        prevBtn.setBackgroundColor(Color.parseColor("#6200EE"));
-        prevBtn.setTextColor(Color.WHITE);
+        prevBtn.setText("◀ 上一页");
+        prevBtn.setBackgroundColor(getButtonBackgroundColor());
+        prevBtn.setTextColor(getButtonTextColor());
+        prevBtn.setTextSize(12);
+        prevBtn.setAllCaps(false);
         prevBtn.setOnClickListener(v -> goToPrevPage());
         
         FrameLayout.LayoutParams prevParams = new FrameLayout.LayoutParams(
@@ -1092,11 +1167,16 @@ public class MainActivity extends AppCompatActivity {
         prevParams.bottomMargin = 80;
         prevBtn.setLayoutParams(prevParams);
         
+        // 添加按钮样式
+        setupButtonStyle(prevBtn, false);
+        
         // 下一页按钮 (左下角)
         nextBtn = new Button(this);
-        nextBtn.setText("下一页");
-        nextBtn.setBackgroundColor(Color.parseColor("#6200EE"));
-        nextBtn.setTextColor(Color.WHITE);
+        nextBtn.setText("下一页 ▶");
+        nextBtn.setBackgroundColor(getButtonBackgroundColor());
+        nextBtn.setTextColor(getButtonTextColor());
+        nextBtn.setTextSize(12);
+        nextBtn.setAllCaps(false);
         nextBtn.setOnClickListener(v -> goToNextPage());
         
         FrameLayout.LayoutParams nextParams = new FrameLayout.LayoutParams(
@@ -1107,11 +1187,16 @@ public class MainActivity extends AppCompatActivity {
         nextParams.bottomMargin = 80;
         nextBtn.setLayoutParams(nextParams);
         
+        // 添加按钮样式
+        setupButtonStyle(nextBtn, false);
+        
         // 跳转按钮 (中间)
         Button jumpBtn = new Button(this);
-        jumpBtn.setText("跳转");
-        jumpBtn.setBackgroundColor(Color.parseColor("#4CAF50"));
-        jumpBtn.setTextColor(Color.WHITE);
+        jumpBtn.setText("📖 跳转");
+        jumpBtn.setBackgroundColor(getSpecialButtonBackgroundColor());
+        jumpBtn.setTextColor(getSpecialButtonTextColor());
+        jumpBtn.setTextSize(12);
+        jumpBtn.setAllCaps(false);
         jumpBtn.setOnClickListener(v -> showJumpPageDialog());
         
         FrameLayout.LayoutParams jumpParams = new FrameLayout.LayoutParams(
@@ -1120,6 +1205,9 @@ public class MainActivity extends AppCompatActivity {
         jumpParams.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         jumpParams.bottomMargin = 80;
         jumpBtn.setLayoutParams(jumpParams);
+        
+        // 添加按钮样式
+        setupButtonStyle(jumpBtn, false);
         
         // 底部页码显示布局参数
         FrameLayout.LayoutParams pageParams = new FrameLayout.LayoutParams(
@@ -1328,8 +1416,8 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout createReaderTopBar() {
         LinearLayout topBar = new LinearLayout(this);
         topBar.setOrientation(LinearLayout.HORIZONTAL);
-        topBar.setBackgroundColor(getStatusBarColor()); // 日间卡其色，夜间黑色
-        topBar.setPadding(0, 5, 0, 5); // 去除左右内边距，让按钮完全占满
+        topBar.setBackgroundColor(getStatusBarColor()); // 古籍边框色
+        topBar.setPadding(0, 8, 0, 8); // 调整内边距
         
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -1343,58 +1431,68 @@ public class MainActivity extends AppCompatActivity {
         
         // 返回按钮 - 使用 goBackToFileList() 方法
         Button backBtn = new Button(this);
-        backBtn.setText("返回");
-        backBtn.setBackgroundColor(Color.parseColor("#3700B3"));
-        backBtn.setTextColor(Color.WHITE);
-        backBtn.setTextSize(12);
-        backBtn.setPadding(0, 5, 0, 5); // 减少内边距
+        backBtn.setText("↩️ 返回");
+        backBtn.setBackgroundColor(getButtonBackgroundColor());
+        backBtn.setTextColor(getButtonTextColor());
+        backBtn.setTextSize(11);
         backBtn.setAllCaps(false); // 禁用大写转换
         backBtn.setLayoutParams(btnParams);
         backBtn.setOnClickListener(v -> goBackToFileList());
         
+        // 添加按钮样式
+        setupButtonStyle(backBtn, false);
+        
         // 夜间模式按钮
         Button nightBtn = new Button(this);
-        nightBtn.setText(nightMode ? "日间" : "夜间");
-        nightBtn.setBackgroundColor(Color.parseColor("#3700B3"));
-        nightBtn.setTextColor(Color.WHITE);
-        nightBtn.setTextSize(12);
-        nightBtn.setPadding(0, 5, 0, 5);
+        nightBtn.setText(nightMode ? "☀️ 日间" : "🌙 夜间");
+        nightBtn.setBackgroundColor(getButtonBackgroundColor());
+        nightBtn.setTextColor(getButtonTextColor());
+        nightBtn.setTextSize(11);
         nightBtn.setAllCaps(false);
         nightBtn.setLayoutParams(btnParams);
         nightBtn.setOnClickListener(v -> toggleNightMode());
         
+        // 添加按钮样式
+        setupButtonStyle(nightBtn, false);
+        
         // 整页/半页按钮
         halfPageBtn = new Button(this);
-        halfPageBtn.setText(halfPageMode ? "整页" : "半页");
-        halfPageBtn.setBackgroundColor(Color.parseColor("#3700B3"));
-        halfPageBtn.setTextColor(Color.WHITE);
-        halfPageBtn.setTextSize(12);
-        halfPageBtn.setPadding(0, 5, 0, 5);
+        halfPageBtn.setText(halfPageMode ? "📄 整页" : "📄 半页");
+        halfPageBtn.setBackgroundColor(getButtonBackgroundColor());
+        halfPageBtn.setTextColor(getButtonTextColor());
+        halfPageBtn.setTextSize(11);
         halfPageBtn.setAllCaps(false);
         halfPageBtn.setLayoutParams(btnParams);
         halfPageBtn.setOnClickListener(v -> toggleHalfPageMode());
         
+        // 添加按钮样式
+        setupButtonStyle(halfPageBtn, false);
+        
         // 单页/双页按钮
         pageModeBtn = new Button(this);
-        pageModeBtn.setText(doublePageMode ? "单页" : "双页");
-        pageModeBtn.setBackgroundColor(Color.parseColor("#3700B3"));
-        pageModeBtn.setTextColor(Color.WHITE);
-        pageModeBtn.setTextSize(12);
-        pageModeBtn.setPadding(0, 5, 0, 5);
+        pageModeBtn.setText(doublePageMode ? "📖 单页" : "📚 双页");
+        pageModeBtn.setBackgroundColor(getButtonBackgroundColor());
+        pageModeBtn.setTextColor(getButtonTextColor());
+        pageModeBtn.setTextSize(11);
         pageModeBtn.setAllCaps(false);
         pageModeBtn.setLayoutParams(btnParams);
         pageModeBtn.setOnClickListener(v -> toggleDoublePageMode());
         
+        // 添加按钮样式
+        setupButtonStyle(pageModeBtn, false);
+        
         // 旋转按钮
         rotateBtn = new Button(this);
-        rotateBtn.setText(isRotated ? "转回" : "旋转");
-        rotateBtn.setBackgroundColor(Color.parseColor("#3700B3"));
-        rotateBtn.setTextColor(Color.WHITE);
-        rotateBtn.setTextSize(12);
-        rotateBtn.setPadding(0, 5, 0, 5);
+        rotateBtn.setText(isRotated ? "↪️ 转回" : "↩️ 旋转");
+        rotateBtn.setBackgroundColor(getButtonBackgroundColor());
+        rotateBtn.setTextColor(getButtonTextColor());
+        rotateBtn.setTextSize(11);
         rotateBtn.setAllCaps(false);
         rotateBtn.setLayoutParams(btnParams);
         rotateBtn.setOnClickListener(v -> toggleRotation());
+        
+        // 添加按钮样式
+        setupButtonStyle(rotateBtn, false);
         
         // 将所有按钮添加到顶部栏
         topBar.addView(backBtn);
@@ -1412,7 +1510,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 更新旋转按钮文本
         if (rotateBtn != null) {
-            rotateBtn.setText(isRotated ? "转回" : "旋转");
+            rotateBtn.setText(isRotated ? "↪️ 转回" : "↩️ 旋转");
         }
         
         // 保存设置
@@ -1430,7 +1528,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 更新按钮文本
         if (halfPageBtn != null) {
-            halfPageBtn.setText(halfPageMode ? "整页" : "半页");
+            halfPageBtn.setText(halfPageMode ? "📄 整页" : "📄 半页");
         }
         
         // 保存设置
@@ -1448,7 +1546,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 更新按钮文本
         if (pageModeBtn != null) {
-            pageModeBtn.setText(doublePageMode ? "单页" : "双页");
+            pageModeBtn.setText(doublePageMode ? "📖 单页" : "📚 双页");
         }
         
         // 保存设置
@@ -1935,7 +2033,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 更新按钮文本
         if (nightModeBtn != null) {
-            nightModeBtn.setText(nightMode ? "日间模式" : "夜间模式");
+            nightModeBtn.setText(nightMode ? "☀️ 日间" : "🌙 夜间");
         }
         
         saveSettings();
