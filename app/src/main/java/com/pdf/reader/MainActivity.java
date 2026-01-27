@@ -182,7 +182,7 @@ public class MainActivity extends AppCompatActivity {
                 // 显示解释对话框
                 new AlertDialog.Builder(this)
                     .setTitle("需要存储权限")
-                    .setMessage("PDF阅读器需要访问您的存储空间来扫描和读取PDF文件。\n\n" +
+                    .setMessage("简帙阅读器需要访问您的存储空间来扫描和读取PDF文件。\n\n" +
                                "权限将用于：\n" +
                                "• 扫描PDF文件\n" +
                                "• 打开您选择的PDF文件\n" +
@@ -406,7 +406,7 @@ public class MainActivity extends AppCompatActivity {
         fileListLayout.setPadding(20, 20, 20, 20);
         
         TextView noPermissionText = new TextView(this);
-        noPermissionText.setText("📜 存储权限未授予\n\n" +
+        noPermissionText.setText("存储权限未授予\n\n" +
                                "无法自动扫描PDF文件\n\n" +
                                "请点击下方手动选择PDF文件");
         noPermissionText.setTextSize(16);
@@ -463,7 +463,7 @@ public class MainActivity extends AppCompatActivity {
             File file = new File(lastOpenedFile);
             if (file.exists() && file.canRead()) {
                 Button continueBtn = new Button(this);
-                continueBtn.setText("📖 继续阅读: " + getShortFileName(file.getName()));
+                continueBtn.setText("继续阅读: " + getShortFileName(file.getName()));
                 continueBtn.setBackgroundColor(getSpecialButtonBackgroundColor());
                 continueBtn.setTextColor(getSpecialButtonTextColor());
                 continueBtn.setTextSize(14);
@@ -499,14 +499,14 @@ public class MainActivity extends AppCompatActivity {
         topBar.setPadding(20, 15, 20, 15);
         
         TextView title = new TextView(this);
-        title.setText("简帙阅读器 v1.0.18"); // 版本号改为1.0.18，添加古籍图标
+        title.setText("简帙阅读器 v1.0.18"); // 版本号改为1.0.18
         title.setTextColor(nightMode ? ANCIENT_BEIGE : ANCIENT_GOLD); // 古籍金色文字
         title.setTextSize(18);
         title.setLayoutParams(new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
         
         nightModeBtn = new Button(this);
-        nightModeBtn.setText(nightMode ? "日间" : "夜间");
+        nightModeBtn.setText(nightMode ? "日间模式" : "夜间模式");
         nightModeBtn.setBackgroundColor(getButtonBackgroundColor());
         nightModeBtn.setTextColor(getButtonTextColor());
         nightModeBtn.setTextSize(12);
@@ -603,7 +603,7 @@ public class MainActivity extends AppCompatActivity {
             fileName += " (读到第" + (lastPage + 1) + "页)";
         }
         
-        fileBtn.setText("📄 " + fileName);
+        fileBtn.setText(fileName);
         fileBtn.setBackgroundColor(getButtonBackgroundColor());
         fileBtn.setTextColor(getButtonTextColor());
         fileBtn.setTextSize(14);
@@ -627,7 +627,7 @@ public class MainActivity extends AppCompatActivity {
     
     private void showNoFilesMessage() {
         TextView noFilesText = new TextView(this);
-        noFilesText.setText("📚 未找到PDF文件\n\n" +
+        noFilesText.setText("未找到PDF文件\n\n" +
                            "请将PDF文件放置在：\n" +
                            "手机存储 → Download文件夹\n\n" +
                            "或者使用下方选项选择文件");
@@ -645,7 +645,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 选项1：选择单个PDF文件
         Button singleFileBtn = new Button(this);
-        singleFileBtn.setText("📂 选择单个PDF文件");
+        singleFileBtn.setText("选择单个PDF文件");
         singleFileBtn.setBackgroundColor(getButtonBackgroundColor());
         singleFileBtn.setTextColor(getButtonTextColor());
         singleFileBtn.setTextSize(14);
@@ -663,7 +663,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 选项2：扫描全盘PDF文件（Android 11+需要特殊权限）
         Button scanAllBtn = new Button(this);
-        scanAllBtn.setText("🔍 扫描全盘PDF文件");
+        scanAllBtn.setText("扫描全盘PDF文件");
         scanAllBtn.setBackgroundColor(getButtonBackgroundColor());
         scanAllBtn.setTextColor(getButtonTextColor());
         scanAllBtn.setTextSize(14);
@@ -715,7 +715,7 @@ public class MainActivity extends AppCompatActivity {
         fileListLayout.removeAllViews();
         
         TextView scanningText = new TextView(this);
-        scanningText.setText("🔍 正在扫描全盘PDF文件，请稍候...");
+        scanningText.setText("正在扫描全盘PDF文件，请稍候...");
         scanningText.setTextSize(16);
         scanningText.setGravity(android.view.Gravity.CENTER);
         scanningText.setTextColor(getTextColor());
@@ -2033,7 +2033,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 更新按钮文本
         if (nightModeBtn != null) {
-            nightModeBtn.setText(nightMode ? "日间" : "夜间");
+            nightModeBtn.setText(nightMode ? "日间模式" : "夜间模式");
         }
         
         saveSettings();
