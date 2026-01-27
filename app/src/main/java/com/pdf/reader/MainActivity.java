@@ -506,7 +506,7 @@ public class MainActivity extends AppCompatActivity {
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f));
         
         nightModeBtn = new Button(this);
-        nightModeBtn.setText(nightMode ? "☀️ 日间" : "🌙 夜间");
+        nightModeBtn.setText(nightMode ? "日间" : "夜间");
         nightModeBtn.setBackgroundColor(getButtonBackgroundColor());
         nightModeBtn.setTextColor(getButtonTextColor());
         nightModeBtn.setTextSize(12);
@@ -516,7 +516,7 @@ public class MainActivity extends AppCompatActivity {
         setupButtonStyle(nightModeBtn, false);
         
         refreshBtn = new Button(this);
-        refreshBtn.setText("🔄 刷新");
+        refreshBtn.setText("刷新");
         refreshBtn.setBackgroundColor(getButtonBackgroundColor());
         refreshBtn.setTextColor(getButtonTextColor());
         refreshBtn.setTextSize(12);
@@ -1152,7 +1152,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 上一页 (右下角)
         prevBtn = new Button(this);
-        prevBtn.setText("◀ 上一页");
+        prevBtn.setText("上一页");
         prevBtn.setBackgroundColor(getButtonBackgroundColor());
         prevBtn.setTextColor(getButtonTextColor());
         prevBtn.setTextSize(12);
@@ -1172,7 +1172,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 下一页按钮 (左下角)
         nextBtn = new Button(this);
-        nextBtn.setText("下一页 ▶");
+        nextBtn.setText("下一页");
         nextBtn.setBackgroundColor(getButtonBackgroundColor());
         nextBtn.setTextColor(getButtonTextColor());
         nextBtn.setTextSize(12);
@@ -1192,7 +1192,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 跳转按钮 (中间)
         Button jumpBtn = new Button(this);
-        jumpBtn.setText("📖 跳转");
+        jumpBtn.setText("跳转");
         jumpBtn.setBackgroundColor(getSpecialButtonBackgroundColor());
         jumpBtn.setTextColor(getSpecialButtonTextColor());
         jumpBtn.setTextSize(12);
@@ -1431,7 +1431,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 返回按钮 - 使用 goBackToFileList() 方法
         Button backBtn = new Button(this);
-        backBtn.setText("↩️ 返回");
+        backBtn.setText("返回");
         backBtn.setBackgroundColor(getButtonBackgroundColor());
         backBtn.setTextColor(getButtonTextColor());
         backBtn.setTextSize(11);
@@ -1444,7 +1444,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 夜间模式按钮
         Button nightBtn = new Button(this);
-        nightBtn.setText(nightMode ? "☀️ 日间" : "🌙 夜间");
+        nightBtn.setText(nightMode ? "日间" : "夜间");
         nightBtn.setBackgroundColor(getButtonBackgroundColor());
         nightBtn.setTextColor(getButtonTextColor());
         nightBtn.setTextSize(11);
@@ -1457,7 +1457,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 整页/半页按钮
         halfPageBtn = new Button(this);
-        halfPageBtn.setText(halfPageMode ? "📄 整页" : "📄 半页");
+        halfPageBtn.setText(halfPageMode ? "整页" : "半页");
         halfPageBtn.setBackgroundColor(getButtonBackgroundColor());
         halfPageBtn.setTextColor(getButtonTextColor());
         halfPageBtn.setTextSize(11);
@@ -1470,7 +1470,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 单页/双页按钮
         pageModeBtn = new Button(this);
-        pageModeBtn.setText(doublePageMode ? "📖 单页" : "📚 双页");
+        pageModeBtn.setText(doublePageMode ? "单页" : "双页");
         pageModeBtn.setBackgroundColor(getButtonBackgroundColor());
         pageModeBtn.setTextColor(getButtonTextColor());
         pageModeBtn.setTextSize(11);
@@ -1483,7 +1483,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 旋转按钮
         rotateBtn = new Button(this);
-        rotateBtn.setText(isRotated ? "↪️ 转回" : "↩️ 旋转");
+        rotateBtn.setText(isRotated ? "转回" : "旋转");
         rotateBtn.setBackgroundColor(getButtonBackgroundColor());
         rotateBtn.setTextColor(getButtonTextColor());
         rotateBtn.setTextSize(11);
@@ -1510,7 +1510,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 更新旋转按钮文本
         if (rotateBtn != null) {
-            rotateBtn.setText(isRotated ? "↪️ 转回" : "↩️ 旋转");
+            rotateBtn.setText(isRotated ? "转回" : "旋转");
         }
         
         // 保存设置
@@ -1528,7 +1528,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 更新按钮文本
         if (halfPageBtn != null) {
-            halfPageBtn.setText(halfPageMode ? "📄 整页" : "📄 半页");
+            halfPageBtn.setText(halfPageMode ? "整页" : "半页");
         }
         
         // 保存设置
@@ -1546,7 +1546,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 更新按钮文本
         if (pageModeBtn != null) {
-            pageModeBtn.setText(doublePageMode ? "📖 单页" : "📚 双页");
+            pageModeBtn.setText(doublePageMode ? "单页" : "双页");
         }
         
         // 保存设置
@@ -2033,7 +2033,7 @@ public class MainActivity extends AppCompatActivity {
         
         // 更新按钮文本
         if (nightModeBtn != null) {
-            nightModeBtn.setText(nightMode ? "☀️ 日间" : "🌙 夜间");
+            nightModeBtn.setText(nightMode ? "日间" : "夜间");
         }
         
         saveSettings();
