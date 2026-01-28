@@ -90,6 +90,16 @@ public class MainActivity extends AppCompatActivity {
     private long lastClickTime = 0;
     private static final int DOUBLE_TAP_TIME_THRESHOLD = 300; // 双击时间阈值（毫秒）
     
+    // 点击和滑动相关变量
+    private float touchStartX, touchStartY;
+    private long touchStartTime;
+    private boolean isClickCandidate = false;
+    private boolean isSwiping = false;
+    private static final int CLICK_MAX_DISTANCE = 20;  // 点击最大移动距离(像素)
+    private static final int CLICK_MAX_TIME = 200;     // 点击最大持续时间(毫秒)
+    private static final int SWIPE_MIN_DISTANCE = 60;  // 滑动最小距离(像素)
+    private static final float SWIPE_VS_SCROLL_RATIO = 1.5f; // 水平vs垂直移动比例
+    
     // 存储
     private SharedPreferences prefs;
     private static final String LAST_OPENED_FILE = "last_opened_file"; // 存储最后打开的文件路径
@@ -999,140 +1009,37 @@ public class MainActivity extends AppCompatActivity {
         savedMatrix.reset();
         mode = NONE;
         
-        // 添加触摸监听器 - 增强版，支持任意位置缩放和拖动
+        // 重置触摸状态
+        touchStartX = 0;
+        touchStartY = 0;
+        touchStartTime = 0;
+        isClickCandidate = false;
+        isSwiping = false;
+        
+        // 添加触摸监听器 - 支持点击、滑动、缩放、拖动四种模式
         pdfImageView.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
                 ImageView view = (ImageView) v;
                 
-                // 处理触摸事件
+                // 1. 如果是两指操作 → 缩放模式（优先处理）
+                if (event.getPointerCount() == 2) {
+                    return handleZoomMode(view, event);
+                }
+                
+                // 2. 如果是单指操作
                 switch (event.getAction() & MotionEvent.ACTION_MASK) {
                     case MotionEvent.ACTION_DOWN:
-                        // 单指触摸
-                        savedMatrix.set(matrix);
-                        startPoint.set(event.getX(), event.getY());
-                        mode = DRAG;
+                        return handleTouchDown(view, event);
                         
-                        // 检查双击
-                        long currentTime = System.currentTimeMillis();
-                        if (currentTime - lastClickTime < DOUBLE_TAP_TIME_THRESHOLD) {
-                            // 双击事件 - 恢复原始大小
-                            resetScale();
-                            return true;
-                        }
-                        lastClickTime = currentTime;
-                        break;
-                        
-                    case MotionEvent.ACTION_POINTER_DOWN:
-                        // 两指触摸开始
-                        oldDistance = spacing(event);
-                        if (oldDistance > 10f) {
-                            savedMatrix.set(matrix);
-                            midPoint(midPoint, event);
-                            mode = ZOOM;
-                        }
-                        break;
+                    case MotionEvent.ACTION_MOVE:
+                        return handleTouchMove(view, event);
                         
                     case MotionEvent.ACTION_UP:
                     case MotionEvent.ACTION_POINTER_UP:
-                        // 触摸结束
-                        mode = NONE;
-                        
-                        // 在缩放状态下，确保图片不会超出边界
-                        if (scaleFactor > 1.01f) {
-                            limitDragWithBoundary();
-                        } else {
-                            // 非缩放状态下居中显示
-                            centerImage();
-                        }
-                        
-                        // 如果不是缩放状态，处理单指点击翻页
-                        if (scaleFactor <= 1.01f) { // 基本没有缩放时
-                            float x = event.getX();
-                            float width = v.getWidth();
-                            
-                            // 原有的翻页逻辑
-                            if (isRotated) {
-                                // 旋转后，原来的左右变成了上下
-                                float height = v.getHeight();
-                                float y = event.getY();
-                                
-                                // 点击上部区域 (高度1/3)：下一页
-                                if (y < height / 3) {
-                                    goToNextPage();
-                                }
-                                // 点击下部区域 (高度2/3-3/3)：上一页
-                                else if (y > height * 2 / 3) {
-                                    goToPrevPage();
-                                }
-                                // 点击中间区域：切换控制栏显示/隐藏
-                                else {
-                                    toggleControls();
-                                }
-                            } else {
-                                // 正常竖屏模式
-                                // 点击左侧区域 (宽度1/3)：下一页
-                                if (x < width / 3) {
-                                    goToNextPage();
-                                }
-                                // 点击右侧区域 (宽度2/3-3/3)：上一页
-                                else if (x > width * 2 / 3) {
-                                    goToPrevPage();
-                                }
-                                // 点击中间区域：切换控制栏显示/隐藏
-                                else {
-                                    toggleControls();
-                                }
-                            }
-                        }
-                        break;
-                        
-                    case MotionEvent.ACTION_MOVE:
-                        if (mode == DRAG) {
-                            // 单指拖动 - 增强版，支持缩放状态下的平滑拖动
-                            matrix.set(savedMatrix);
-                            float dx = event.getX() - startPoint.x;
-                            float dy = event.getY() - startPoint.y;
-                            
-                            // 限制拖动范围，防止拖出边界
-                            matrix.postTranslate(dx, dy);
-                            
-                            // 实时限制边界，提供更好的拖动反馈
-                            if (scaleFactor > 1.01f) {
-                                limitDragWithBoundary(); // 使用新的边界限制方法
-                            }
-                            
-                        } else if (mode == ZOOM) {
-                            // 两指缩放
-                            float newDist = spacing(event);
-                            if (newDist > 10f) {
-                                matrix.set(savedMatrix);
-                                float scale = newDist / oldDistance;
-                                
-                                // 更新缩放比例
-                                scaleFactor *= scale;
-                                
-                                // 限制缩放范围
-                                if (scaleFactor < minScale) {
-                                    scaleFactor = minScale;
-                                    scale = minScale / (scaleFactor / scale);
-                                } else if (scaleFactor > maxScale) {
-                                    scaleFactor = maxScale;
-                                    scale = maxScale / (scaleFactor / scale);
-                                }
-                                
-                                // 以两指中心点为缩放中心
-                                matrix.postScale(scale, scale, midPoint.x, midPoint.y);
-                                
-                                // 缩放后立即限制位置
-                                limitDragWithBoundary();
-                            }
-                        }
-                        break;
+                        return handleTouchUp(view, event);
                 }
                 
-                // 应用矩阵变化
-                view.setImageMatrix(matrix);
                 return true;
             }
         });
@@ -1236,6 +1143,239 @@ public class MainActivity extends AppCompatActivity {
         }, 100);
     }
     
+    // 处理缩放模式
+    private boolean handleZoomMode(ImageView view, MotionEvent event) {
+        // 重置点击和滑动状态
+        isClickCandidate = false;
+        isSwiping = false;
+        
+        // 调用原有的缩放处理逻辑
+        switch (event.getAction() & MotionEvent.ACTION_MASK) {
+            case MotionEvent.ACTION_POINTER_DOWN:
+                // 两指触摸开始
+                oldDistance = spacing(event);
+                if (oldDistance > 10f) {
+                    savedMatrix.set(matrix);
+                    midPoint(midPoint, event);
+                    mode = ZOOM;
+                }
+                break;
+                
+            case MotionEvent.ACTION_MOVE:
+                if (mode == ZOOM) {
+                    // 两指缩放
+                    float newDist = spacing(event);
+                    if (newDist > 10f) {
+                        matrix.set(savedMatrix);
+                        float scale = newDist / oldDistance;
+                        
+                        // 更新缩放比例
+                        scaleFactor *= scale;
+                        
+                        // 限制缩放范围
+                        if (scaleFactor < minScale) {
+                            scaleFactor = minScale;
+                            scale = minScale / (scaleFactor / scale);
+                        } else if (scaleFactor > maxScale) {
+                            scaleFactor = maxScale;
+                            scale = maxScale / (scaleFactor / scale);
+                        }
+                        
+                        // 以两指中心点为缩放中心
+                        matrix.postScale(scale, scale, midPoint.x, midPoint.y);
+                        
+                        // 缩放后立即限制位置
+                        limitDragWithBoundary();
+                    }
+                }
+                break;
+                
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_POINTER_UP:
+                // 触摸结束
+                mode = NONE;
+                
+                // 在缩放状态下，确保图片不会超出边界
+                if (scaleFactor > 1.01f) {
+                    limitDragWithBoundary();
+                } else {
+                    // 非缩放状态下居中显示
+                    centerImage();
+                }
+                break;
+        }
+        
+        // 应用矩阵变化
+        view.setImageMatrix(matrix);
+        return true;
+    }
+    
+    // 处理触摸按下
+    private boolean handleTouchDown(ImageView view, MotionEvent event) {
+        // 记录起点信息
+        touchStartX = event.getX();
+        touchStartY = event.getY();
+        touchStartTime = System.currentTimeMillis();
+        
+        // 如果已经在缩放状态 → 进入拖动模式
+        if (scaleFactor > 1.01f) {
+            isClickCandidate = false;  // 缩放状态下不是点击
+            isSwiping = false;         // 缩放状态下不是滑动
+            
+            // 进入拖动模式
+            savedMatrix.set(matrix);
+            startPoint.set(touchStartX, touchStartY);
+            mode = DRAG;
+            return true;
+        } else {
+            // 未缩放状态，可能是点击或滑动
+            isClickCandidate = true;
+            isSwiping = false;
+            mode = NONE;
+        }
+        return true;
+    }
+    
+    // 处理触摸移动
+    private boolean handleTouchMove(ImageView view, MotionEvent event) {
+        // 如果已经在缩放状态 → 继续拖动
+        if (scaleFactor > 1.01f && mode == DRAG) {
+            // 单指拖动
+            matrix.set(savedMatrix);
+            float dx = event.getX() - startPoint.x;
+            float dy = event.getY() - startPoint.y;
+            
+            // 限制拖动范围，防止拖出边界
+            matrix.postTranslate(dx, dy);
+            
+            // 实时限制边界
+            limitDragWithBoundary();
+            
+            // 应用矩阵变化
+            view.setImageMatrix(matrix);
+            return true;
+        }
+        
+        // 检查是否应该进入滑动模式
+        float currentX = event.getX();
+        float currentY = event.getY();
+        float dx = Math.abs(currentX - touchStartX);
+        float dy = Math.abs(currentY - touchStartY);
+        
+        // 如果是水平滑动且超过阈值
+        if (dx > SWIPE_MIN_DISTANCE && dx > dy * SWIPE_VS_SCROLL_RATIO) {
+            isClickCandidate = false;  // 不是点击
+            isSwiping = true;          // 是滑动
+        }
+        
+        return true;
+    }
+    
+    // 处理触摸抬起
+    private boolean handleTouchUp(ImageView view, MotionEvent event) {
+        float endX = event.getX();
+        float endY = event.getY();
+        long duration = System.currentTimeMillis() - touchStartTime;
+        float distance = (float) Math.sqrt(
+            Math.pow(endX - touchStartX, 2) + Math.pow(endY - touchStartY, 2));
+        
+        // 如果已经在缩放状态 → 拖动结束
+        if (scaleFactor > 1.01f && mode == DRAG) {
+            mode = NONE;
+            return true;
+        }
+        
+        // 检查双击（只在中间区域）
+        long currentTime = System.currentTimeMillis();
+        float width = view.getWidth();
+        
+        if (currentTime - lastClickTime < DOUBLE_TAP_TIME_THRESHOLD) {
+            // 检查是否在中间区域
+            if (isRotated) {
+                // 旋转状态下，检查垂直方向中间区域
+                float height = view.getHeight();
+                if (endY >= height/3 && endY <= height*2/3) {
+                    resetScale();
+                    lastClickTime = 0; // 重置，避免连续双击
+                    return true;
+                }
+            } else {
+                // 正常状态，检查水平方向中间区域
+                if (endX >= width/3 && endX <= width*2/3) {
+                    resetScale();
+                    lastClickTime = 0; // 重置，避免连续双击
+                    return true;
+                }
+            }
+        }
+        lastClickTime = currentTime;
+        
+        // 判断是点击还是滑动
+        if (isClickCandidate && duration < CLICK_MAX_TIME && 
+            distance < CLICK_MAX_DISTANCE) {
+            // 点击处理
+            handleClick(endX, width);
+        } else if (isSwiping) {
+            // 滑动处理
+            handleSwipe(touchStartX, endX);
+        }
+        
+        // 重置状态
+        isClickCandidate = false;
+        isSwiping = false;
+        mode = NONE;
+        
+        return true;
+    }
+    
+    // 处理点击事件
+    private void handleClick(float clickX, float viewWidth) {
+        if (isRotated) {
+            // 旋转状态下，原来的左右变成了上下
+            float height = pdfImageView.getHeight();
+            float clickY = clickX; // 注意：这里需要根据实际情况获取Y坐标
+            
+            if (clickY < height / 3) {
+                // 上部点击 → 下一页
+                goToNextPage();
+            } else if (clickY > height * 2 / 3) {
+                // 下部点击 → 上一页
+                goToPrevPage();
+            } else {
+                // 中间点击 → 清屏（切换控制栏显示）
+                toggleControls();
+            }
+        } else {
+            // 正常状态
+            float third = viewWidth / 3;
+            
+            if (clickX < third) {
+                // 左侧点击 → 下一页
+                goToNextPage();
+            } else if (clickX > 2 * third) {
+                // 右侧点击 → 上一页
+                goToPrevPage();
+            } else {
+                // 中间点击 → 清屏（切换控制栏显示）
+                toggleControls();
+            }
+        }
+    }
+    
+    // 处理滑动事件
+    private void handleSwipe(float startX, float endX) {
+        float dx = endX - startX;
+        
+        if (dx > SWIPE_MIN_DISTANCE) {
+            // 右滑（从左向右）→ 下一页
+            goToNextPage();
+        } else if (dx < -SWIPE_MIN_DISTANCE) {
+            // 左滑（从右向左）→ 上一页
+            goToPrevPage();
+        }
+        // 如果滑动距离不够，不处理
+    }
+    
     // 计算两指距离
     private float spacing(MotionEvent event) {
         float x = event.getX(0) - event.getX(1);
@@ -1316,22 +1456,6 @@ public class MainActivity extends AppCompatActivity {
         values[Matrix.MTRANS_X] = transX;
         values[Matrix.MTRANS_Y] = transY;
         matrix.setValues(values);
-        
-        // 添加边界回弹效果（可选）
-        addBoundaryBounceEffect(transX, transY, minTransX, maxTransX, minTransY, maxTransY);
-    }
-    
-    // 添加边界回弹效果（可选，提供更好的用户体验）
-    private void addBoundaryBounceEffect(float currentX, float currentY, 
-                                         float minX, float maxX, float minY, float maxY) {
-        // 检查是否接近边界
-        float bounceThreshold = 10f; // 回弹阈值
-        
-        if (currentX <= minX + bounceThreshold || currentX >= maxX - bounceThreshold ||
-            currentY <= minY + bounceThreshold || currentY >= maxY - bounceThreshold) {
-            // 在边界附近，可以添加轻微的回弹效果
-            // 这里可以根据需要实现更复杂的物理效果
-        }
     }
     
     // 增强的中心对齐方法，考虑缩放状态
