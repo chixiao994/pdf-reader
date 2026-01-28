@@ -1015,6 +1015,8 @@ public class MainActivity extends AppCompatActivity {
         touchStartTime = 0;
         isClickCandidate = false;
         isSwiping = false;
+        lastTapX = 0;
+        lastTapY = 0;
         
         // 添加触摸监听器 - 支持点击、滑动、缩放、拖动四种模式
         pdfImageView.setOnTouchListener(new View.OnTouchListener() {
@@ -1022,12 +1024,17 @@ public class MainActivity extends AppCompatActivity {
             public boolean onTouch(View v, MotionEvent event) {
                 ImageView view = (ImageView) v;
                 
-                // 1. 如果是两指操作 → 缩放模式（优先处理）
+                // 1. 首先检查是否是双击（在任何状态下都优先处理双击）
+                if (checkDoubleTap(event, v)) {
+                    return true;
+                }
+                
+                // 2. 如果是两指操作 → 缩放模式
                 if (event.getPointerCount() == 2) {
                     return handleZoomMode(view, event);
                 }
                 
-                // 2. 如果是单指操作
+                // 3. 如果是单指操作
                 switch (event.getAction() & MotionEvent.ACTION_MASK) {
                     case MotionEvent.ACTION_DOWN:
                         return handleTouchDown(view, event);
@@ -1141,6 +1148,36 @@ public class MainActivity extends AppCompatActivity {
                 displayCurrentPage();
             }
         }, 100);
+    }
+    
+    // 检查双击事件（在触摸事件开始时立即检查）
+    private boolean checkDoubleTap(MotionEvent event, View v) {
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            long currentTime = System.currentTimeMillis();
+            float currentX = event.getX();
+            float currentY = event.getY();
+            
+            // 检查是否是双击
+            if (currentTime - lastClickTime < DOUBLE_TAP_TIME_THRESHOLD) {
+                // 检查两次点击的位置是否接近
+                float distance = (float) Math.sqrt(
+                    Math.pow(currentX - lastTapX, 2) + Math.pow(currentY - lastTapY, 2));
+                
+                if (distance < DOUBLE_TAP_MAX_DISTANCE) {
+                    // 是有效的双击
+                    resetScale(); // 恢复原始大小
+                    lastClickTime = 0; // 重置，避免连续双击
+                    return true;
+                }
+            }
+            
+            // 记录本次点击的时间和位置
+            lastClickTime = currentTime;
+            lastTapX = currentX;
+            lastTapY = currentY;
+        }
+        
+        return false;
     }
     
     // 处理缩放模式
@@ -1285,36 +1322,11 @@ public class MainActivity extends AppCompatActivity {
             return true;
         }
         
-        // 检查双击（只在中间区域）
-        long currentTime = System.currentTimeMillis();
-        float width = view.getWidth();
-        
-        if (currentTime - lastClickTime < DOUBLE_TAP_TIME_THRESHOLD) {
-            // 检查是否在中间区域
-            if (isRotated) {
-                // 旋转状态下，检查垂直方向中间区域
-                float height = view.getHeight();
-                if (endY >= height/3 && endY <= height*2/3) {
-                    resetScale();
-                    lastClickTime = 0; // 重置，避免连续双击
-                    return true;
-                }
-            } else {
-                // 正常状态，检查水平方向中间区域
-                if (endX >= width/3 && endX <= width*2/3) {
-                    resetScale();
-                    lastClickTime = 0; // 重置，避免连续双击
-                    return true;
-                }
-            }
-        }
-        lastClickTime = currentTime;
-        
-        // 判断是点击还是滑动
+        // 判断是点击还是滑动（注意：这里不再检查双击，因为双击已经在 ACTION_DOWN 时处理了）
         if (isClickCandidate && duration < CLICK_MAX_TIME && 
             distance < CLICK_MAX_DISTANCE) {
             // 点击处理
-            handleClick(endX, width);
+            handleClick(endX, view.getWidth());
         } else if (isSwiping) {
             // 滑动处理
             handleSwipe(touchStartX, endX);
@@ -1535,8 +1547,10 @@ public class MainActivity extends AppCompatActivity {
         
         // 确保视图更新
         pdfImageView.invalidate();
-    }
-    
+        
+        // 显示提示（可选）
+        Toast.makeText(this, "已恢复原始大小", Toast.LENGTH_SHORT).show();
+    }    
     private LinearLayout createReaderTopBar() {
         LinearLayout topBar = new LinearLayout(this);
         topBar.setOrientation(LinearLayout.HORIZONTAL);
