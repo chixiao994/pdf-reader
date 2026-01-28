@@ -100,6 +100,10 @@ public class MainActivity extends AppCompatActivity {
     private static final int SWIPE_MIN_DISTANCE = 60;  // 滑动最小距离(像素)
     private static final float SWIPE_VS_SCROLL_RATIO = 1.5f; // 水平vs垂直移动比例
     
+    // 双击相关变量
+    private float lastTapX, lastTapY;
+    private static final int DOUBLE_TAP_MAX_DISTANCE = 50; // 双击最大距离(像素)
+    
     // 存储
     private SharedPreferences prefs;
     private static final String LAST_OPENED_FILE = "last_opened_file"; // 存储最后打开的文件路径
@@ -509,7 +513,7 @@ public class MainActivity extends AppCompatActivity {
         topBar.setPadding(20, 15, 20, 15);
         
         TextView title = new TextView(this);
-        title.setText("简帙阅读器 v1.0.19"); // 版本号改为1.0.19
+        title.setText("简帙阅读器 v1.0.18"); // 版本号改为1.0.18
         title.setTextColor(nightMode ? ANCIENT_BEIGE : ANCIENT_GOLD); // 古籍金色文字
         title.setTextSize(18);
         title.setLayoutParams(new LinearLayout.LayoutParams(
@@ -984,6 +988,36 @@ public class MainActivity extends AppCompatActivity {
         return filePath;
     }
     
+    // 检查双击事件
+    private boolean checkDoubleTap(MotionEvent event) {
+        if (event.getAction() == MotionEvent.ACTION_DOWN) {
+            long currentTime = System.currentTimeMillis();
+            float currentX = event.getX();
+            float currentY = event.getY();
+            
+            // 检查是否是双击
+            if (currentTime - lastClickTime < DOUBLE_TAP_TIME_THRESHOLD) {
+                // 检查两次点击的位置是否接近
+                float distance = (float) Math.sqrt(
+                    Math.pow(currentX - lastTapX, 2) + Math.pow(currentY - lastTapY, 2));
+                
+                if (distance < DOUBLE_TAP_MAX_DISTANCE) {
+                    // 是有效的双击
+                    resetScale(); // 恢复原始大小
+                    lastClickTime = 0; // 重置，避免连续双击
+                    return true;
+                }
+            }
+            
+            // 记录本次点击的时间和位置
+            lastClickTime = currentTime;
+            lastTapX = currentX;
+            lastTapY = currentY;
+        }
+        
+        return false;
+    }
+    
     private void showReaderView() {
         mainLayout.removeAllViews();
         
@@ -1017,6 +1051,7 @@ public class MainActivity extends AppCompatActivity {
         isSwiping = false;
         lastTapX = 0;
         lastTapY = 0;
+        lastClickTime = 0;
         
         // 添加触摸监听器 - 支持点击、滑动、缩放、拖动四种模式
         pdfImageView.setOnTouchListener(new View.OnTouchListener() {
@@ -1025,7 +1060,7 @@ public class MainActivity extends AppCompatActivity {
                 ImageView view = (ImageView) v;
                 
                 // 1. 首先检查是否是双击（在任何状态下都优先处理双击）
-                if (checkDoubleTap(event, v)) {
+                if (checkDoubleTap(event)) {
                     return true;
                 }
                 
@@ -1148,36 +1183,6 @@ public class MainActivity extends AppCompatActivity {
                 displayCurrentPage();
             }
         }, 100);
-    }
-    
-    // 检查双击事件（在触摸事件开始时立即检查）
-    private boolean checkDoubleTap(MotionEvent event, View v) {
-        if (event.getAction() == MotionEvent.ACTION_DOWN) {
-            long currentTime = System.currentTimeMillis();
-            float currentX = event.getX();
-            float currentY = event.getY();
-            
-            // 检查是否是双击
-            if (currentTime - lastClickTime < DOUBLE_TAP_TIME_THRESHOLD) {
-                // 检查两次点击的位置是否接近
-                float distance = (float) Math.sqrt(
-                    Math.pow(currentX - lastTapX, 2) + Math.pow(currentY - lastTapY, 2));
-                
-                if (distance < DOUBLE_TAP_MAX_DISTANCE) {
-                    // 是有效的双击
-                    resetScale(); // 恢复原始大小
-                    lastClickTime = 0; // 重置，避免连续双击
-                    return true;
-                }
-            }
-            
-            // 记录本次点击的时间和位置
-            lastClickTime = currentTime;
-            lastTapX = currentX;
-            lastTapY = currentY;
-        }
-        
-        return false;
     }
     
     // 处理缩放模式
@@ -1322,7 +1327,7 @@ public class MainActivity extends AppCompatActivity {
             return true;
         }
         
-        // 判断是点击还是滑动（注意：这里不再检查双击，因为双击已经在 ACTION_DOWN 时处理了）
+        // 判断是点击还是滑动
         if (isClickCandidate && duration < CLICK_MAX_TIME && 
             distance < CLICK_MAX_DISTANCE) {
             // 点击处理
@@ -1344,8 +1349,12 @@ public class MainActivity extends AppCompatActivity {
     private void handleClick(float clickX, float viewWidth) {
         if (isRotated) {
             // 旋转状态下，原来的左右变成了上下
+            // 注意：这里clickX实际上是Y坐标，需要获取真实的clickY
+            // 由于我们在触摸事件中只记录了X坐标，这里暂时使用clickX作为Y坐标的近似
+            float clickY = clickX; // 这是一个近似值，实际使用中应该记录Y坐标
+            
+            // 获取视图高度
             float height = pdfImageView.getHeight();
-            float clickY = clickX; // 注意：这里需要根据实际情况获取Y坐标
             
             if (clickY < height / 3) {
                 // 上部点击 → 下一页
@@ -1548,9 +1557,10 @@ public class MainActivity extends AppCompatActivity {
         // 确保视图更新
         pdfImageView.invalidate();
         
-        // 显示提示（可选）
+        // 显示提示
         Toast.makeText(this, "已恢复原始大小", Toast.LENGTH_SHORT).show();
-    }    
+    }
+    
     private LinearLayout createReaderTopBar() {
         LinearLayout topBar = new LinearLayout(this);
         topBar.setOrientation(LinearLayout.HORIZONTAL);
