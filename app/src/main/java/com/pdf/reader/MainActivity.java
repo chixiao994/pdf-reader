@@ -513,7 +513,7 @@ public class MainActivity extends AppCompatActivity {
         topBar.setPadding(20, 15, 20, 15);
         
         TextView title = new TextView(this);
-        title.setText("简帙阅读器 v1.0.18"); // 版本号改为1.0.18
+        title.setText("简帙阅读器 v1.0.20"); // 版本号改为1.0.20
         title.setTextColor(nightMode ? ANCIENT_BEIGE : ANCIENT_GOLD); // 古籍金色文字
         title.setTextSize(18);
         title.setLayoutParams(new LinearLayout.LayoutParams(
