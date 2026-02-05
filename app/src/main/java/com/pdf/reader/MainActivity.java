@@ -1314,9 +1314,10 @@ public class MainActivity extends AppCompatActivity {
     }
     
     // 处理触摸抬起
+    // 处理触摸抬起
     private boolean handleTouchUp(ImageView view, MotionEvent event) {
         float endX = event.getX();
-        float endY = event.getY();
+        float endY = event.getY();  // 新增：获取Y坐标
         long duration = System.currentTimeMillis() - touchStartTime;
         float distance = (float) Math.sqrt(
             Math.pow(endX - touchStartX, 2) + Math.pow(endY - touchStartY, 2));
@@ -1330,8 +1331,8 @@ public class MainActivity extends AppCompatActivity {
         // 判断是点击还是滑动
         if (isClickCandidate && duration < CLICK_MAX_TIME && 
             distance < CLICK_MAX_DISTANCE) {
-            // 点击处理
-            handleClick(endX, view.getWidth());
+            // 点击处理 - 同时传递X和Y坐标
+            handleClick(endX, endY, view.getWidth(), view.getHeight());
         } else if (isSwiping) {
             // 滑动处理
             handleSwipe(touchStartX, endX);
@@ -1344,30 +1345,29 @@ public class MainActivity extends AppCompatActivity {
         
         return true;
     }
+
     
-    // 处理点击事件
-    private void handleClick(float clickX, float viewWidth) {
+    // 处理点击事件 - 修改方法签名，添加Y坐标和视图高度
+    private void handleClick(float clickX, float clickY, float viewWidth, float viewHeight) {
         if (isRotated) {
             // 旋转状态下，原来的左右变成了上下
-            // 注意：这里clickX实际上是Y坐标，需要获取真实的clickY
-            // 由于我们在触摸事件中只记录了X坐标，这里暂时使用clickX作为Y坐标的近似
-            float clickY = clickX; // 这是一个近似值，实际使用中应该记录Y坐标
+            // 现在我们有正确的Y坐标来判断垂直方向的分区
             
-            // 获取视图高度
-            float height = pdfImageView.getHeight();
+            // 计算垂直方向的三等分
+            float third = viewHeight / 3;
             
-            if (clickY < height / 3) {
-                // 上部点击 → 下一页
+            if (clickY < third) {
+                // 上部点击 → 下一页（原左侧）
                 goToNextPage();
-            } else if (clickY > height * 2 / 3) {
-                // 下部点击 → 上一页
+            } else if (clickY > 2 * third) {
+                // 下部点击 → 上一页（原右侧）
                 goToPrevPage();
             } else {
                 // 中间点击 → 清屏（切换控制栏显示）
                 toggleControls();
             }
         } else {
-            // 正常状态
+            // 正常状态 - 使用水平方向的三等分
             float third = viewWidth / 3;
             
             if (clickX < third) {
@@ -1382,6 +1382,7 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
+
     
     // 处理滑动事件
     private void handleSwipe(float startX, float endX) {
