@@ -5,6 +5,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import android.Manifest;
+import android.animation.ValueAnimator;
 import android.content.ContentResolver;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -12,6 +13,7 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Camera;
 import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
@@ -35,6 +37,7 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.animation.AccelerateDecelerateInterpolator;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -57,7 +60,7 @@ public class MainActivity extends AppCompatActivity {
     private FrameLayout readerContainer;
     private ImageView pdfImageView;
     private TextView pageTextView;
-    private Button nightModeBtn, halfPageBtn, pageModeBtn, prevBtn, nextBtn, openFileBtn, refreshBtn, rotateBtn;
+    private Button nightModeBtn, halfPageBtn, pageModeBtn, prevBtn, nextBtn, openFileBtn, refreshBtn, rotateBtn, flipModeBtn;
     
     // PDF相关
     private PdfRenderer pdfRenderer;
@@ -73,6 +76,16 @@ public class MainActivity extends AppCompatActivity {
     private boolean leftPage = false;
     private boolean controlsVisible = true; // 控制栏是否可见
     private boolean isRotated = false; // 是否旋转90度
+    
+    // 翻页效果相关变量
+    private boolean flipPageMode = false; // 是否启用仿真翻页效果
+    private boolean isFlipping = false; // 是否正在翻页
+    private float flipProgress = 0f; // 翻页进度 0.0-1.0
+    private Bitmap currentPageBitmap; // 当前页
+    private Bitmap nextPageBitmap; // 下一页
+    private Paint flipPaint;
+    private Matrix flipMatrix;
+    private float flipStartX; // 翻页起始X坐标
     
     // 缩放相关变量 - 增强版
     private float scaleFactor = 1.0f;
@@ -132,6 +145,22 @@ public class MainActivity extends AppCompatActivity {
     private static final int DAY_STATUS_BAR_COLOR = Color.parseColor("#5D4037"); // 深褐色（古籍边框色）
     private static final int NIGHT_STATUS_BAR_COLOR = Color.parseColor("#2C2C2C"); // 深灰色
     
+    // 自定义ImageView，支持翻页效果
+    private class FlipImageView extends ImageView {
+        public FlipImageView(Context context) {
+            super(context);
+        }
+        
+        @Override
+        protected void onDraw(Canvas canvas) {
+            super.onDraw(canvas);
+            
+            if (flipPageMode && isFlipping && currentPageBitmap != null && nextPageBitmap != null) {
+                drawFlipEffect(canvas);
+            }
+        }
+    }
+    
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -143,6 +172,11 @@ public class MainActivity extends AppCompatActivity {
         // 初始化存储
         prefs = getSharedPreferences("pdf_reader", MODE_PRIVATE);
         loadSettings();
+        
+        // 初始化翻页相关的Paint
+        flipPaint = new Paint();
+        flipPaint.setAntiAlias(true);
+        flipMatrix = new Matrix();
         
         // 检查是否是首次运行
         boolean firstRun = prefs.getBoolean(FIRST_RUN, true);
@@ -161,8 +195,76 @@ public class MainActivity extends AppCompatActivity {
         }
     }
     
+    // 绘制翻页效果
+    private void drawFlipEffect(Canvas canvas) {
+        if (!flipPageMode || !isFlipping || currentPageBitmap == null || nextPageBitmap == null) {
+            return;
+        }
+        
+        int width = pdfImageView.getWidth();
+        int height = pdfImageView.getHeight();
+        
+        // 计算翻页的折痕位置（从右向左翻）
+        float hingeX = width * flipProgress;
+        
+        // 绘制下一页（作为背景）
+        canvas.drawBitmap(nextPageBitmap, 0, 0, flipPaint);
+        
+        // 绘制当前页（正在翻动的页面）
+        canvas.save();
+        
+        // 应用透视变换模拟3D效果
+        Camera camera = new Camera();
+        camera.save();
+        
+        float degrees = flipProgress * 180;
+        camera.rotateY(degrees); // 绕Y轴旋转
+        
+        Matrix matrix = new Matrix();
+        camera.getMatrix(matrix);
+        camera.restore();
+        
+        // 调整变换中心点
+        matrix.preTranslate(-hingeX, -height / 2);
+        matrix.postTranslate(hingeX, height / 2);
+        
+        canvas.concat(matrix);
+        
+        // 裁剪要显示的部分
+        canvas.clipRect(0, 0, hingeX, height);
+        canvas.drawBitmap(currentPageBitmap, 0, 0, flipPaint);
+        
+        canvas.restore();
+        
+        // 绘制翻页边缘的阴影效果
+        if (flipProgress > 0.1f) {
+            Paint shadowPaint = new Paint();
+            shadowPaint.setColor(Color.parseColor("#40000000"));
+            shadowPaint.setStyle(Paint.Style.FILL);
+            
+            // 绘制翻页边缘的渐变阴影
+            float shadowWidth = Math.min(20, hingeX * 0.1f);
+            for (int i = 0; i < shadowWidth; i++) {
+                float alpha = 0.4f * (1 - i / shadowWidth);
+                shadowPaint.setAlpha((int)(alpha * 255));
+                canvas.drawRect(hingeX - i, 0, hingeX - i + 1, height, shadowPaint);
+            }
+        }
+    }
+    
     private void goBackToFileList() {
         closePdf();
+        
+        // 清理翻页相关资源
+        if (currentPageBitmap != null) {
+            currentPageBitmap.recycle();
+            currentPageBitmap = null;
+        }
+        if (nextPageBitmap != null) {
+            nextPageBitmap.recycle();
+            nextPageBitmap = null;
+        }
+        isFlipping = false;
         
         // 根据权限状态显示文件列表
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -316,6 +418,7 @@ public class MainActivity extends AppCompatActivity {
         halfPageMode = prefs.getBoolean("half_page", false);
         doublePageMode = prefs.getBoolean("double_page", false);
         isRotated = prefs.getBoolean("is_rotated", false); // 加载旋转状态
+        flipPageMode = prefs.getBoolean("flip_page_mode", false); // 加载翻页模式，默认平滑
     }
     
     private void saveSettings() {
@@ -324,6 +427,7 @@ public class MainActivity extends AppCompatActivity {
             .putBoolean("half_page", halfPageMode)
             .putBoolean("double_page", doublePageMode)
             .putBoolean("is_rotated", isRotated) // 保存旋转状态
+            .putBoolean("flip_page_mode", flipPageMode) // 保存翻页模式
             .apply();
     }
     
@@ -871,6 +975,8 @@ public class MainActivity extends AppCompatActivity {
                         displayName = cursor.getString(nameIndex);
                     }
                 }
+            } catch (Exception e) {
+                Log.e("PDF_DEBUG", "查询文件信息失败", e);
             }
             
             // 创建临时文件名
@@ -912,7 +1018,6 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
-    
     private String getRealPathFromUri(Uri uri) {
         String filePath = null;
         
@@ -1028,8 +1133,8 @@ public class MainActivity extends AppCompatActivity {
                 FrameLayout.LayoutParams.MATCH_PARENT));
         readerContainer.setBackgroundColor(getBackgroundColor());
         
-        // PDF显示区域
-        pdfImageView = new ImageView(this);
+        // PDF显示区域 - 使用自定义的FlipImageView
+        pdfImageView = new FlipImageView(this);
         FrameLayout.LayoutParams imageParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT);
@@ -1052,6 +1157,10 @@ public class MainActivity extends AppCompatActivity {
         lastTapX = 0;
         lastTapY = 0;
         lastClickTime = 0;
+        
+        // 重置翻页状态
+        isFlipping = false;
+        flipProgress = 0f;
         
         // 添加触摸监听器 - 支持点击、滑动、缩放、拖动四种模式
         pdfImageView.setOnTouchListener(new View.OnTouchListener() {
@@ -1314,10 +1423,9 @@ public class MainActivity extends AppCompatActivity {
     }
     
     // 处理触摸抬起
-    // 处理触摸抬起
     private boolean handleTouchUp(ImageView view, MotionEvent event) {
         float endX = event.getX();
-        float endY = event.getY();  // 新增：获取Y坐标
+        float endY = event.getY();
         long duration = System.currentTimeMillis() - touchStartTime;
         float distance = (float) Math.sqrt(
             Math.pow(endX - touchStartX, 2) + Math.pow(endY - touchStartY, 2));
@@ -1346,8 +1454,7 @@ public class MainActivity extends AppCompatActivity {
         return true;
     }
 
-    
-    // 处理点击事件 - 修改方法签名，添加Y坐标和视图高度
+    // 处理点击事件
     private void handleClick(float clickX, float clickY, float viewWidth, float viewHeight) {
         if (isRotated) {
             // 旋转状态下，原来的左右变成了上下
@@ -1383,7 +1490,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    
     // 处理滑动事件
     private void handleSwipe(float startX, float endX) {
         float dx = endX - startX;
@@ -1643,14 +1749,51 @@ public class MainActivity extends AppCompatActivity {
         // 添加按钮样式
         setupButtonStyle(rotateBtn, false);
         
+        // 翻页模式按钮
+        flipModeBtn = new Button(this);
+        flipModeBtn.setText(flipPageMode ? "平滑" : "翻动");
+        flipModeBtn.setBackgroundColor(getButtonBackgroundColor());
+        flipModeBtn.setTextColor(getButtonTextColor());
+        flipModeBtn.setTextSize(11);
+        flipModeBtn.setAllCaps(false);
+        flipModeBtn.setLayoutParams(btnParams);
+        flipModeBtn.setOnClickListener(v -> toggleFlipPageMode());
+        
+        // 添加按钮样式
+        setupButtonStyle(flipModeBtn, false);
+        
         // 将所有按钮添加到顶部栏
         topBar.addView(backBtn);
         topBar.addView(nightBtn);
         topBar.addView(halfPageBtn);
         topBar.addView(pageModeBtn);
         topBar.addView(rotateBtn);
+        topBar.addView(flipModeBtn);
         
         return topBar;
+    }
+    
+    private void toggleFlipPageMode() {
+        // 切换翻页模式
+        flipPageMode = !flipPageMode;
+        
+        // 重置翻页状态
+        isFlipping = false;
+        flipProgress = 0f;
+        
+        // 更新按钮文本
+        if (flipModeBtn != null) {
+            flipModeBtn.setText(flipPageMode ? "平滑" : "翻动");
+        }
+        
+        // 保存设置
+        saveSettings();
+        
+        if (flipPageMode) {
+            Toast.makeText(this, "已启用翻动效果（仿真翻页）", Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(this, "已启用平滑翻页", Toast.LENGTH_SHORT).show();
+        }
     }
     
     private void toggleRotation() {
@@ -1810,8 +1953,269 @@ public class MainActivity extends AppCompatActivity {
         return rotatedBitmap;
     }
     
-    // 创建双页Bitmap的方法（居中显示，两页间不留空隙）
-    private Bitmap createDoublePageBitmap(int leftPageNum, int rightPageNum) {
+    // 保存当前页和下一页的位图（用于翻页动画）
+    private void savePageBitmapsForFlip(boolean forward) {
+        try {
+            // 清理旧的位图
+            if (currentPageBitmap != null) {
+                currentPageBitmap.recycle();
+                currentPageBitmap = null;
+            }
+            if (nextPageBitmap != null) {
+                nextPageBitmap.recycle();
+                nextPageBitmap = null;
+            }
+            
+            // 获取当前页的位图
+            PdfRenderer.Page currentPage = pdfRenderer.openPage(this.currentPage);
+            int pageWidth = currentPage.getWidth();
+            int pageHeight = currentPage.getHeight();
+            
+            // 获取视图尺寸
+            int viewWidth = pdfImageView.getWidth();
+            int viewHeight = pdfImageView.getHeight();
+            
+            // 计算合适的缩放比例
+            float scale = Math.min(
+                (float) viewWidth / pageWidth,
+                (float) viewHeight / pageHeight
+            );
+            
+            int scaledWidth = (int) (pageWidth * scale);
+            int scaledHeight = (int) (pageHeight * scale);
+            
+            // 渲染当前页
+            currentPageBitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888);
+            currentPage.render(currentPageBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+            currentPage.close();
+            
+            // 获取下一页的位图
+            int nextPageIndex = forward ? this.currentPage + 1 : this.currentPage - 1;
+            if (nextPageIndex >= 0 && nextPageIndex < totalPages) {
+                PdfRenderer.Page nextPage = pdfRenderer.openPage(nextPageIndex);
+                nextPageBitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888);
+                nextPage.render(nextPageBitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                nextPage.close();
+            }
+            
+            // 夜间模式反转颜色
+            if (nightMode) {
+                if (currentPageBitmap != null) {
+                    currentPageBitmap = invertColors(currentPageBitmap);
+                }
+                if (nextPageBitmap != null) {
+                    nextPageBitmap = invertColors(nextPageBitmap);
+                }
+            }
+            
+            // 如果旋转了，旋转位图
+            if (isRotated) {
+                if (currentPageBitmap != null) {
+                    currentPageBitmap = rotateBitmap90(currentPageBitmap);
+                }
+                if (nextPageBitmap != null) {
+                    nextPageBitmap = rotateBitmap90(nextPageBitmap);
+                }
+            }
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    
+    // 执行翻页动画
+    private void performFlipAnimation(final boolean forward) {
+        if (isFlipping) return;
+        
+        // 判断是否能够翻页
+        if (forward) {
+            if (doublePageMode) {
+                if (currentPage >= totalPages - 2) {
+                    Toast.makeText(this, "已经是最后一页", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+            } else if (halfPageMode) {
+                if (currentPage >= totalPages - 1 && !leftPage) {
+                    Toast.makeText(this, "已经是最后一页", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+            } else {
+                if (currentPage >= totalPages - 1) {
+                    Toast.makeText(this, "已经是最后一页", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+            }
+        } else {
+            if (doublePageMode) {
+                if (currentPage <= 1) {
+                    Toast.makeText(this, "已经是第一页", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+            } else if (halfPageMode) {
+                if (currentPage <= 0 && leftPage) {
+                    Toast.makeText(this, "已经是第一页", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+            } else {
+                if (currentPage <= 0) {
+                    Toast.makeText(this, "已经是第一页", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+            }
+        }
+        
+        // 保存页面位图
+        savePageBitmapsForFlip(forward);
+        
+        if (currentPageBitmap == null || nextPageBitmap == null) {
+            // 如果获取位图失败，使用普通翻页
+            if (forward) {
+                originalGoToNextPage();
+            } else {
+                originalGoToPrevPage();
+            }
+            return;
+        }
+        
+        // 开始翻页动画
+        isFlipping = true;
+        flipProgress = 0f;
+        
+        // 创建动画
+        ValueAnimator animator = ValueAnimator.ofFloat(0f, 1f);
+        animator.setDuration(500); // 动画持续时间500ms
+        animator.setInterpolator(new AccelerateDecelerateInterpolator()); // 先加速后减速
+        
+        animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                flipProgress = (float) animation.getAnimatedValue();
+                pdfImageView.invalidate(); // 触发重绘
+                
+                // 动画完成后更新页面
+                if (flipProgress >= 1.0f) {
+                    // 实际翻页
+                    if (forward) {
+                        originalGoToNextPage();
+                    } else {
+                        originalGoToPrevPage();
+                    }
+                    
+                    // 重置状态
+                    isFlipping = false;
+                    flipProgress = 0f;
+                    
+                    // 清理位图资源
+                    if (currentPageBitmap != null) {
+                        currentPageBitmap.recycle();
+                        currentPageBitmap = null;
+                    }
+                    if (nextPageBitmap != null) {
+                        nextPageBitmap.recycle();
+                        nextPageBitmap = null;
+                    }
+                }
+            }
+        });
+        
+        animator.start();
+    }
+    
+    private void goToPrevPage() {
+        if (flipPageMode) {
+            // 使用仿真翻页效果
+            performFlipAnimation(false);
+        } else {
+            // 原有的平滑翻页逻辑
+            originalGoToPrevPage();
+        }
+    }
+    
+    private void goToNextPage() {
+        if (flipPageMode) {
+            // 使用仿真翻页效果
+            performFlipAnimation(true);
+        } else {
+            // 原有的平滑翻页逻辑
+            originalGoToNextPage();
+        }
+    }
+    
+    private void originalGoToPrevPage() {
+        // 翻页时重置缩放
+        if (scaleFactor > 1.01f) {
+            resetScale();
+        }
+        
+        if (doublePageMode) { // 双页模式
+            // 双页模式下，一次后退两页
+            if (currentPage > 1) {
+                currentPage -= 2;
+            } else {
+                currentPage = 0;
+                Toast.makeText(this, "已经是第一页", Toast.LENGTH_SHORT).show();
+            }
+        } else if (halfPageMode) { // 半页模式
+            if (leftPage) {
+                // 当前是左半页，上一页应该是同页的右半部分
+                leftPage = false;
+            } else {
+                // 当前是右半页，上一页应该是上一页的左半部分
+                if (currentPage > 0) {
+                    currentPage--;
+                    leftPage = true;
+                } else {
+                    // 已经是第0页的右半页，没有上一页了
+                    Toast.makeText(this, "已经是第一页", Toast.LENGTH_SHORT).show();
+                }
+            }
+        } else { // 单页模式
+            if (currentPage > 0) {
+                currentPage--;
+            }
+        }
+        displayCurrentPage();
+    }
+    
+    private void originalGoToNextPage() {
+        // 翻页时重置缩放
+        if (scaleFactor > 1.01f) {
+            resetScale();
+        }
+        
+        if (doublePageMode) { // 双页模式
+            // 双页模式下，一次前进两页
+            if (currentPage < totalPages - 1) {
+                currentPage += 2;
+                if (currentPage >= totalPages) {
+                    currentPage = totalPages - 1;
+                }
+            } else {
+                Toast.makeText(this, "已经是最后一页", Toast.LENGTH_SHORT).show();
+            }
+        } else if (halfPageMode) { // 半页模式
+            if (leftPage) {
+                // 当前是左半页，下一页应该是下一页的右半部分
+                if (currentPage < totalPages - 1) {
+                    currentPage++;
+                    leftPage = false;
+                } else {
+                    // 已经是最后一页的左半页，没有下一页了
+                    Toast.makeText(this, "已经是最后一页", Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                // 当前是右半页，下一页应该是同页的左半部分
+                leftPage = true;
+            }
+        } else { // 单页模式
+            if (currentPage < totalPages - 1) {
+                currentPage++;
+            }
+        }
+        displayCurrentPage();
+    }
+    
+    private void createDoublePageBitmap(int leftPageNum, int rightPageNum) {
         try {
             // 获取屏幕尺寸
             int screenWidth = getResources().getDisplayMetrics().widthPixels;
@@ -1932,13 +2336,31 @@ public class MainActivity extends AppCompatActivity {
                 doubleBitmap = rotateBitmap90(doubleBitmap);
             }
             
-            return doubleBitmap;
+            // 设置图片到ImageView
+            pdfImageView.setImageBitmap(doubleBitmap);
+            
+            // 更新页码显示
+            if (leftPageNum < totalPages) {
+                pageTextView.setText((leftPageNum + 1) + "," + (rightPageNum + 1) + "/" + totalPages);
+            } else {
+                pageTextView.setText((leftPageNum + 1) + "/" + totalPages);
+            }
+            
+            // 立即显示图片
+            pdfImageView.invalidate();
+            
+            // 延迟执行居中，确保布局完成
+            pdfImageView.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    centerImage();
+                }
+            }, 100);
             
         } catch (Exception e) {
             e.printStackTrace();
-            return null;
         }
-    }           
+    }
 
     private void displayCurrentPage() {
         if (pdfRenderer == null) return;
@@ -1963,31 +2385,8 @@ public class MainActivity extends AppCompatActivity {
                     leftPageNum = totalPages - 1;
                 }
                 
-                // 创建双页Bitmap
-                Bitmap doubleBitmap = createDoublePageBitmap(leftPageNum, rightPageNum);
-                
-                if (doubleBitmap != null) {
-                    // 设置图片到ImageView
-                    pdfImageView.setImageBitmap(doubleBitmap);
-                    
-                    // 更新页码显示
-                    if (leftPageNum < totalPages) {
-                        pageTextView.setText((leftPageNum + 1) + "," + (rightPageNum + 1) + "/" + totalPages);
-                    } else {
-                        pageTextView.setText((leftPageNum + 1) + "/" + totalPages);
-                    }
-                    
-                    // 立即显示图片，然后延迟居中
-                    pdfImageView.invalidate();
-                    
-                    // 延迟执行居中，确保布局完成
-                    pdfImageView.postDelayed(new Runnable() {
-                        @Override
-                        public void run() {
-                            centerImage();
-                        }
-                    }, 100);
-                }
+                // 创建并显示双页
+                createDoublePageBitmap(leftPageNum, rightPageNum);
                 
             } else { // 单页模式（可能包含半页模式）
                 PdfRenderer.Page page = pdfRenderer.openPage(currentPage);
@@ -2103,80 +2502,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
     
-    private void goToPrevPage() {
-        // 翻页时重置缩放
-        if (scaleFactor > 1.01f) {
-            resetScale();
-        }
-        
-        if (doublePageMode) { // 双页模式
-            // 双页模式下，一次后退两页
-            if (currentPage > 1) {
-                currentPage -= 2;
-            } else {
-                currentPage = 0;
-                Toast.makeText(this, "已经是第一页", Toast.LENGTH_SHORT).show();
-            }
-        } else if (halfPageMode) { // 半页模式
-            if (leftPage) {
-                // 当前是左半页，上一页应该是同页的右半部分
-                leftPage = false;
-            } else {
-                // 当前是右半页，上一页应该是上一页的左半部分
-                if (currentPage > 0) {
-                    currentPage--;
-                    leftPage = true;
-                } else {
-                    // 已经是第0页的右半页，没有上一页了
-                    Toast.makeText(this, "已经是第一页", Toast.LENGTH_SHORT).show();
-                }
-            }
-        } else { // 单页模式
-            if (currentPage > 0) {
-                currentPage--;
-            }
-        }
-        displayCurrentPage();
-    }
-    
-    private void goToNextPage() {
-        // 翻页时重置缩放
-        if (scaleFactor > 1.01f) {
-            resetScale();
-        }
-        
-        if (doublePageMode) { // 双页模式
-            // 双页模式下，一次前进两页
-            if (currentPage < totalPages - 1) {
-                currentPage += 2;
-                if (currentPage >= totalPages) {
-                    currentPage = totalPages - 1;
-                }
-            } else {
-                Toast.makeText(this, "已经是最后一页", Toast.LENGTH_SHORT).show();
-            }
-        } else if (halfPageMode) { // 半页模式
-            if (leftPage) {
-                // 当前是左半页，下一页应该是下一页的右半部分
-                if (currentPage < totalPages - 1) {
-                    currentPage++;
-                    leftPage = false;
-                } else {
-                    // 已经是最后一页的左半页，没有下一页了
-                    Toast.makeText(this, "已经是最后一页", Toast.LENGTH_SHORT).show();
-                }
-            } else {
-                // 当前是右半页，下一页应该是同页的左半部分
-                leftPage = true;
-            }
-        } else { // 单页模式
-            if (currentPage < totalPages - 1) {
-                currentPage++;
-            }
-        }
-        displayCurrentPage();
-    }
-    
     private void toggleNightMode() {
         nightMode = !nightMode;
         
@@ -2212,6 +2537,17 @@ public class MainActivity extends AppCompatActivity {
     }
     
     private void closePdf() {
+        // 清理翻页相关资源
+        if (currentPageBitmap != null) {
+            currentPageBitmap.recycle();
+            currentPageBitmap = null;
+        }
+        if (nextPageBitmap != null) {
+            nextPageBitmap.recycle();
+            nextPageBitmap = null;
+        }
+        isFlipping = false;
+        
         if (pdfRenderer != null) {
             pdfRenderer.close();
         }
@@ -2276,4 +2612,4 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
-}
+}                
