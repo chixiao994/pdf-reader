@@ -5,6 +5,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import android.Manifest;
+import android.animation.ValueAnimator;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
@@ -50,18 +51,21 @@ import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
+    // 视图组件
     private LinearLayout mainLayout, fileListLayout;
     private FrameLayout readerContainer;
     private ImageView pdfImageView;
     private TextView pageTextView;
     private Button nightModeBtn, halfPageBtn, pageModeBtn, prevBtn, nextBtn, openFileBtn, refreshBtn, rotateBtn, flipModeBtn;
 
+    // PDF相关
     private PdfRenderer pdfRenderer;
     private ParcelFileDescriptor fileDescriptor;
     private int currentPage = 0;
     private int totalPages = 0;
     private String currentFilePath;
 
+    // 设置
     private boolean nightMode = false;
     private boolean halfPageMode = false;
     private boolean doublePageMode = false;
@@ -69,9 +73,11 @@ public class MainActivity extends AppCompatActivity {
     private boolean controlsVisible = true;
     private boolean isRotated = false;
 
-    private boolean flipPageMode = true;
+    // 翻页效果相关变量
+    private boolean flipPageMode = false;              // 【修改1】默认平滑模式
     private boolean isFlipping = false;
 
+    // 页面缓存相关变量（原始代码未修改）
     private Bitmap prevPageCache;
     private Bitmap currentPageCache;
     private Bitmap nextPageCache;
@@ -80,6 +86,7 @@ public class MainActivity extends AppCompatActivity {
     private int cachedNextPage = -1;
     private boolean cacheInitialized = false;
 
+    // 缩放相关变量
     private float scaleFactor = 1.0f;
     private float minScale = 0.5f;
     private float maxScale = 5.0f;
@@ -107,6 +114,7 @@ public class MainActivity extends AppCompatActivity {
     private float lastTapX, lastTapY;
     private static final int DOUBLE_TAP_MAX_DISTANCE = 50;
 
+    // 存储
     private SharedPreferences prefs;
     private static final String LAST_OPENED_FILE = "last_opened_file";
     private static final String AUTO_OPEN_LAST_FILE = "auto_open_last_file";
@@ -114,6 +122,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int PERMISSION_REQUEST_CODE = 100;
     private static final int FILE_PICKER_REQUEST_CODE = 101;
 
+    // 颜色常量
     private static final int DAY_MODE_BG = Color.parseColor("#FFF8F0");
     private static final int DAY_MODE_TEXT = Color.parseColor("#3E2723");
     private static final int NIGHT_MODE_BG = Color.parseColor("#1A1A1A");
@@ -136,7 +145,8 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                WindowManager.LayoutParams.FLAG_FULLSCREEN);
         prefs = getSharedPreferences("pdf_reader", MODE_PRIVATE);
         loadSettings();
         boolean firstRun = prefs.getBoolean(FIRST_RUN, true);
@@ -149,16 +159,15 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // ==================== 核心缓存（旋转/半页/双页修复） ====================
+    // ==================== 原始缓存方法（未做任何修改） ====================
     private void initPageCache() {
         if (pdfRenderer == null) return;
-        if (doublePageMode) { cacheInitialized = false; return; }
         clearPageCache();
         int prevPage = Math.max(0, currentPage - 1);
         int nextPage = Math.min(totalPages - 1, currentPage + 1);
         cachePage(prevPage, true);
         cachePage(currentPage, false);
-        cachePage(nextPage, false);
+        cachePage(nextPage, true);
         cachedPrevPage = prevPage;
         cachedCurrentPage = currentPage;
         cachedNextPage = nextPage;
@@ -167,7 +176,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void cachePage(int pageIndex, boolean isAdjacent) {
         if (pageIndex < 0 || pageIndex >= totalPages) return;
-        if (doublePageMode) return;
         try {
             PdfRenderer.Page page = pdfRenderer.openPage(pageIndex);
             int pageWidth = page.getWidth();
@@ -177,57 +185,49 @@ public class MainActivity extends AppCompatActivity {
                 viewWidth = getResources().getDisplayMetrics().widthPixels;
                 viewHeight = getResources().getDisplayMetrics().heightPixels;
             }
-            float targetW = isRotated ? pageHeight : pageWidth;
-            float targetH = isRotated ? pageWidth : pageHeight;
-            float scale = Math.min((float) viewWidth / targetW, (float) viewHeight / targetH);
-            if (halfPageMode && pageIndex == currentPage) {
-                scale = Math.min((float) viewWidth / (targetW / 2), (float) viewHeight / targetH);
+            float scaleQuality = isAdjacent ? 2.0f : 4.0f;
+            float scale = Math.min((float) viewWidth / pageWidth, (float) viewHeight / pageHeight);
+            if (halfPageMode && !isAdjacent) {
+                scale = Math.min((float) viewWidth / (pageWidth / 2), (float) viewHeight / pageHeight);
             }
-            int renderW = Math.max(1, (int) (pageWidth * scale * 2));
-            int renderH = Math.max(1, (int) (pageHeight * scale * 2));
-            Bitmap bitmap = Bitmap.createBitmap(renderW, renderH, Bitmap.Config.ARGB_8888);
+            int scaledWidth = (int) (pageWidth * scale * scaleQuality);
+            int scaledHeight = (int) (pageHeight * scale * scaleQuality);
+            scaledWidth = Math.max(scaledWidth, 1);
+            scaledHeight = Math.max(scaledHeight, 1);
+            Bitmap bitmap = Bitmap.createBitmap(scaledWidth, scaledHeight, Bitmap.Config.ARGB_8888);
             page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
             page.close();
-
-            int finalW = Math.max(1, (int) (pageWidth * scale));
-            int finalH = Math.max(1, (int) (pageHeight * scale));
-            bitmap = Bitmap.createScaledBitmap(bitmap, finalW, finalH, true);
             if (nightMode) bitmap = invertColors(bitmap);
-
-            if (halfPageMode && pageIndex == currentPage) {
-                bitmap = leftPage ? Bitmap.createBitmap(bitmap, 0, 0, finalW / 2, finalH)
-                                  : Bitmap.createBitmap(bitmap, finalW / 2, 0, finalW / 2, finalH);
-            }
             if (isRotated) bitmap = rotateBitmap90(bitmap);
-
-            if (pageIndex == currentPage) {
-                if (currentPageCache != null && !currentPageCache.isRecycled()) currentPageCache.recycle();
-                currentPageCache = bitmap;
-            } else if (pageIndex == currentPage - 1) {
-                if (prevPageCache != null && !prevPageCache.isRecycled()) prevPageCache.recycle();
-                prevPageCache = bitmap;
-            } else if (pageIndex == currentPage + 1) {
-                if (nextPageCache != null && !nextPageCache.isRecycled()) nextPageCache.recycle();
-                nextPageCache = bitmap;
+            if (halfPageMode && !isAdjacent) {
+                int finalWidth = (int) (pageWidth * scale);
+                int finalHeight = (int) (pageHeight * scale);
+                bitmap = Bitmap.createScaledBitmap(bitmap, finalWidth, finalHeight, true);
+                if (leftPage) bitmap = Bitmap.createBitmap(bitmap, 0, 0, finalWidth / 2, finalHeight);
+                else bitmap = Bitmap.createBitmap(bitmap, finalWidth / 2, 0, finalWidth / 2, finalHeight);
+            } else {
+                int finalWidth = (int) (pageWidth * scale);
+                int finalHeight = (int) (pageHeight * scale);
+                bitmap = Bitmap.createScaledBitmap(bitmap, finalWidth, finalHeight, true);
             }
-        } catch (Exception e) {
-            Log.e("PDF_DEBUG", "缓存页面失败: " + pageIndex, e);
-        }
+            if (pageIndex == currentPage) currentPageCache = bitmap;
+            else if (pageIndex == currentPage - 1) prevPageCache = bitmap;
+            else if (pageIndex == currentPage + 1) nextPageCache = bitmap;
+        } catch (Exception e) { Log.e("PDF_DEBUG", "缓存页面失败: " + pageIndex, e); }
     }
 
     private void clearPageCache() {
-        if (prevPageCache != null && !prevPageCache.isRecycled()) prevPageCache.recycle();
-        if (currentPageCache != null && !currentPageCache.isRecycled()) currentPageCache.recycle();
-        if (nextPageCache != null && !nextPageCache.isRecycled()) nextPageCache.recycle();
-        prevPageCache = currentPageCache = nextPageCache = null;
+        if (prevPageCache != null) { prevPageCache.recycle(); prevPageCache = null; }
+        if (currentPageCache != null) { currentPageCache.recycle(); currentPageCache = null; }
+        if (nextPageCache != null) { nextPageCache.recycle(); nextPageCache = null; }
         cachedPrevPage = cachedCurrentPage = cachedNextPage = -1;
         cacheInitialized = false;
     }
 
     private void updatePageCacheAfterFlip(boolean forward) {
-        if (!cacheInitialized || !flipPageMode || doublePageMode) return;
+        if (!cacheInitialized || !flipPageMode) return;
         if (forward) {
-            if (prevPageCache != null && !prevPageCache.isRecycled()) prevPageCache.recycle();
+            if (prevPageCache != null) { prevPageCache.recycle(); prevPageCache = null; }
             prevPageCache = currentPageCache;
             currentPageCache = nextPageCache;
             nextPageCache = null;
@@ -235,11 +235,11 @@ public class MainActivity extends AppCompatActivity {
             cachedCurrentPage = cachedNextPage;
             int newNextPage = Math.min(totalPages - 1, currentPage + 1);
             if (newNextPage != cachedCurrentPage && newNextPage < totalPages) {
-                cachePage(newNextPage, false);
+                cachePage(newNextPage, true);
                 cachedNextPage = newNextPage;
             }
         } else {
-            if (nextPageCache != null && !nextPageCache.isRecycled()) nextPageCache.recycle();
+            if (nextPageCache != null) { nextPageCache.recycle(); nextPageCache = null; }
             nextPageCache = currentPageCache;
             currentPageCache = prevPageCache;
             prevPageCache = null;
@@ -247,28 +247,24 @@ public class MainActivity extends AppCompatActivity {
             cachedCurrentPage = cachedPrevPage;
             int newPrevPage = Math.max(0, currentPage - 1);
             if (newPrevPage != cachedCurrentPage && newPrevPage >= 0) {
-                cachePage(newPrevPage, false);
+                cachePage(newPrevPage, true);
                 cachedPrevPage = newPrevPage;
             }
         }
         if (currentPageCache != null) {
             pdfImageView.setImageBitmap(currentPageCache);
-            scaleFactor = 1.0f;
-            matrix.reset();
             centerImage();
             pdfImageView.invalidate();
         }
     }
 
-    // ==================== 翻页控制 ====================
+    // ==================== 翻页控制（原始） ====================
     private void goToPrevPage() {
-        if (doublePageMode) { originalGoToPrevPage(); return; }
         if (flipPageMode && cacheInitialized) performCachedFlip(false);
         else originalGoToPrevPage();
     }
 
     private void goToNextPage() {
-        if (doublePageMode) { originalGoToNextPage(); return; }
         if (flipPageMode && cacheInitialized) performCachedFlip(true);
         else originalGoToNextPage();
     }
@@ -280,22 +276,14 @@ public class MainActivity extends AppCompatActivity {
         isFlipping = true;
         if (forward && nextPageCache != null) {
             pdfImageView.setImageBitmap(nextPageCache);
-            scaleFactor = 1.0f;
-            matrix.reset();
-            centerImage();
-            pdfImageView.invalidate();
-            currentPage++;
-            if (halfPageMode) leftPage = true;
+            centerImage(); pdfImageView.invalidate();
+            currentPage++; if (halfPageMode) leftPage = true;
             updatePageNumberText();
             new android.os.Handler().postDelayed(() -> { updatePageCacheAfterFlip(true); saveReadingPosition(); isFlipping = false; }, 50);
         } else if (!forward && prevPageCache != null) {
             pdfImageView.setImageBitmap(prevPageCache);
-            scaleFactor = 1.0f;
-            matrix.reset();
-            centerImage();
-            pdfImageView.invalidate();
-            currentPage--;
-            if (halfPageMode) leftPage = false;
+            centerImage(); pdfImageView.invalidate();
+            currentPage--; if (halfPageMode) leftPage = false;
             updatePageNumberText();
             new android.os.Handler().postDelayed(() -> { updatePageCacheAfterFlip(false); saveReadingPosition(); isFlipping = false; }, 50);
         } else {
@@ -305,7 +293,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void originalGoToPrevPage() {
-        resetScaleIfNeeded();
+        if (scaleFactor > 1.01f) resetScale();
         if (doublePageMode) {
             if (currentPage > 1) currentPage -= 2;
             else { currentPage = 0; Toast.makeText(this, "已经是第一页", Toast.LENGTH_SHORT).show(); }
@@ -318,7 +306,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void originalGoToNextPage() {
-        resetScaleIfNeeded();
+        if (scaleFactor > 1.01f) resetScale();
         if (doublePageMode) {
             if (currentPage < totalPages - 1) { currentPage += 2; if (currentPage >= totalPages) currentPage = totalPages - 1; }
             else Toast.makeText(this, "已经是最后一页", Toast.LENGTH_SHORT).show();
@@ -329,48 +317,49 @@ public class MainActivity extends AppCompatActivity {
         displayCurrentPage();
     }
 
-    private void resetScaleIfNeeded() { if (scaleFactor > 1.01f) resetScale(); }
-
-    // ==================== 显示页面（缓存居中修复） ====================
+    // ==================== 显示页面（原始） ====================
     private void displayCurrentPage() {
         if (pdfRenderer == null) return;
         try {
-            if (doublePageMode) { showDoublePage(currentPage, Math.min(currentPage + 1, totalPages - 1)); return; }
-            if (flipPageMode && cacheInitialized && cachedCurrentPage == currentPage && currentPageCache != null && !currentPageCache.isRecycled()) {
-                pdfImageView.setImageBitmap(currentPageCache);
-                scaleFactor = 1.0f;         // 重置缩放
-                matrix.reset();             // 重置矩阵
-                centerImage();
+            if (doublePageMode) {
+                int basePage = currentPage;
+                if (basePage % 2 != 0) basePage--;
+                int rightPageNum = basePage, leftPageNum = basePage + 1;
+                if (rightPageNum >= totalPages) rightPageNum = totalPages - 1;
+                if (leftPageNum >= totalPages) leftPageNum = totalPages - 1;
+                showDoublePage(leftPageNum, rightPageNum);
+            } else {
+                if (flipPageMode && cacheInitialized && cachedCurrentPage == currentPage && currentPageCache != null) {
+                    pdfImageView.setImageBitmap(currentPageCache);
+                    centerImage(); pdfImageView.invalidate();
+                    updatePageNumberText(); saveReadingPosition(); return;
+                }
+                PdfRenderer.Page page = pdfRenderer.openPage(currentPage);
+                int pageWidth = page.getWidth(), pageHeight = page.getHeight();
+                int screenWidth = getResources().getDisplayMetrics().widthPixels;
+                int screenHeight = getResources().getDisplayMetrics().heightPixels;
+                if (isRotated) { int t = screenWidth; screenWidth = screenHeight; screenHeight = t; }
+                float scale = Math.min((float) screenWidth / pageWidth, (float) screenHeight / pageHeight);
+                if (halfPageMode) scale = Math.min((float) screenWidth / (pageWidth / 2), (float) screenHeight / pageHeight);
+                int hrW = Math.max((int)(pageWidth * scale * 4), 1), hrH = Math.max((int)(pageHeight * scale * 4), 1);
+                Bitmap hrBmp = Bitmap.createBitmap(hrW, hrH, Bitmap.Config.ARGB_8888);
+                page.render(hrBmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                page.close();
+                int scaledW = (int)(pageWidth * scale), scaledH = (int)(pageHeight * scale);
+                Bitmap bitmap = Bitmap.createScaledBitmap(hrBmp, scaledW, scaledH, true);
+                if (!hrBmp.isRecycled() && hrBmp != bitmap) hrBmp.recycle();
+                if (halfPageMode) {
+                    bitmap = leftPage ? Bitmap.createBitmap(bitmap, 0, 0, scaledW/2, scaledH) : Bitmap.createBitmap(bitmap, scaledW/2, 0, scaledW/2, scaledH);
+                }
+                if (nightMode) bitmap = invertColors(bitmap);
+                if (isRotated) bitmap = rotateBitmap90(bitmap);
+                pdfImageView.setImageBitmap(bitmap);
+                pdfImageView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
                 pdfImageView.invalidate();
-                updatePageNumberText(); saveReadingPosition();
-                return;
+                scaleFactor = 1.0f; matrix.reset();
+                pdfImageView.postDelayed(() -> centerImage(), 100);
             }
-            PdfRenderer.Page page = pdfRenderer.openPage(currentPage);
-            int pageWidth = page.getWidth(), pageHeight = page.getHeight();
-            int screenWidth = getResources().getDisplayMetrics().widthPixels;
-            int screenHeight = getResources().getDisplayMetrics().heightPixels;
-            if (isRotated) { int t = screenWidth; screenWidth = screenHeight; screenHeight = t; }
-            float scale = Math.min((float) screenWidth / pageWidth, (float) screenHeight / pageHeight);
-            if (halfPageMode) scale = Math.min((float) screenWidth / (pageWidth / 2), (float) screenHeight / pageHeight);
-            int hrW = Math.max(1, (int)(pageWidth * scale * 4)), hrH = Math.max(1, (int)(pageHeight * scale * 4));
-            Bitmap hrBmp = Bitmap.createBitmap(hrW, hrH, Bitmap.Config.ARGB_8888);
-            page.render(hrBmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-            page.close();
-            int scaledW = (int)(pageWidth * scale), scaledH = (int)(pageHeight * scale);
-            Bitmap bitmap = Bitmap.createScaledBitmap(hrBmp, scaledW, scaledH, true);
-            if (!hrBmp.isRecycled() && hrBmp != bitmap) hrBmp.recycle();
-            if (halfPageMode) {
-                bitmap = leftPage ? Bitmap.createBitmap(bitmap, 0, 0, scaledW/2, scaledH) : Bitmap.createBitmap(bitmap, scaledW/2, 0, scaledW/2, scaledH);
-            }
-            if (nightMode) bitmap = invertColors(bitmap);
-            if (isRotated) bitmap = rotateBitmap90(bitmap);
-            pdfImageView.setImageBitmap(bitmap);
-            pdfImageView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
-            pdfImageView.invalidate();
-            scaleFactor = 1.0f;
-            matrix.reset();
-            centerImage();          // 直接居中，去掉postDelayed
-            updatePageNumberText(); saveReadingPosition();
+            saveReadingPosition();
             if (flipPageMode && !cacheInitialized) pdfImageView.postDelayed(() -> initPageCache(), 300);
         } catch (Exception e) { Toast.makeText(this, "显示页面失败: " + e.getMessage(), Toast.LENGTH_SHORT).show(); e.printStackTrace(); }
     }
@@ -392,12 +381,11 @@ public class MainActivity extends AppCompatActivity {
             float scale = Math.min(scaleByH, scaleByW);
             int scaledLH = (int)(lh * scale), scaledLW = (int)(lw * scale);
             int scaledRH = (int)(rh * scale), scaledRW = (int)(rw * scale);
-            int totalScaledW = scaledLW + scaledRW;
-            int startX = (screenWidth - totalScaledW) / 2;
-            int startY = (screenHeight - scaledLH) / 2;
+            int totalW = scaledLW + scaledRW;
+            int startX = (screenWidth - totalW) / 2, startY = (screenHeight - scaledLH) / 2;
             if (leftPageNum < totalPages) {
                 PdfRenderer.Page lp = pdfRenderer.openPage(leftPageNum);
-                Bitmap lb = Bitmap.createBitmap(Math.max(1,scaledLW*2), Math.max(1,scaledLH*2), Bitmap.Config.ARGB_8888);
+                Bitmap lb = Bitmap.createBitmap(scaledLW*2, scaledLH*2, Bitmap.Config.ARGB_8888);
                 lp.render(lb, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                 lp.close();
                 lb = Bitmap.createScaledBitmap(lb, scaledLW, scaledLH, true);
@@ -406,7 +394,7 @@ public class MainActivity extends AppCompatActivity {
             }
             if (rightPageNum < totalPages) {
                 PdfRenderer.Page rp = pdfRenderer.openPage(rightPageNum);
-                Bitmap rb = Bitmap.createBitmap(Math.max(1,scaledRW*2), Math.max(1,scaledRH*2), Bitmap.Config.ARGB_8888);
+                Bitmap rb = Bitmap.createBitmap(scaledRW*2, scaledRH*2, Bitmap.Config.ARGB_8888);
                 rp.render(rb, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                 rp.close();
                 rb = Bitmap.createScaledBitmap(rb, scaledRW, scaledRH, true);
@@ -416,23 +404,18 @@ public class MainActivity extends AppCompatActivity {
             if (isRotated) doubleBitmap = rotateBitmap90(doubleBitmap);
             pdfImageView.setImageBitmap(doubleBitmap);
             pageTextView.setText((leftPageNum + 1) + "," + (rightPageNum + 1) + "/" + totalPages);
-            scaleFactor = 1.0f;
-            matrix.reset();
-            centerImage();
             pdfImageView.invalidate();
+            pdfImageView.postDelayed(() -> centerImage(), 100);
         } catch (Exception e) { e.printStackTrace(); }
     }
 
-    // ==================== 模式切换（保持缓存重建） ====================
+    // ==================== 模式切换 ====================
     private void toggleHalfPageMode() {
         halfPageMode = !halfPageMode;
         if (halfPageBtn != null) halfPageBtn.setText(halfPageMode ? "整页" : "半页");
         saveSettings();
         if (flipPageMode) clearPageCache();
-        if (pdfRenderer != null) {
-            displayCurrentPage();
-            if (flipPageMode && !doublePageMode) pdfImageView.postDelayed(() -> initPageCache(), 300);
-        }
+        if (pdfRenderer != null) displayCurrentPage();
     }
 
     private void toggleDoublePageMode() {
@@ -440,10 +423,7 @@ public class MainActivity extends AppCompatActivity {
         if (pageModeBtn != null) pageModeBtn.setText(doublePageMode ? "单页" : "双页");
         saveSettings();
         if (flipPageMode) clearPageCache();
-        if (pdfRenderer != null) {
-            displayCurrentPage();
-            if (!doublePageMode && flipPageMode) pdfImageView.postDelayed(() -> initPageCache(), 300);
-        }
+        if (pdfRenderer != null) displayCurrentPage();
     }
 
     private void toggleRotation() {
@@ -451,17 +431,14 @@ public class MainActivity extends AppCompatActivity {
         if (rotateBtn != null) rotateBtn.setText(isRotated ? "转回" : "旋转");
         saveSettings();
         if (flipPageMode) clearPageCache();
-        if (pdfRenderer != null) {
-            displayCurrentPage();
-            if (flipPageMode && !doublePageMode) pdfImageView.postDelayed(() -> initPageCache(), 300);
-        }
+        if (pdfRenderer != null) displayCurrentPage();
     }
 
     private void toggleFlipPageMode() {
         flipPageMode = !flipPageMode;
         if (flipModeBtn != null) flipModeBtn.setText(flipPageMode ? "平滑" : "预载");
         if (!flipPageMode) clearPageCache();
-        else if (pdfRenderer != null && !doublePageMode && !cacheInitialized) initPageCache();
+        else if (pdfRenderer != null && !cacheInitialized) initPageCache();
         saveSettings();
         Toast.makeText(this, flipPageMode ? "已启用预载模式" : "已启用平滑翻页", Toast.LENGTH_SHORT).show();
     }
@@ -477,11 +454,10 @@ public class MainActivity extends AppCompatActivity {
             if (pdfImageView != null) pdfImageView.setBackgroundColor(getBackgroundColor());
             if (pageTextView != null) pageTextView.setTextColor(getTextColor());
             displayCurrentPage();
-            if (flipPageMode && !doublePageMode) pdfImageView.postDelayed(() -> initPageCache(), 300);
         }
     }
 
-    // ==================== 其余工具方法（全部保留原始代码） ====================
+    // ==================== UI 工具方法 ====================
     private void goBackToFileList() {
         closePdf();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
@@ -495,8 +471,8 @@ public class MainActivity extends AppCompatActivity {
     private void requestPermissionsOnFirstRun() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
             new AlertDialog.Builder(this).setTitle("需要存储权限").setMessage("简帙阅读器需要访问您的存储空间来扫描和读取PDF文件。")
-                    .setPositiveButton("允许", (d,w) -> requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, PERMISSION_REQUEST_CODE))
-                    .setNegativeButton("不允许", (d,w) -> showFileListWithoutScan()).setCancelable(false).show();
+                .setPositiveButton("允许", (d,w) -> requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, PERMISSION_REQUEST_CODE))
+                .setNegativeButton("不允许", (d,w) -> showFileListWithoutScan()).setCancelable(false).show();
         } else showFileList();
     }
 
@@ -542,7 +518,7 @@ public class MainActivity extends AppCompatActivity {
         halfPageMode = prefs.getBoolean("half_page", false);
         doublePageMode = prefs.getBoolean("double_page", false);
         isRotated = prefs.getBoolean("is_rotated", false);
-        flipPageMode = prefs.getBoolean("flip_page_mode", true);
+        flipPageMode = prefs.getBoolean("flip_page_mode", false);   // 默认从存储读取，若无则false
     }
 
     private void saveSettings() {
@@ -720,8 +696,27 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private String getRealPathFromUri(Uri uri) {
-        // ... 完整代码保持不变 ...
-        return null;
+        String filePath = null;
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && DocumentsContract.isDocumentUri(this, uri)) {
+                String wholeID = DocumentsContract.getDocumentId(uri);
+                if (wholeID != null) {
+                    String[] split = wholeID.split(":");
+                    if (split.length > 1) {
+                        String type = split[0], id = split[1];
+                        if ("primary".equalsIgnoreCase(type)) filePath = Environment.getExternalStorageDirectory() + "/" + id;
+                        else if (Environment.getExternalStorageDirectory().getParent() != null) filePath = Environment.getExternalStorageDirectory().getParent() + "/" + type + "/" + id;
+                    } else filePath = Environment.getExternalStorageDirectory() + "/" + wholeID;
+                }
+            } else if ("content".equalsIgnoreCase(uri.getScheme())) {
+                try (Cursor cursor = getContentResolver().query(uri, new String[]{MediaStore.Files.FileColumns.DATA}, null, null, null)) {
+                    if (cursor != null && cursor.moveToFirst()) filePath = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA));
+                }
+            } else if ("file".equalsIgnoreCase(uri.getScheme())) filePath = uri.getPath();
+            if (filePath == null) filePath = uri.getPath();
+            if (filePath != null && !new File(filePath).exists()) return null;
+        } catch (Exception e) { Log.e("PDF_DEBUG","获取路径失败",e); }
+        return filePath;
     }
 
     private boolean checkDoubleTap(MotionEvent e) {
@@ -733,11 +728,18 @@ public class MainActivity extends AppCompatActivity {
         return false;
     }
 
+    // ★★★ 底部整合横条 ★★★
     private void showReaderView() {
         mainLayout.removeAllViews();
-        readerContainer = new FrameLayout(this); readerContainer.setBackgroundColor(getBackgroundColor());
-        pdfImageView = new FlipImageView(this); pdfImageView.setLayoutParams(new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-        pdfImageView.setScaleType(ImageView.ScaleType.MATRIX); pdfImageView.setBackgroundColor(getBackgroundColor());
+        readerContainer = new FrameLayout(this);
+        readerContainer.setLayoutParams(new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        readerContainer.setBackgroundColor(getBackgroundColor());
+
+        pdfImageView = new FlipImageView(this);
+        FrameLayout.LayoutParams imageParams = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT);
+        pdfImageView.setLayoutParams(imageParams);
+        pdfImageView.setScaleType(ImageView.ScaleType.MATRIX);
+        pdfImageView.setBackgroundColor(getBackgroundColor());
         scaleFactor=1.0f; matrix.reset(); savedMatrix.reset(); mode=NONE;
         touchStartX=touchStartY=touchStartTime=0; isClickCandidate=isSwiping=false; lastTapX=lastTapY=lastClickTime=0; isFlipping=false;
 
@@ -752,23 +754,69 @@ public class MainActivity extends AppCompatActivity {
             return true;
         });
 
-        LinearLayout topBar = createReaderTopBar(); topBar.setId(View.generateViewId());
-        pageTextView = new TextView(this); pageTextView.setId(View.generateViewId()); pageTextView.setTextColor(getTextColor()); pageTextView.setTextSize(14);
-        pageTextView.setBackgroundColor(Color.parseColor("#805D4037")); pageTextView.setPadding(15,8,15,8); pageTextView.setGravity(Gravity.CENTER);
-        FrameLayout.LayoutParams pageParams = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL); pageParams.bottomMargin=20; pageTextView.setLayoutParams(pageParams);
+        // 顶部控制栏
+        LinearLayout topBar = createReaderTopBar();
+        topBar.setId(View.generateViewId());
 
-        prevBtn = new Button(this); prevBtn.setText("上一页"); prevBtn.setBackgroundColor(getButtonBackgroundColor()); prevBtn.setTextColor(getButtonTextColor()); prevBtn.setTextSize(12); prevBtn.setAllCaps(false); prevBtn.setOnClickListener(v->goToPrevPage());
-        setupButtonStyle(prevBtn,false); FrameLayout.LayoutParams prevP = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM|Gravity.RIGHT); prevP.rightMargin=20; prevP.bottomMargin=80; prevBtn.setLayoutParams(prevP);
+        // 底部整合横条
+        LinearLayout bottomBar = new LinearLayout(this);
+        bottomBar.setOrientation(LinearLayout.HORIZONTAL);
+        bottomBar.setBackgroundColor(Color.parseColor("#B05D4037")); // 半透明深褐
+        bottomBar.setGravity(Gravity.CENTER_VERTICAL);
+        bottomBar.setPadding(5, 8, 5, 8);
 
-        nextBtn = new Button(this); nextBtn.setText("下一页"); nextBtn.setBackgroundColor(getButtonBackgroundColor()); nextBtn.setTextColor(getButtonTextColor()); nextBtn.setTextSize(12); nextBtn.setAllCaps(false); nextBtn.setOnClickListener(v->goToNextPage());
-        setupButtonStyle(nextBtn,false); FrameLayout.LayoutParams nextP = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM|Gravity.LEFT); nextP.leftMargin=20; nextP.bottomMargin=80; nextBtn.setLayoutParams(nextP);
+        prevBtn = new Button(this);
+        prevBtn.setText("上一页");
+        prevBtn.setBackgroundColor(getButtonBackgroundColor());
+        prevBtn.setTextColor(getButtonTextColor());
+        prevBtn.setTextSize(11);
+        prevBtn.setAllCaps(false);
+        prevBtn.setOnClickListener(v -> goToPrevPage());
+        LinearLayout.LayoutParams prevP = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        prevBtn.setLayoutParams(prevP);
 
-        Button jumpBtn = new Button(this); jumpBtn.setText("跳转"); jumpBtn.setBackgroundColor(getSpecialButtonBackgroundColor()); jumpBtn.setTextColor(getSpecialButtonTextColor()); jumpBtn.setTextSize(12); jumpBtn.setAllCaps(false); jumpBtn.setOnClickListener(v->showJumpPageDialog());
-        FrameLayout.LayoutParams jumpP = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL); jumpP.bottomMargin=80; jumpBtn.setLayoutParams(jumpP);
+        pageTextView = new TextView(this);
+        pageTextView.setTextColor(getTextColor());
+        pageTextView.setTextSize(14);
+        pageTextView.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams pageP = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 2.0f);
+        pageTextView.setLayoutParams(pageP);
 
-        readerContainer.addView(pdfImageView); readerContainer.addView(topBar); readerContainer.addView(prevBtn); readerContainer.addView(nextBtn); readerContainer.addView(jumpBtn); readerContainer.addView(pageTextView);
+        nextBtn = new Button(this);
+        nextBtn.setText("下一页");
+        nextBtn.setBackgroundColor(getButtonBackgroundColor());
+        nextBtn.setTextColor(getButtonTextColor());
+        nextBtn.setTextSize(11);
+        nextBtn.setAllCaps(false);
+        nextBtn.setOnClickListener(v -> goToNextPage());
+        LinearLayout.LayoutParams nextP = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        nextBtn.setLayoutParams(nextP);
+
+        Button jumpBtn = new Button(this);
+        jumpBtn.setText("跳转");
+        jumpBtn.setBackgroundColor(getSpecialButtonBackgroundColor());
+        jumpBtn.setTextColor(getSpecialButtonTextColor());
+        jumpBtn.setTextSize(11);
+        jumpBtn.setAllCaps(false);
+        jumpBtn.setOnClickListener(v -> showJumpPageDialog());
+        LinearLayout.LayoutParams jumpP = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        jumpBtn.setLayoutParams(jumpP);
+
+        bottomBar.addView(prevBtn);
+        bottomBar.addView(pageTextView);
+        bottomBar.addView(nextBtn);
+        bottomBar.addView(jumpBtn);
+
+        FrameLayout.LayoutParams bottomParams = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
+        bottomBar.setLayoutParams(bottomParams);
+
+        readerContainer.addView(pdfImageView);
+        readerContainer.addView(topBar);
+        readerContainer.addView(bottomBar);
+
         mainLayout.addView(readerContainer);
-        pdfImageView.postDelayed(()->displayCurrentPage(),100);
+        pdfImageView.postDelayed(() -> displayCurrentPage(), 100);
+        pdfImageView.postDelayed(() -> updatePageNumberText(), 150);
     }
 
     private boolean handleZoomMode(ImageView view, MotionEvent event) {
@@ -856,12 +904,14 @@ public class MainActivity extends AppCompatActivity {
         return bar;
     }
 
+    // ★ 适配新底栏的控制栏显隐
     private void toggleControls() {
         controlsVisible = !controlsVisible;
-        View topBar = readerContainer.findViewById(readerContainer.getChildAt(1).getId());
-        View prevV = readerContainer.getChildAt(2), nextV = readerContainer.getChildAt(3), jumpV = readerContainer.getChildAt(4), pageV = readerContainer.getChildAt(5);
+        View topBar = readerContainer.getChildAt(1);
+        View bottomBar = readerContainer.getChildAt(2);
         int vis = controlsVisible ? View.VISIBLE : View.GONE;
-        topBar.setVisibility(vis); prevV.setVisibility(vis); nextV.setVisibility(vis); jumpV.setVisibility(vis); pageV.setVisibility(vis);
+        topBar.setVisibility(vis);
+        bottomBar.setVisibility(vis);
     }
 
     private void showJumpPageDialog() {
@@ -870,7 +920,7 @@ public class MainActivity extends AppCompatActivity {
         b.setPositiveButton("确定",(d,w)->{
             try {
                 int p = Integer.parseInt(et.getText().toString().trim());
-                if(p>=1 && p<=totalPages){ currentPage=p-1; if(halfPageMode) leftPage=true; if (flipPageMode) clearPageCache(); displayCurrentPage(); }
+                if(p>=1 && p<=totalPages){ currentPage=p-1; if(halfPageMode) leftPage=true; displayCurrentPage(); }
                 else Toast.makeText(this,"范围1-"+totalPages,Toast.LENGTH_SHORT).show();
             } catch (Exception e) { Toast.makeText(this,"请输入数字",Toast.LENGTH_SHORT).show(); }
         });
@@ -907,15 +957,13 @@ public class MainActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode == RESULT_OK && data != null) {
             Uri uri = data.getData();
-            if (uri != null) {
-                if (requestCode == FILE_PICKER_REQUEST_CODE) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
-                        try { getContentResolver().takePersistableUriPermission(uri, data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION)); } catch (SecurityException e) {}
-                    }
-                    String filePath = getRealPathFromUri(uri);
-                    if (filePath != null && new File(filePath).exists()) openPdfFile(filePath);
-                    else openPdfFromUri(uri);
+            if (uri != null && requestCode == FILE_PICKER_REQUEST_CODE) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                    try { getContentResolver().takePersistableUriPermission(uri, data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION)); } catch (SecurityException e) {}
                 }
+                String filePath = getRealPathFromUri(uri);
+                if (filePath != null && new File(filePath).exists()) openPdfFile(filePath);
+                else openPdfFromUri(uri);
             }
         }
     }
@@ -925,4 +973,4 @@ public class MainActivity extends AppCompatActivity {
         closePdf();
         if (currentFilePath != null && currentFilePath.contains("temp_pdf_")) new File(currentFilePath).delete();
     }
-}
+                                                               }
