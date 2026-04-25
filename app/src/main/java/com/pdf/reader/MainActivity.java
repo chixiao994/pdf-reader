@@ -585,7 +585,7 @@ public class MainActivity extends AppCompatActivity {
 
     private LinearLayout createTopBar() {
         LinearLayout top = new LinearLayout(this); top.setOrientation(LinearLayout.HORIZONTAL); top.setBackgroundColor(getStatusBarColor()); top.setPadding(20,15,20,15);
-        TextView title = new TextView(this); title.setText("简帙阅读器 v1.0.21"); title.setTextColor(nightMode?ANCIENT_BEIGE:ANCIENT_GOLD); title.setTextSize(18); title.setLayoutParams(new LinearLayout.LayoutParams(0,LinearLayout.LayoutParams.WRAP_CONTENT,1.0f));
+        TextView title = new TextView(this); title.setText("简帙阅读器 v1.0.22"); title.setTextColor(nightMode?ANCIENT_BEIGE:ANCIENT_GOLD); title.setTextSize(18); title.setLayoutParams(new LinearLayout.LayoutParams(0,LinearLayout.LayoutParams.WRAP_CONTENT,1.0f));
         nightModeBtn = new Button(this); nightModeBtn.setText(nightMode?"日间模式":"夜间模式"); nightModeBtn.setBackgroundColor(getButtonBackgroundColor()); nightModeBtn.setTextColor(getButtonTextColor()); nightModeBtn.setTextSize(12); nightModeBtn.setAllCaps(false); setupButtonStyle(nightModeBtn,false);
         refreshBtn = new Button(this); refreshBtn.setText("刷新"); refreshBtn.setBackgroundColor(getButtonBackgroundColor()); refreshBtn.setTextColor(getButtonTextColor()); refreshBtn.setTextSize(12); refreshBtn.setAllCaps(false); setupButtonStyle(refreshBtn,false);
         top.addView(title); top.addView(nightModeBtn); top.addView(refreshBtn);
