@@ -710,6 +710,17 @@ public class MainActivity extends AppCompatActivity {
         optionsLayout.addView(singleFileBtn);
         optionsLayout.addView(scanAllBtn);
         fileListLayout.addView(optionsLayout);
+// 在 addFileChooserOptions() 的 
+        optionsLayout 中添加：
+        Button tianlangBtn = new Button(this);
+        tianlangBtn.setText("天朗裁切");
+        tianlangBtn.setBackgroundColor(getSpecialButtonBackgroundColor());
+        tianlangBtn.setTextColor(getSpecialButtonTextColor());
+        tianlangBtn.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, TianLangActivity.class);
+            startActivity(intent);
+        });
+        optionsLayout.addView(tianlangBtn);
     }
     
     private void choosePdfFile() {
