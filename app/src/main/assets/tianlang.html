@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>天朗·堆叠切除</title>
-    <!-- 仅保留 jsPDF 用于无需原生时的导出备用（实际导出已由原生接管，保留以防扩展） -->
+    <!-- 导出 PDF 依赖 jsPDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
@@ -69,7 +69,6 @@
                 <label><input type="radio" name="pageMode" value="left-only"> 指定左</label>
                 <label><input type="radio" name="pageMode" value="right-only"> 指定右</label>
                 <label><input type="radio" name="pageMode" value="combined"> 📖 合拟面</label>
-                <label><input type="radio" name="pageMode" value="manual"> 手动</label>
             </div>
             <button class="button" id="processBtn">🔍 执行裁切</button>
             <button class="button" id="resetBtn">↩️ 重置</button>
@@ -100,7 +99,7 @@
 </div>
 
 <script>
-// ────────── 全局引用 ──────────
+// ────── 全局引用 ──────
 const bgTolSlider = document.getElementById('bgTolSlider');
 const lrMarginSlider = document.getElementById('lrMarginSlider');
 const topMarginSlider = document.getElementById('topMarginSlider');
@@ -135,10 +134,10 @@ let originalImage = null;
 let imageDataCache = null;
 let currentFileName = '未命名';
 let isPdfMode = false;
-let currentPageNum = 0;  // 0-based
+let currentPageNum = 0;   // 0-based
 let totalPageCount = 0;
 
-// ────────── 工具函数 ──────────
+// ────── 工具函数 ──────
 function getCurrentParams() {
     return {
         bgTol: +bgTolSlider.value,
@@ -163,9 +162,7 @@ function updateSliderLabels() {
 }
 
 [bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider,
- contrastSlider, thresholdSlider, sensitivitySlider].forEach(el => {
-    el.addEventListener('input', updateSliderLabels);
-});
+ contrastSlider, thresholdSlider, sensitivitySlider].forEach(el => el.addEventListener('input', updateSliderLabels));
 
 function fitImageToCanvas() {
     if (!originalImage) return;
@@ -177,8 +174,7 @@ function fitImageToCanvas() {
     imageDataCache = originalCtx.getImageData(0, 0, originalCanvas.width, originalCanvas.height);
 }
 
-// ────────── 原生桥接接收函数 ──────────
-// 接收图片（单张或相机等）
+// ────── 原生桥接接收函数 ──────
 window.loadImage = function(base64, fileName) {
     const img = new Image();
     img.onload = () => {
@@ -193,7 +189,6 @@ window.loadImage = function(base64, fileName) {
     img.src = 'data:image/png;base64,' + base64;
 };
 
-// 原生打开 PDF 成功时调用
 window.onPdfOpened = function(total, fileName) {
     totalPageCount = total;
     currentPageNum = 0;
@@ -206,9 +201,7 @@ window.onPdfOpened = function(total, fileName) {
     updateNavButtons();
 };
 
-// 原生渲染完一页后调用
 window.onPageRendered = function(base64, pageNum, total) {
-    // 更新总页数（可能变化）
     if (total !== totalPageCount) {
         totalPageCount = total;
         totalPagesSpan.innerText = totalPageCount;
@@ -216,20 +209,14 @@ window.onPageRendered = function(base64, pageNum, total) {
     currentPageNum = pageNum;
     pageNumInput.value = pageNum + 1;
     updateNavButtons();
-
     const img = new Image();
-    img.onload = () => {
-        originalImage = img;
-        fitImageToCanvas();
-        processImage();
-    };
+    img.onload = () => { originalImage = img; fitImageToCanvas(); processImage(); };
     img.src = 'data:image/png;base64,' + base64;
 };
 
-// ────────── 翻页通讯 ──────────
+// ────── 翻页请求 ──────
 function requestPage(pageNum) {
-    if (!isPdfMode) return;
-    if (pageNum < 0 || pageNum >= totalPageCount) return;
+    if (!isPdfMode || pageNum < 0 || pageNum >= totalPageCount) return;
     Android.goToPage(pageNum);
 }
 
@@ -237,20 +224,17 @@ prevPageBtn.onclick = () => requestPage(currentPageNum - 1);
 nextPageBtn.onclick = () => requestPage(currentPageNum + 1);
 pageNumInput.onchange = function() {
     const num = parseInt(this.value) - 1;
-    if (isNaN(num) || num < 0 || num >= totalPageCount) {
-        this.value = currentPageNum + 1;
-        return;
-    }
+    if (isNaN(num) || num < 0 || num >= totalPageCount) { this.value = currentPageNum + 1; return; }
     requestPage(num);
 };
 
 function updateNavButtons() {
-    prevPageBtn.disabled = (currentPageNum <= 0);
-    nextPageBtn.disabled = (currentPageNum >= totalPageCount - 1);
+    prevPageBtn.disabled = currentPageNum <= 0;
+    nextPageBtn.disabled = currentPageNum >= totalPageCount - 1;
     pageNumInput.value = currentPageNum + 1;
 }
 
-// ────────── 完整裁切算法（与之前相同，保留所有功能） ──────────
+// ────── 完整裁切算法 ──────
 function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     const { data, width, height } = imageData;
     const edgePixels = [];
@@ -410,7 +394,8 @@ function processImage() {
         cropRegion = removeBackground(fullImgData, params.bgTol, params.lrMargin, params.topMargin, params.bottomMargin);
     }
 
-    let workImgData, offsetX = 0, offsetY = 0;
+    let workImgData;
+    let offsetX = 0, offsetY = 0;
     if (cropRegion) {
         workImgData = originalCtx.getImageData(cropRegion.left, cropRegion.top, cropRegion.width, cropRegion.height);
         offsetX = cropRegion.left; offsetY = cropRegion.top;
@@ -427,6 +412,7 @@ function processImage() {
     }
     const binary = new Uint8Array(width * height);
     for (let i = 0; i < width * height; i++) binary[i] = gray[i] < params.thresh ? 1 : 0;
+
     const projection = new Float32Array(width);
     for (let x = 0; x < width; x++) {
         let sum = 0;
@@ -470,46 +456,61 @@ function processImage() {
     document.getElementById('leftCut').innerText = leftCut !== null ? (leftCut + offsetX).toFixed(1) : '无';
     document.getElementById('rightCut').innerText = rightCut !== null ? (rightCut + offsetX).toFixed(1) : '无';
 
+    // 绘制标注
     originalCtx.putImageData(fullImgData, 0, 0);
     if (cropRegion) {
-        originalCtx.strokeStyle = '#2d6a4f'; originalCtx.lineWidth = 2;
-        originalCtx.setLineDash([4,4]); originalCtx.strokeRect(cropRegion.left, cropRegion.top, cropRegion.width, cropRegion.height);
+        originalCtx.strokeStyle = '#2d6a4f';
+        originalCtx.lineWidth = 2;
+        originalCtx.setLineDash([4,4]);
+        originalCtx.strokeRect(cropRegion.left, cropRegion.top, cropRegion.width, cropRegion.height);
     }
     if (leftCut !== null) {
-        originalCtx.strokeStyle = '#d63447'; originalCtx.lineWidth = 2;
-        originalCtx.setLineDash([6,4]); originalCtx.beginPath();
-        originalCtx.moveTo(leftCut + offsetX, offsetY); originalCtx.lineTo(leftCut + offsetX, offsetY + height);
+        originalCtx.strokeStyle = '#d63447';
+        originalCtx.lineWidth = 2;
+        originalCtx.setLineDash([6,4]);
+        originalCtx.beginPath();
+        originalCtx.moveTo(leftCut + offsetX, offsetY);
+        originalCtx.lineTo(leftCut + offsetX, offsetY + height);
         originalCtx.stroke();
     }
     if (rightCut !== null) {
-        originalCtx.strokeStyle = '#d63447'; originalCtx.lineWidth = 2;
-        originalCtx.setLineDash([6,4]); originalCtx.beginPath();
-        originalCtx.moveTo(rightCut + offsetX, offsetY); originalCtx.lineTo(rightCut + offsetX, offsetY + height);
+        originalCtx.strokeStyle = '#d63447';
+        originalCtx.setLineDash([6,4]);
+        originalCtx.beginPath();
+        originalCtx.moveTo(rightCut + offsetX, offsetY);
+        originalCtx.lineTo(rightCut + offsetX, offsetY + height);
         originalCtx.stroke();
     }
     if (bindLine !== null) {
-        originalCtx.strokeStyle = '#1e5f9e'; originalCtx.lineWidth = 2;
-        originalCtx.setLineDash([8,6]); originalCtx.beginPath();
-        originalCtx.moveTo(bindLine + offsetX, offsetY); originalCtx.lineTo(bindLine + offsetX, offsetY + height);
+        originalCtx.strokeStyle = '#1e5f9e';
+        originalCtx.setLineDash([8,6]);
+        originalCtx.beginPath();
+        originalCtx.moveTo(bindLine + offsetX, offsetY);
+        originalCtx.lineTo(bindLine + offsetX, offsetY + height);
         originalCtx.stroke();
     }
     originalCtx.setLineDash([]);
 
-    // 结果绘制
+    // 结果图
     if (params.mode === 'combined' && leftCut !== null && rightCut !== null && bindLine !== null) {
-        const lw = bindLine - leftCut, rw = rightCut - bindLine;
-        const resultW = Math.max(lw, rw), resultH = height * 2 + 4;
-        resultCanvas.width = resultW; resultCanvas.height = resultH;
+        const lw = bindLine - leftCut;
+        const rw = rightCut - bindLine;
+        const resultW = Math.max(lw, rw);
+        const resultH = height * 2 + 4;
+        resultCanvas.width = resultW;
+        resultCanvas.height = resultH;
         const leftData = originalCtx.getImageData(leftCut + offsetX, offsetY, lw, height);
         resultCtx.putImageData(leftData, 0, 0);
-        resultCtx.fillStyle = '#ddd'; resultCtx.fillRect(0, height, resultW, 4);
+        resultCtx.fillStyle = '#ddd';
+        resultCtx.fillRect(0, height, resultW, 4);
         const rightData = originalCtx.getImageData(bindLine + offsetX, offsetY, rw, height);
         resultCtx.putImageData(rightData, 0, height + 4);
     } else {
         const cropLeft = leftCut !== null ? leftCut : 0;
         const cropRight = rightCut !== null ? rightCut : width;
         const resultW = Math.max(1, cropRight - cropLeft);
-        resultCanvas.width = resultW; resultCanvas.height = height;
+        resultCanvas.width = resultW;
+        resultCanvas.height = height;
         const resData = originalCtx.getImageData(cropLeft + offsetX, offsetY, resultW, height);
         resultCtx.putImageData(resData, 0, 0);
     }
@@ -523,49 +524,72 @@ function processImage() {
 function drawProjectionPlot(proj, width, threshold, leftCut, rightCut, bindLine) {
     const pw = projCanvas.width, ph = projCanvas.height;
     projCtx.clearRect(0, 0, pw, ph);
-    projCtx.fillStyle = '#faf6f0'; projCtx.fillRect(0, 0, pw, ph);
+    projCtx.fillStyle = '#faf6f0';
+    projCtx.fillRect(0, 0, pw, ph);
     const maxProj = Math.max(0.5, ...proj);
     const scaleY = ph / maxProj;
     const thY = ph - threshold * scaleY;
-    projCtx.strokeStyle = '#c4a27a'; projCtx.setLineDash([4,4]);
-    projCtx.beginPath(); projCtx.moveTo(0, thY); projCtx.lineTo(pw, thY); projCtx.stroke();
+    projCtx.strokeStyle = '#c4a27a';
+    projCtx.setLineDash([4,4]);
+    projCtx.beginPath();
+    projCtx.moveTo(0, thY);
+    projCtx.lineTo(pw, thY);
+    projCtx.stroke();
     projCtx.setLineDash([]);
-    projCtx.strokeStyle = '#3e2c1b'; projCtx.lineWidth = 2;
+
+    projCtx.strokeStyle = '#3e2c1b';
+    projCtx.lineWidth = 2;
     projCtx.beginPath();
     const step = width / pw;
     for (let i = 0; i < pw; i++) {
         const idx = Math.floor(i * step);
-        const val = proj[Math.min(idx, width-1)];
+        const val = proj[Math.min(idx, width - 1)];
         const y = ph - val * scaleY;
-        if (i === 0) projCtx.moveTo(i, y); else projCtx.lineTo(i, y);
+        if (i === 0) projCtx.moveTo(i, y);
+        else projCtx.lineTo(i, y);
     }
     projCtx.stroke();
+
     if (leftCut !== null) {
         const lx = (leftCut / width) * pw;
-        projCtx.strokeStyle = '#d63447'; projCtx.beginPath();
-        projCtx.moveTo(lx, 0); projCtx.lineTo(lx, ph); projCtx.stroke();
-        projCtx.fillStyle = '#d63447'; projCtx.fillText('左切', lx + 2, 15);
+        projCtx.strokeStyle = '#d63447';
+        projCtx.beginPath();
+        projCtx.moveTo(lx, 0);
+        projCtx.lineTo(lx, ph);
+        projCtx.stroke();
+        projCtx.fillStyle = '#d63447';
+        projCtx.fillText('左切', lx + 2, 15);
     }
     if (rightCut !== null) {
         const rx = (rightCut / width) * pw;
-        projCtx.strokeStyle = '#d63447'; projCtx.beginPath();
-        projCtx.moveTo(rx, 0); projCtx.lineTo(rx, ph); projCtx.stroke();
-        projCtx.fillStyle = '#d63447'; projCtx.fillText('右切', rx - 30, 15);
+        projCtx.strokeStyle = '#d63447';
+        projCtx.beginPath();
+        projCtx.moveTo(rx, 0);
+        projCtx.lineTo(rx, ph);
+        projCtx.stroke();
+        projCtx.fillStyle = '#d63447';
+        projCtx.fillText('右切', rx - 30, 15);
     }
     if (bindLine !== null) {
         const bx = (bindLine / width) * pw;
-        projCtx.strokeStyle = '#1e5f9e'; projCtx.setLineDash([8,6]);
-        projCtx.beginPath(); projCtx.moveTo(bx, 0); projCtx.lineTo(bx, ph); projCtx.stroke();
-        projCtx.setLineDash([]); projCtx.fillText('装订', bx + 2, 25);
+        projCtx.strokeStyle = '#1e5f9e';
+        projCtx.setLineDash([8,6]);
+        projCtx.beginPath();
+        projCtx.moveTo(bx, 0);
+        projCtx.lineTo(bx, ph);
+        projCtx.stroke();
+        projCtx.setLineDash([]);
+        projCtx.fillText('装订', bx + 2, 25);
     }
 }
 
-// ────────── 保存当前结果 ──────────
+// ────── 保存当前结果 ──────
 document.getElementById('saveBtn').onclick = () => {
     if (resultCanvas.width === 0) return;
     const data = resultCtx.getImageData(0, 0, resultCanvas.width, resultCanvas.height);
     const canvas = document.createElement('canvas');
-    canvas.width = resultCanvas.width; canvas.height = resultCanvas.height;
+    canvas.width = resultCanvas.width;
+    canvas.height = resultCanvas.height;
     canvas.getContext('2d').putImageData(data, 0, 0);
     const base64 = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
     if (window.Android && Android.saveFile) {
@@ -575,16 +599,116 @@ document.getElementById('saveBtn').onclick = () => {
     }
 };
 
-// ────────── 导出裁切 PDF（调用原生） ──────────
-document.getElementById('generatePdfBtn').onclick = () => {
+// ────── 生成裁切PDF（逐页请求原生渲染并处理） ──────
+document.getElementById('generatePdfBtn').onclick = async () => {
     if (!isPdfMode) { alert('请先上传PDF'); return; }
-    Android.exportCroppedPdf();
+    const progressContainer = document.getElementById('progressContainer');
+    const progressFill = document.getElementById('progressFill');
+    const progressText = document.getElementById('progressText');
+    progressContainer.style.display = 'flex';
+    generatePdfBtn.disabled = true;
+    try {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ unit: 'pt', compress: false });
+        const params = getCurrentParams();
+        for (let i = 0; i < totalPageCount; i++) {
+            // 请求原生渲染该页
+            const pageBase64 = await new Promise(resolve => {
+                const origHandler = window.onPageRendered;
+                window.onPageRendered = (b64, pageNum, total) => {
+                    // 恢复原 handler
+                    window.onPageRendered = origHandler;
+                    resolve(b64);
+                };
+                Android.goToPage(i);
+            });
+            // 解码图片并裁切
+            const img = await new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.src = 'data:image/png;base64,' + pageBase64;
+            });
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            // 应用算法
+            const gray = new Float32Array(canvas.width * canvas.height);
+            for (let j = 0; j < gray.length; j++) {
+                const r = imgData.data[j*4], g = imgData.data[j*4+1], b = imgData.data[j*4+2];
+                const lum = 0.299*r + 0.587*g + 0.114*b;
+                gray[j] = Math.min(255, Math.max(0, Math.pow(lum/255, 1/params.contrast) * 255));
+            }
+            const binary = new Uint8Array(gray.length);
+            for (let j = 0; j < gray.length; j++) binary[j] = gray[j] < params.thresh ? 1 : 0;
+            const proj = new Float32Array(canvas.width);
+            for (let x = 0; x < canvas.width; x++) {
+                let sum = 0;
+                for (let y = 0; y < canvas.height; y++) sum += binary[y*canvas.width + x];
+                proj[x] = sum / canvas.height;
+            }
+            const avg = proj.reduce((a,b) => a+b, 0) / canvas.width;
+            const eff = Math.max(0.25, avg * 1.8) * (1 + params.sensitivity);
+            const flt = (p,w,t) => {
+                let s = -1;
+                for (let x = 0; x < w*0.4; x++) if (p[x] > t) { s = x; break; }
+                if (s === -1) return null;
+                let pk = s;
+                for (let x = s; x < w*0.5; x++) if (p[x] > p[pk]) pk = x;
+                for (let x = pk; x < w*0.5; x++) if (p[x] < t*0.5) return x;
+                return pk + 5;
+            };
+            const frt = (p,w,t) => {
+                let s = -1;
+                for (let x = w-1; x > w*0.6; x--) if (p[x] > t) { s = x; break; }
+                if (s === -1) return null;
+                let pk = s;
+                for (let x = s; x > w*0.4; x--) if (p[x] > p[pk]) pk = x;
+                for (let x = pk; x > w*0.4; x--) if (p[x] < t*0.5) return x;
+                return pk - 5;
+            };
+            let left = flt(proj, canvas.width, eff);
+            let right = frt(proj, canvas.width, eff);
+            if (params.mode === 'left-only') right = canvas.width;
+            else if (params.mode === 'right-only') left = 0;
+            if (left === null) left = 0;
+            if (right === null) right = canvas.width;
+            if (left >= right) { left = 0; right = canvas.width; }
+            const cropW = right - left;
+            const cropCanvas = document.createElement('canvas');
+            cropCanvas.width = cropW;
+            cropCanvas.height = canvas.height;
+            cropCanvas.getContext('2d').putImageData(
+                new ImageData(new Uint8ClampedArray(imgData.data.buffer.slice(left*4, right*4 + canvas.height*canvas.width*4)), cropW, canvas.height), 0, 0);
+            if (i > 0) pdf.addPage();
+            pdf.internal.pageSize.setWidth(cropW);
+            pdf.internal.pageSize.setHeight(canvas.height);
+            pdf.addImage(cropCanvas.toDataURL('image/png'), 'PNG', 0, 0, cropW, canvas.height);
+
+            const pct = Math.round((i+1)/totalPageCount * 100);
+            progressFill.style.width = pct + '%';
+            progressText.innerText = pct + '%';
+        }
+        const pdfBase64 = pdf.output('datauristring').split(',')[1];
+        Android.saveFile(pdfBase64, currentFileName.replace('.pdf', '') + '_天朗.pdf');
+        // 恢复预览当前页
+        requestPage(currentPageNum);
+    } catch (e) {
+        alert('生成PDF出错: ' + e.message);
+    } finally {
+        progressContainer.style.display = 'none';
+        generatePdfBtn.disabled = false;
+        progressFill.style.width = '0%';
+        progressText.innerText = '0%';
+    }
 };
 
-// ────────── 执行裁切按钮 ──────────
+// ────── 执行裁切按钮 ──────
 document.getElementById('processBtn').onclick = processImage;
 
-// ────────── 重置按钮 ──────────
+// ────── 重置按钮 ──────
 document.getElementById('resetBtn').onclick = () => {
     if (imageDataCache) {
         originalCtx.putImageData(imageDataCache, 0, 0);
