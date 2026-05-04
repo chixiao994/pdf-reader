@@ -709,9 +709,7 @@ public class MainActivity extends AppCompatActivity {
         setupButtonStyle(scanAllBtn, true);
         optionsLayout.addView(singleFileBtn);
         optionsLayout.addView(scanAllBtn);
-        fileListLayout.addView(optionsLayout);
-// 在 addFileChooserOptions() 的 
-        optionsLayout 中添加：
+        // 在 addFileChooserOptions() 的optionsLayout 中添加：
         Button tianlangBtn = new Button(this);
         tianlangBtn.setText("天朗裁切");
         tianlangBtn.setBackgroundColor(getSpecialButtonBackgroundColor());
@@ -720,7 +718,9 @@ public class MainActivity extends AppCompatActivity {
             Intent intent = new Intent(MainActivity.this, TianLangActivity.class);
             startActivity(intent);
         });
-        optionsLayout.addView(tianlangBtn);
+        optionsLayout.addView(tianlangBtn);        
+        fileListLayout.addView(optionsLayout);
+
     }
     
     private void choosePdfFile() {
