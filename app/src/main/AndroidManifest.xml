@@ -39,5 +39,6 @@
                 <data android:mimeType="application/pdf" />
             </intent-filter>
         </activity>
+        <activity android:name=".TianLangActivity" />
     </application>
 </manifest>
