@@ -355,7 +355,7 @@ public class TianLangActivity extends AppCompatActivity {
         }
     }
 
-    // ==================== TianLangActivity 成员变量 ====================
+    // ==================== 界面与交互 ====================
     private TianLangEngine.CropParams cropParams = new TianLangEngine.CropParams();
     private Map<Integer, TianLangEngine.CropParams> pageParams = new HashMap<>();
     private Bitmap currentOriginalBitmap;
@@ -368,7 +368,8 @@ public class TianLangActivity extends AppCompatActivity {
     private RadioGroup modeGroup;
     private RadioButton rbAutoSingle, rbLeftOnly, rbRightOnly, rbCombined, rbManual;
     private TextView pageIndicator;
-    private Button prevBtn, nextBtn;
+
+    // 滑块控件
     private SeekBar bgTolSeek, lrMarginSeek, topMarginSeek, bottomMarginSeek;
     private SeekBar contrastSeek, threshSeek, sensSeek;
 
@@ -387,52 +388,37 @@ public class TianLangActivity extends AppCompatActivity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(20, 20, 20, 30);
 
-        // 文件选择按钮
+        // 文件选择
         LinearLayout fileRow = new LinearLayout(this);
-        Button btnImage = new Button(this);
-        btnImage.setText("上传图片");
+        Button btnImage = new Button(this); btnImage.setText("上传图片");
         btnImage.setOnClickListener(v -> pickFile(PICK_IMAGE));
-        Button btnPdf = new Button(this);
-        btnPdf.setText("上传PDF");
+        Button btnPdf = new Button(this); btnPdf.setText("上传PDF");
         btnPdf.setOnClickListener(v -> pickFile(PICK_PDF));
-        fileRow.addView(btnImage);
-        fileRow.addView(btnPdf);
+        fileRow.addView(btnImage); fileRow.addView(btnPdf);
         root.addView(fileRow);
 
-        // 翻页栏
+        // 翻页
         LinearLayout navRow = new LinearLayout(this);
-        prevBtn = new Button(this);
-        prevBtn.setText("上一页");
-        pageIndicator = new TextView(this);
-        pageIndicator.setText("0/0");
+        Button prevBtn = new Button(this); prevBtn.setText("上一页");
+        pageIndicator = new TextView(this); pageIndicator.setText("0/0");
         pageIndicator.setGravity(Gravity.CENTER);
         pageIndicator.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        nextBtn = new Button(this);
-        nextBtn.setText("下一页");
+        Button nextBtn = new Button(this); nextBtn.setText("下一页");
         prevBtn.setOnClickListener(v -> changePage(-1));
         nextBtn.setOnClickListener(v -> changePage(1));
-        navRow.addView(prevBtn);
-        navRow.addView(pageIndicator);
-        navRow.addView(nextBtn);
+        navRow.addView(prevBtn); navRow.addView(pageIndicator); navRow.addView(nextBtn);
         root.addView(navRow);
 
-        // 策略选择
+        // 策略
         modeGroup = new RadioGroup(this);
         modeGroup.setOrientation(RadioGroup.HORIZONTAL);
-        rbAutoSingle = new RadioButton(this);
-        rbAutoSingle.setText("自动单侧");
-        rbLeftOnly = new RadioButton(this);
-        rbLeftOnly.setText("指定左");
-        rbRightOnly = new RadioButton(this);
-        rbRightOnly.setText("指定右");
-        rbCombined = new RadioButton(this);
-        rbCombined.setText("合拟面");
-        rbManual = new RadioButton(this);
-        rbManual.setText("手动");
-        modeGroup.addView(rbAutoSingle);
-        modeGroup.addView(rbLeftOnly);
-        modeGroup.addView(rbRightOnly);
-        modeGroup.addView(rbCombined);
+        rbAutoSingle = new RadioButton(this); rbAutoSingle.setText("自动单侧");
+        rbLeftOnly = new RadioButton(this); rbLeftOnly.setText("指定左");
+        rbRightOnly = new RadioButton(this); rbRightOnly.setText("指定右");
+        rbCombined = new RadioButton(this); rbCombined.setText("合拟面");
+        rbManual = new RadioButton(this); rbManual.setText("手动");
+        modeGroup.addView(rbAutoSingle); modeGroup.addView(rbLeftOnly);
+        modeGroup.addView(rbRightOnly); modeGroup.addView(rbCombined);
         modeGroup.addView(rbManual);
         rbAutoSingle.setChecked(true);
         modeGroup.setOnCheckedChangeListener((group, id) -> {
@@ -441,74 +427,72 @@ public class TianLangActivity extends AppCompatActivity {
         });
         root.addView(modeGroup);
 
-        // 参数滑块
-        addSlider(root, "背景容差", 0, 50, 15, val -> cropParams.bgTol = val, bgTolSeek);
-        addSlider(root, "左右边距", -50, 50, 0, val -> cropParams.lrMargin = val, lrMarginSeek);
-        addSlider(root, "上边距", -50, 50, 0, val -> cropParams.topMargin = val, topMarginSeek);
-        addSlider(root, "下边距", -50, 50, 0, val -> cropParams.bottomMargin = val, bottomMarginSeek);
-        addSlider(root, "对比度", 5, 30, 18, val -> cropParams.contrast = val / 10f, contrastSeek);
-        addSlider(root, "二值化阈值", 40, 200, 90, val -> cropParams.binThresh = val, threshSeek);
-        addSlider(root, "堆叠敏感度", 10, 90, 35, val -> cropParams.sensitivity = val / 100f, sensSeek);
+        // 滑块区域 - 每个滑块都通过回调直接修改 cropParams 并保存引用
+        bgTolSeek = addSlider(root, "背景容差", 0, 50, 15, val -> cropParams.bgTol = val);
+        lrMarginSeek = addSlider(root, "左右边距", -50, 50, 0, val -> cropParams.lrMargin = val);
+        topMarginSeek = addSlider(root, "上边距", -50, 50, 0, val -> cropParams.topMargin = val);
+        bottomMarginSeek = addSlider(root, "下边距", -50, 50, 0, val -> cropParams.bottomMargin = val);
+        contrastSeek = addSlider(root, "对比度", 5, 30, 18, val -> cropParams.contrast = val / 10f);
+        threshSeek = addSlider(root, "二值化阈值", 40, 200, 90, val -> cropParams.binThresh = val);
+        sensSeek = addSlider(root, "堆叠敏感度", 10, 90, 35, val -> cropParams.sensitivity = val / 100f);
 
-        // 操作按钮
+        // 按钮行
         LinearLayout btnRow = new LinearLayout(this);
-        Button processBtn = new Button(this);
-        processBtn.setText("执行裁切");
+        Button processBtn = new Button(this); processBtn.setText("执行裁切");
         processBtn.setOnClickListener(v -> processCurrent());
-        Button resetBtn = new Button(this);
-        resetBtn.setText("重置");
+        Button resetBtn = new Button(this); resetBtn.setText("重置");
         resetBtn.setOnClickListener(v -> {
             cropParams = new TianLangEngine.CropParams();
             updateUIFromParams();
             processCurrent();
         });
-        Button saveBtn = new Button(this);
-        saveBtn.setText("保存当前");
+        Button saveBtn = new Button(this); saveBtn.setText("保存当前");
         saveBtn.setOnClickListener(v -> saveCurrentResult());
-        Button exportBtn = new Button(this);
-        exportBtn.setText("生成裁切PDF");
+        Button exportBtn = new Button(this); exportBtn.setText("生成裁切PDF");
         exportBtn.setOnClickListener(v -> exportCroppedPdf());
-        btnRow.addView(processBtn);
-        btnRow.addView(resetBtn);
-        btnRow.addView(saveBtn);
-        btnRow.addView(exportBtn);
+        btnRow.addView(processBtn); btnRow.addView(resetBtn);
+        btnRow.addView(saveBtn); btnRow.addView(exportBtn);
         root.addView(btnRow);
 
-        // 原图预览
-        TextView origLabel = new TextView(this);
-        origLabel.setText("📜 原拟面 (带标注)");
-        origLabel.setTextSize(16);
+        // 原图与结果
         originalView = new ImageView(this);
         originalView.setScaleType(ImageView.ScaleType.FIT_CENTER);
         originalView.setBackgroundColor(Color.WHITE);
         originalView.setMinimumHeight(400);
-        root.addView(origLabel);
+        root.addView(newLabel("📜 原拟面 (带标注)"));
         root.addView(originalView);
 
-        // 结果预览
-        TextView resLabel = new TextView(this);
-        resLabel.setText("🌤️ 天朗半拟面");
-        resLabel.setTextSize(16);
         resultView = new ImageView(this);
         resultView.setScaleType(ImageView.ScaleType.FIT_CENTER);
         resultView.setBackgroundColor(Color.WHITE);
         resultView.setAdjustViewBounds(true);
         resultView.setMinimumHeight(400);
-        root.addView(resLabel);
+        root.addView(newLabel("🌤️ 天朗半拟面"));
         root.addView(resultView);
 
         scrollView.addView(root);
         setContentView(scrollView);
     }
 
-    private void addSlider(LinearLayout parent, String label, int min, int max, int def,
-                           SliderCallback callback, SeekBar seekBarRef) {
+    private TextView newLabel(String text) {
+        TextView tv = new TextView(this);
+        tv.setText(text);
+        tv.setTextSize(16);
+        tv.setPadding(0, 10, 0, 5);
+        return tv;
+    }
+
+    // 构建滑块并返回 SeekBar 引用
+    private SeekBar addSlider(LinearLayout parent, String label, int min, int max, int def,
+                              SliderCallback callback) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setPadding(0, 8, 0, 8);
+
         TextView tv = new TextView(this);
         tv.setText(label + ": " + def);
         tv.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 0.35f));
+
         SeekBar seekBar = new SeekBar(this);
         seekBar.setMax(max - min);
         seekBar.setProgress(def - min);
@@ -524,15 +508,11 @@ public class TianLangActivity extends AppCompatActivity {
             @Override public void onStartTrackingTouch(SeekBar seekBar) {}
             @Override public void onStopTrackingTouch(SeekBar seekBar) {}
         });
+
         row.addView(tv);
         row.addView(seekBar);
         parent.addView(row);
-        // 保存引用（通过数组传递）
-        try {
-            java.lang.reflect.Field f = TianLangActivity.class.getDeclaredField(label.replace(" ", "") + "Ref");
-            f.setAccessible(true);
-            f.set(this, seekBar);
-        } catch (Exception e) {}
+        return seekBar;
     }
 
     interface SliderCallback { void onChange(int value); }
@@ -576,18 +556,13 @@ public class TianLangActivity extends AppCompatActivity {
         Canvas canvas = new Canvas(work);
         Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         paint.setStrokeWidth(4);
-        if (res.bgCropRect != null) {
-            paint.setColor(Color.GREEN);
-            paint.setStyle(Paint.Style.STROKE);
+        if (res.bgCropRect != null && !res.bgCropRect.equals(new Rect(0,0,original.getWidth(),original.getHeight()))) {
+            paint.setColor(Color.GREEN); paint.setStyle(Paint.Style.STROKE);
             canvas.drawRect(res.bgCropRect, paint);
         }
-        paint.setColor(Color.RED);
-        if (res.leftCut >= 0) canvas.drawLine(res.leftCut, 0, res.leftCut, work.getHeight(), paint);
-        if (res.rightCut >= 0) canvas.drawLine(res.rightCut, 0, res.rightCut, work.getHeight(), paint);
-        if (res.bindLine >= 0) {
-            paint.setColor(Color.BLUE);
-            canvas.drawLine(res.bindLine, 0, res.bindLine, work.getHeight(), paint);
-        }
+        if (res.leftCut >= 0) { paint.setColor(Color.RED); canvas.drawLine(res.leftCut, 0, res.leftCut, work.getHeight(), paint); }
+        if (res.rightCut >= 0) { paint.setColor(Color.RED); canvas.drawLine(res.rightCut, 0, res.rightCut, work.getHeight(), paint); }
+        if (res.bindLine >= 0) { paint.setColor(Color.BLUE); canvas.drawLine(res.bindLine, 0, res.bindLine, work.getHeight(), paint); }
         return work;
     }
 
@@ -613,14 +588,11 @@ public class TianLangActivity extends AppCompatActivity {
             Bitmap bmp = BitmapFactory.decodeStream(is);
             if (bmp == null) { Toast.makeText(this, "无法加载图片", Toast.LENGTH_SHORT).show(); return; }
             currentOriginalBitmap = bmp;
-            totalPages = 1;
-            currentPage = 0;
+            totalPages = 1; currentPage = 0;
             pdfRenderer = null;
             updatePageInfo();
             processCurrent();
-        } catch (IOException e) {
-            Toast.makeText(this, "加载失败", Toast.LENGTH_SHORT).show();
-        }
+        } catch (IOException e) { Toast.makeText(this, "加载失败", Toast.LENGTH_SHORT).show(); }
     }
 
     private void loadPdf(Uri uri) {
@@ -640,9 +612,7 @@ public class TianLangActivity extends AppCompatActivity {
             currentPage = 0;
             renderPage(0);
             updatePageInfo();
-        } catch (IOException e) {
-            Toast.makeText(this, "无法打开PDF", Toast.LENGTH_SHORT).show();
-        }
+        } catch (IOException e) { Toast.makeText(this, "无法打开PDF", Toast.LENGTH_SHORT).show(); }
     }
 
     private void renderPage(int index) {
@@ -659,9 +629,7 @@ public class TianLangActivity extends AppCompatActivity {
                 updateUIFromParams();
             }
             processCurrent();
-        } catch (Exception e) {
-            Toast.makeText(this, "渲染失败", Toast.LENGTH_SHORT).show();
-        }
+        } catch (Exception e) { Toast.makeText(this, "渲染失败", Toast.LENGTH_SHORT).show(); }
     }
 
     private void changePage(int delta) {
@@ -681,28 +649,18 @@ public class TianLangActivity extends AppCompatActivity {
     }
 
     private void saveCurrentResult() {
-        if (resultView.getDrawable() == null) {
-            Toast.makeText(this, "无结果可保存", Toast.LENGTH_SHORT).show();
-            return;
-        }
+        if (resultView.getDrawable() == null) { Toast.makeText(this, "无结果", Toast.LENGTH_SHORT).show(); return; }
         Bitmap bmp = ((android.graphics.drawable.BitmapDrawable) resultView.getDrawable()).getBitmap();
         try {
             File outFile = new File(getExternalFilesDir(null), "tianlang_" + System.currentTimeMillis() + ".png");
-            try (FileOutputStream fos = new FileOutputStream(outFile)) {
-                bmp.compress(Bitmap.CompressFormat.PNG, 100, fos);
-            }
+            try (FileOutputStream fos = new FileOutputStream(outFile)) { bmp.compress(Bitmap.CompressFormat.PNG, 100, fos); }
             Toast.makeText(this, "已保存: " + outFile.getAbsolutePath(), Toast.LENGTH_LONG).show();
-        } catch (IOException e) {
-            Toast.makeText(this, "保存失败", Toast.LENGTH_SHORT).show();
-        }
+        } catch (IOException e) { Toast.makeText(this, "保存失败", Toast.LENGTH_SHORT).show(); }
     }
 
     private void exportCroppedPdf() {
-        if (pdfRenderer == null || totalPages == 0) {
-            Toast.makeText(this, "请先打开PDF", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        new AsyncTask<Void, Integer, String>() {
+        if (pdfRenderer == null || totalPages == 0) { Toast.makeText(this, "请先打开PDF", Toast.LENGTH_SHORT).show(); return; }
+        new AsyncTask<Void, Void, String>() {
             @Override
             protected String doInBackground(Void... voids) {
                 try {
@@ -712,27 +670,20 @@ public class TianLangActivity extends AppCompatActivity {
                         Bitmap orig = Bitmap.createBitmap(page.getWidth(), page.getHeight(), Bitmap.Config.ARGB_8888);
                         page.render(orig, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                         page.close();
-                        TianLangEngine.CropParams p = pageParams.containsKey(i) ?
-                                pageParams.get(i).clone() : cropParams.clone();
+                        TianLangEngine.CropParams p = pageParams.containsKey(i) ? pageParams.get(i).clone() : cropParams.clone();
                         TianLangEngine.PageResult res = TianLangEngine.processPage(orig, p);
                         Bitmap result = res.resultBitmap;
-                        android.graphics.pdf.PdfDocument.PageInfo info =
-                                new android.graphics.pdf.PdfDocument.PageInfo.Builder(
-                                        result.getWidth(), result.getHeight(), i).create();
+                        android.graphics.pdf.PdfDocument.PageInfo info = new android.graphics.pdf.PdfDocument.PageInfo.Builder(result.getWidth(), result.getHeight(), i).create();
                         android.graphics.pdf.PdfDocument.Page outPage = out.startPage(info);
                         outPage.getCanvas().drawBitmap(result, 0, 0, null);
                         out.finishPage(outPage);
-                        orig.recycle();
-                        result.recycle();
+                        orig.recycle(); result.recycle();
                     }
-                    File outFile = new File(getExternalFilesDir(null),
-                            "tianlang_export_" + System.currentTimeMillis() + ".pdf");
+                    File outFile = new File(getExternalFilesDir(null), "tianlang_export_" + System.currentTimeMillis() + ".pdf");
                     out.writeTo(new FileOutputStream(outFile));
                     out.close();
                     return outFile.getAbsolutePath();
-                } catch (IOException e) {
-                    return null;
-                }
+                } catch (IOException e) { return null; }
             }
             @Override
             protected void onPostExecute(String path) {
