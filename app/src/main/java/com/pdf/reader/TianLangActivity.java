@@ -34,7 +34,7 @@ import java.util.Map;
 public class TianLangActivity extends AppCompatActivity {
 
     private TianLangEngine.CropParams cropParams = new TianLangEngine.CropParams();
-    private Map<Integer, TianLangEngine.CropParams> pageParams = new HashMap<>();
+    private final Map<Integer, TianLangEngine.CropParams> pageParams = new HashMap<>();
     private Bitmap currentOriginalBitmap;
     private PdfRenderer pdfRenderer;
     private ParcelFileDescriptor fileDescriptor;
@@ -182,32 +182,38 @@ public class TianLangActivity extends AppCompatActivity {
         else if (id == rbLeftOnly.getId()) cropParams.mode = "left-only";
         else if (id == rbRightOnly.getId()) cropParams.mode = "right-only";
         else if (id == rbCombined.getId()) cropParams.mode = "combined";
-        else if (id == rbManual.getId()) cropParams.mode = "manual";
+        else cropParams.mode = "manual";
     }
 
     private void updateUIFromParams() {
-        bgTolSeek.setProgress(cropParams.bgTol);
-        lrMarginSeek.setProgress(cropParams.lrMargin + 50);
-        topMarginSeek.setProgress(cropParams.topMargin + 50);
-        bottomMarginSeek.setProgress(cropParams.bottomMargin + 50);
-        contrastSeek.setProgress((int)(cropParams.contrast * 10) - 5);
-        threshSeek.setProgress(cropParams.binThresh - 40);
-        sensSeek.setProgress((int)(cropParams.sensitivity * 100) - 10);
-        switch (cropParams.mode) {
+        if (bgTolSeek != null) bgTolSeek.setProgress(cropParams.bgTol);
+        if (lrMarginSeek != null) lrMarginSeek.setProgress(cropParams.lrMargin + 50);
+        if (topMarginSeek != null) topMarginSeek.setProgress(cropParams.topMargin + 50);
+        if (bottomMarginSeek != null) bottomMarginSeek.setProgress(cropParams.bottomMargin + 50);
+        if (contrastSeek != null) contrastSeek.setProgress(Math.round(cropParams.contrast * 10) - 5);
+        if (threshSeek != null) threshSeek.setProgress(cropParams.binThresh - 40);
+        if (sensSeek != null) sensSeek.setProgress(Math.round(cropParams.sensitivity * 100) - 10);
+
+        String mode = cropParams.mode != null ? cropParams.mode : "auto-single";
+        switch (mode) {
             case "auto-single": rbAutoSingle.setChecked(true); break;
             case "left-only": rbLeftOnly.setChecked(true); break;
             case "right-only": rbRightOnly.setChecked(true); break;
             case "combined": rbCombined.setChecked(true); break;
-            case "manual": rbManual.setChecked(true); break;
+            default: rbManual.setChecked(true); break;
         }
     }
 
     private void processCurrent() {
         if (currentOriginalBitmap == null) return;
-        TianLangEngine.PageResult res = TianLangEngine.processPage(currentOriginalBitmap, cropParams);
-        Bitmap annotated = drawAnnotations(currentOriginalBitmap, res);
-        originalView.setImageBitmap(annotated);
-        resultView.setImageBitmap(res.resultBitmap);
+        try {
+            TianLangEngine.PageResult res = TianLangEngine.processPage(currentOriginalBitmap, cropParams);
+            Bitmap annotated = drawAnnotations(currentOriginalBitmap, res);
+            originalView.setImageBitmap(annotated);
+            resultView.setImageBitmap(res.resultBitmap);
+        } catch (Exception e) {
+            Toast.makeText(this, "算法处理出错: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
     }
 
     private Bitmap drawAnnotations(Bitmap original, TianLangEngine.PageResult res) {
@@ -252,7 +258,7 @@ public class TianLangActivity extends AppCompatActivity {
             pdfRenderer = null;
             updatePageInfo();
             processCurrent();
-        } catch (IOException e) { Toast.makeText(this, "加载失败", Toast.LENGTH_SHORT).show(); }
+        } catch (IOException e) { Toast.makeText(this, "加载失败: " + e.getMessage(), Toast.LENGTH_SHORT).show(); }
     }
 
     private void loadPdf(Uri uri) {
@@ -272,7 +278,7 @@ public class TianLangActivity extends AppCompatActivity {
             currentPage = 0;
             renderPage(0);
             updatePageInfo();
-        } catch (IOException e) { Toast.makeText(this, "无法打开PDF", Toast.LENGTH_SHORT).show(); }
+        } catch (IOException e) { Toast.makeText(this, "无法打开PDF: " + e.getMessage(), Toast.LENGTH_SHORT).show(); }
     }
 
     private void renderPage(int index) {
@@ -289,7 +295,7 @@ public class TianLangActivity extends AppCompatActivity {
                 updateUIFromParams();
             }
             processCurrent();
-        } catch (Exception e) { Toast.makeText(this, "渲染失败", Toast.LENGTH_SHORT).show(); }
+        } catch (Exception e) { Toast.makeText(this, "渲染失败: " + e.getMessage(), Toast.LENGTH_SHORT).show(); }
     }
 
     private void changePage(int delta) {
