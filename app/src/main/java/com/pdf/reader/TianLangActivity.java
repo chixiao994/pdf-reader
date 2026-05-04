@@ -31,6 +31,7 @@ public class TianLangActivity extends AppCompatActivity {
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setAllowFileAccess(true);
+        settings.setAllowContentAccess(true);
         settings.setDomStorageEnabled(true);
 
         webView.addJavascriptInterface(new NativeBridge(), "Android");
@@ -82,25 +83,38 @@ public class TianLangActivity extends AppCompatActivity {
             Uri uri = data.getData();
             if (uri == null) return;
             try {
-                InputStream inputStream = getContentResolver().openInputStream(uri);
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                byte[] buffer = new byte[4096];
-                int len;
-                while ((len = inputStream.read(buffer)) != -1) {
-                    baos.write(buffer, 0, len);
-                }
-                inputStream.close();
-                byte[] fileBytes = baos.toByteArray();
-                String base64 = Base64.encodeToString(fileBytes, Base64.NO_WRAP);
-                String fileName = getFileName(uri);
-
                 if (requestCode == PICK_IMAGE) {
+                    // 图片仍通过 Base64 传递（体积小，安全）
+                    InputStream inputStream = getContentResolver().openInputStream(uri);
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    byte[] buffer = new byte[4096];
+                    int len;
+                    while ((len = inputStream.read(buffer)) != -1) {
+                        baos.write(buffer, 0, len);
+                    }
+                    inputStream.close();
+                    String base64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
+                    String fileName = getFileName(uri);
                     webView.evaluateJavascript("javascript:loadImage('" + base64 + "', '" + fileName + "')", null);
                 } else if (requestCode == PICK_PDF) {
-                    webView.evaluateJavascript("javascript:loadPdf('" + base64 + "', '" + fileName + "')", null);
+                    // PDF 直接拷贝到缓存目录，传递文件路径（避免 Base64 内存问题）
+                    InputStream inputStream = getContentResolver().openInputStream(uri);
+                    File tempFile = new File(getCacheDir(), "temp_pdf_" + System.currentTimeMillis() + ".pdf");
+                    try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+                        byte[] buffer = new byte[4096];
+                        int len;
+                        while ((len = inputStream.read(buffer)) != -1) {
+                            fos.write(buffer, 0, len);
+                        }
+                    }
+                    inputStream.close();
+                    String filePath = tempFile.getAbsolutePath();
+                    String fileName = getFileName(uri);
+                    webView.evaluateJavascript(
+                        "javascript:loadPdfFromPath('" + filePath + "', '" + fileName + "')", null);
                 }
             } catch (Exception e) {
-                Toast.makeText(this, "文件读取失败", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, "文件读取失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             }
         }
     }
