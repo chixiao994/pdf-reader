@@ -524,6 +524,24 @@ public class MainActivity extends AppCompatActivity {
         setupButtonStyle(openFileBtn, true);
         fileListLayout.addView(openFileBtn);
         fileListLayout.setBackgroundColor(getBackgroundColor());
+        // 添加天朗裁切按钮
+        Button tianlangBtn = new Button(this);
+        tianlangBtn.setText("天朗裁切");
+        tianlangBtn.setBackgroundColor(getSpecialButtonBackgroundColor());
+        tianlangBtn.setTextColor(getSpecialButtonTextColor());
+        tianlangBtn.setTextSize(14);
+        tianlangBtn.setAllCaps(false);
+        tianlangBtn.setOnClickListener(v -> {
+            Intent intent = new Intent(MainActivity.this, TianLangActivity.class);
+            startActivity(intent);
+        });
+        LinearLayout.LayoutParams tlParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        tlParams.bottomMargin = 10;
+        tianlangBtn.setLayoutParams(tlParams);
+        setupButtonStyle(tianlangBtn, true);
+        fileListLayout.addView(tianlangBtn);
         mainLayout.addView(topBar);
         mainLayout.addView(fileListLayout);
     }
@@ -575,7 +593,7 @@ public class MainActivity extends AppCompatActivity {
         topBar.setBackgroundColor(getStatusBarColor());
         topBar.setPadding(20, 15, 20, 15);
         TextView title = new TextView(this);
-        title.setText("简帙阅读器 v1.0.22");
+        title.setText("简帙阅读器 v1.0.23");
         title.setTextColor(nightMode ? ANCIENT_BEIGE : ANCIENT_GOLD);
         title.setTextSize(18);
         title.setLayoutParams(new LinearLayout.LayoutParams(
