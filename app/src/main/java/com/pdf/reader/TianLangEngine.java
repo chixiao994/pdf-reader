@@ -29,7 +29,7 @@ public class TianLangEngine {
             try {
                 return (CropParams) super.clone();
             } catch (CloneNotSupportedException e) {
-                // 不会执行，因为实现了 Cloneable
+                // 不会执行
                 return new CropParams();
             }
         }
@@ -44,11 +44,11 @@ public class TianLangEngine {
     }
 
     public static PageResult processPage(Bitmap original, CropParams params) {
-        // 1. 背景切除
         Bitmap workBitmap = original;
         Rect bgCrop = removeBackground(original, params);
         if (bgCrop != null && bgCrop.width() > 10 && bgCrop.height() > 10) {
-            workBitmap = Bitmap.createBitmap(original, bgCrop.left, bgCrop.top, bgCrop.width(), bgCrop.height());
+            workBitmap = Bitmap.createBitmap(original, bgCrop.left, bgCrop.top,
+                    bgCrop.width(), bgCrop.height());
         } else {
             bgCrop = new Rect(0, 0, original.getWidth(), original.getHeight());
         }
@@ -82,13 +82,13 @@ public class TianLangEngine {
                 bind = findMiddleFrameLine(workBitmap);
                 if (bind == -1) bind = w / 2;
                 break;
-            default: // auto-single
+            default:
                 left = autoLeft;
                 right = autoRight;
                 break;
         }
 
-        // 边界保护
+        // 防御性修正
         if (left == -1) left = 0;
         if (right == -1) right = w;
         if (left >= right) { left = 0; right = w; }
@@ -104,9 +104,8 @@ public class TianLangEngine {
             Bitmap leftHalf = Bitmap.createBitmap(workBitmap, left, 0, lw, h);
             Bitmap rightHalf = Bitmap.createBitmap(workBitmap, bind, 0, rw, h);
             canvas.drawBitmap(leftHalf, 0, 0, null);
-            Paint separator = new Paint();
-            separator.setColor(Color.LTGRAY);
-            canvas.drawRect(0, h, resultW, h + 4, separator);
+            Paint sep = new Paint(); sep.setColor(Color.LTGRAY);
+            canvas.drawRect(0, h, resultW, h + 4, sep);
             canvas.drawBitmap(rightHalf, 0, h + 4, null);
             leftHalf.recycle();
             rightHalf.recycle();
@@ -125,7 +124,6 @@ public class TianLangEngine {
         return res;
     }
 
-    // ---------- 背景切除 ----------
     private static Rect removeBackground(Bitmap bmp, CropParams p) {
         int w = bmp.getWidth(), h = bmp.getHeight();
         int[] pixels = new int[w * h];
@@ -174,8 +172,7 @@ public class TianLangEngine {
         for (int i = 0; i < w * h; i++) {
             int r = Color.red(pixels[i]), g = Color.green(pixels[i]), b = Color.blue(pixels[i]);
             double dr = r - mr, dg = g - mg, db = b - mb;
-            double dist = Math.sqrt(dr*dr + dg*dg + db*db);
-            mask[i] = (dist <= tol) ? 0 : (byte) 255;
+            mask[i] = (Math.sqrt(dr*dr + dg*dg + db*db) <= tol) ? 0 : (byte) 255;
         }
 
         mask = dilate(mask, w, h);
@@ -260,12 +257,11 @@ public class TianLangEngine {
         return maxRect;
     }
 
-    // ---------- 图像处理基础方法 ----------
     private static int[] toGrayEnhanced(Bitmap bmp, float contrast) {
         int w = bmp.getWidth(), h = bmp.getHeight();
+        int[] gray = new int[w * h];
         int[] pixels = new int[w * h];
         bmp.getPixels(pixels, 0, w, 0, 0, w, h);
-        int[] gray = new int[w * h];
         for (int i = 0; i < w * h; i++) {
             int r = Color.red(pixels[i]), g = Color.green(pixels[i]), b = Color.blue(pixels[i]);
             float lum = 0.299f * r + 0.587f * g + 0.114f * b;
