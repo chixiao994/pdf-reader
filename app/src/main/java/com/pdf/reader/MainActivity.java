@@ -709,16 +709,24 @@ public class MainActivity extends AppCompatActivity {
         setupButtonStyle(scanAllBtn, true);
         optionsLayout.addView(singleFileBtn);
         optionsLayout.addView(scanAllBtn);
-        // 在 addFileChooserOptions() 的optionsLayout 中添加：
+        // 天朗裁切按钮（新增）
         Button tianlangBtn = new Button(this);
         tianlangBtn.setText("天朗裁切");
-        tianlangBtn.setBackgroundColor(getSpecialButtonBackgroundColor());
-        tianlangBtn.setTextColor(getSpecialButtonTextColor());
+        tianlangBtn.setBackgroundColor(getButtonBackgroundColor());
+        tianlangBtn.setTextColor(getButtonTextColor());
+        tianlangBtn.setTextSize(14);
+        tianlangBtn.setAllCaps(false);
         tianlangBtn.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, TianLangActivity.class);
             startActivity(intent);
         });
-        optionsLayout.addView(tianlangBtn);        
+        LinearLayout.LayoutParams tianlangParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        tianlangParams.bottomMargin = 10;
+        tianlangBtn.setLayoutParams(tianlangParams);
+        setupButtonStyle(tianlangBtn, true);
+        optionsLayout.addView(tianlangBtn);     
         fileListLayout.addView(optionsLayout);
 
     }
