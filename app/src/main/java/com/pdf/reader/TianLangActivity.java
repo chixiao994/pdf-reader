@@ -30,9 +30,12 @@ public class TianLangActivity extends AppCompatActivity {
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
-        settings.setAllowFileAccess(true);
+        settings.setAllowFileAccess(true);                          // 允许访问文件
         settings.setAllowContentAccess(true);
         settings.setDomStorageEnabled(true);
+        // 允许从文件URL访问其他文件URL（解决跨域问题）
+        settings.setAllowFileAccessFromFileURLs(true);
+        settings.setAllowUniversalAccessFromFileURLs(true);
 
         webView.addJavascriptInterface(new NativeBridge(), "Android");
 
@@ -84,7 +87,7 @@ public class TianLangActivity extends AppCompatActivity {
             if (uri == null) return;
             try {
                 if (requestCode == PICK_IMAGE) {
-                    // 图片仍通过 Base64 传递（体积小，安全）
+                    // 图片仍通过 Base64 传递
                     InputStream inputStream = getContentResolver().openInputStream(uri);
                     ByteArrayOutputStream baos = new ByteArrayOutputStream();
                     byte[] buffer = new byte[4096];
@@ -97,7 +100,7 @@ public class TianLangActivity extends AppCompatActivity {
                     String fileName = getFileName(uri);
                     webView.evaluateJavascript("javascript:loadImage('" + base64 + "', '" + fileName + "')", null);
                 } else if (requestCode == PICK_PDF) {
-                    // PDF 直接拷贝到缓存目录，传递文件路径（避免 Base64 内存问题）
+                    // PDF 复制到缓存目录，传递 file:// URI
                     InputStream inputStream = getContentResolver().openInputStream(uri);
                     File tempFile = new File(getCacheDir(), "temp_pdf_" + System.currentTimeMillis() + ".pdf");
                     try (FileOutputStream fos = new FileOutputStream(tempFile)) {
@@ -108,10 +111,11 @@ public class TianLangActivity extends AppCompatActivity {
                         }
                     }
                     inputStream.close();
-                    String filePath = tempFile.getAbsolutePath();
+                    // 构造 file:// URI
+                    String fileUri = "file://" + tempFile.getAbsolutePath();
                     String fileName = getFileName(uri);
                     webView.evaluateJavascript(
-                        "javascript:loadPdfFromPath('" + filePath + "', '" + fileName + "')", null);
+                        "javascript:loadPdfFromPath('" + fileUri + "', '" + fileName + "')", null);
                 }
             } catch (Exception e) {
                 Toast.makeText(this, "文件读取失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
