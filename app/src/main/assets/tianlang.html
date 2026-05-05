@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>天朗·堆叠切除</title>
-    <!-- 导出 PDF 依赖 jsPDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
@@ -22,7 +21,8 @@
         label { font-weight:500; }
         input[type="range"] { width:150px; }
         .button { background:#9b7653; border:none; color:white; padding:10px 25px; border-radius:30px; font-size:1em; cursor:pointer; transition:background 0.2s; white-space:nowrap; }
-        .button:hover { background:#7b5a3a; }
+        .button:disabled { background:#aaa; cursor:not-allowed; }
+        .button:hover:not(:disabled) { background:#7b5a3a; }
         .upload-btn { background:#5d4a3a; }
         .save-btn { background:#2d6a4f; }
         .mode-group { display:flex; flex-wrap:wrap; gap:12px; background:#ede0ce; padding:8px 15px; border-radius:30px; align-items:center; }
@@ -136,6 +136,7 @@ let currentFileName = '未命名';
 let isPdfMode = false;
 let currentPageNum = 0;   // 0-based
 let totalPageCount = 0;
+let isProcessingPage = false;
 
 // ────── 工具函数 ──────
 function getCurrentParams() {
@@ -198,6 +199,7 @@ window.onPdfOpened = function(total, fileName) {
     totalPagesSpan.innerText = totalPageCount;
     pageNumInput.value = 1;
     generatePdfBtn.style.display = 'inline-block';
+    isProcessingPage = false;
     updateNavButtons();
 };
 
@@ -209,28 +211,46 @@ window.onPageRendered = function(base64, pageNum, total) {
     currentPageNum = pageNum;
     pageNumInput.value = pageNum + 1;
     updateNavButtons();
+    isProcessingPage = false;
+
     const img = new Image();
     img.onload = () => { originalImage = img; fitImageToCanvas(); processImage(); };
     img.src = 'data:image/png;base64,' + base64;
 };
 
-// ────── 翻页请求 ──────
+// ────── 翻页请求（防止并发） ──────
 function requestPage(pageNum) {
-    if (!isPdfMode || pageNum < 0 || pageNum >= totalPageCount) return;
+    if (!isPdfMode || isProcessingPage || pageNum < 0 || pageNum >= totalPageCount) return;
+    isProcessingPage = true;
+    updateNavButtons();
     Android.goToPage(pageNum);
 }
 
 prevPageBtn.onclick = () => requestPage(currentPageNum - 1);
 nextPageBtn.onclick = () => requestPage(currentPageNum + 1);
-pageNumInput.onchange = function() {
+
+pageNumInput.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+        const num = parseInt(this.value) - 1;
+        if (isNaN(num) || num < 0 || num >= totalPageCount) {
+            this.value = currentPageNum + 1;
+        } else {
+            requestPage(num);
+        }
+    }
+});
+pageNumInput.addEventListener('blur', function() {
     const num = parseInt(this.value) - 1;
-    if (isNaN(num) || num < 0 || num >= totalPageCount) { this.value = currentPageNum + 1; return; }
-    requestPage(num);
-};
+    if (isNaN(num) || num < 0 || num >= totalPageCount) {
+        this.value = currentPageNum + 1;
+    } else {
+        requestPage(num);
+    }
+});
 
 function updateNavButtons() {
-    prevPageBtn.disabled = currentPageNum <= 0;
-    nextPageBtn.disabled = currentPageNum >= totalPageCount - 1;
+    prevPageBtn.disabled = isProcessingPage || currentPageNum <= 0;
+    nextPageBtn.disabled = isProcessingPage || currentPageNum >= totalPageCount - 1;
     pageNumInput.value = currentPageNum + 1;
 }
 
@@ -394,8 +414,7 @@ function processImage() {
         cropRegion = removeBackground(fullImgData, params.bgTol, params.lrMargin, params.topMargin, params.bottomMargin);
     }
 
-    let workImgData;
-    let offsetX = 0, offsetY = 0;
+    let workImgData, offsetX = 0, offsetY = 0;
     if (cropRegion) {
         workImgData = originalCtx.getImageData(cropRegion.left, cropRegion.top, cropRegion.width, cropRegion.height);
         offsetX = cropRegion.left; offsetY = cropRegion.top;
@@ -456,67 +475,50 @@ function processImage() {
     document.getElementById('leftCut').innerText = leftCut !== null ? (leftCut + offsetX).toFixed(1) : '无';
     document.getElementById('rightCut').innerText = rightCut !== null ? (rightCut + offsetX).toFixed(1) : '无';
 
-    // 绘制标注
     originalCtx.putImageData(fullImgData, 0, 0);
     if (cropRegion) {
-        originalCtx.strokeStyle = '#2d6a4f';
-        originalCtx.lineWidth = 2;
-        originalCtx.setLineDash([4,4]);
-        originalCtx.strokeRect(cropRegion.left, cropRegion.top, cropRegion.width, cropRegion.height);
+        originalCtx.strokeStyle = '#2d6a4f'; originalCtx.lineWidth = 2;
+        originalCtx.setLineDash([4,4]); originalCtx.strokeRect(cropRegion.left, cropRegion.top, cropRegion.width, cropRegion.height);
     }
     if (leftCut !== null) {
-        originalCtx.strokeStyle = '#d63447';
-        originalCtx.lineWidth = 2;
-        originalCtx.setLineDash([6,4]);
-        originalCtx.beginPath();
-        originalCtx.moveTo(leftCut + offsetX, offsetY);
-        originalCtx.lineTo(leftCut + offsetX, offsetY + height);
+        originalCtx.strokeStyle = '#d63447'; originalCtx.lineWidth = 2;
+        originalCtx.setLineDash([6,4]); originalCtx.beginPath();
+        originalCtx.moveTo(leftCut + offsetX, offsetY); originalCtx.lineTo(leftCut + offsetX, offsetY + height);
         originalCtx.stroke();
     }
     if (rightCut !== null) {
-        originalCtx.strokeStyle = '#d63447';
-        originalCtx.setLineDash([6,4]);
-        originalCtx.beginPath();
-        originalCtx.moveTo(rightCut + offsetX, offsetY);
-        originalCtx.lineTo(rightCut + offsetX, offsetY + height);
+        originalCtx.strokeStyle = '#d63447'; originalCtx.lineWidth = 2;
+        originalCtx.setLineDash([6,4]); originalCtx.beginPath();
+        originalCtx.moveTo(rightCut + offsetX, offsetY); originalCtx.lineTo(rightCut + offsetX, offsetY + height);
         originalCtx.stroke();
     }
     if (bindLine !== null) {
-        originalCtx.strokeStyle = '#1e5f9e';
-        originalCtx.setLineDash([8,6]);
-        originalCtx.beginPath();
-        originalCtx.moveTo(bindLine + offsetX, offsetY);
-        originalCtx.lineTo(bindLine + offsetX, offsetY + height);
+        originalCtx.strokeStyle = '#1e5f9e'; originalCtx.lineWidth = 2;
+        originalCtx.setLineDash([8,6]); originalCtx.beginPath();
+        originalCtx.moveTo(bindLine + offsetX, offsetY); originalCtx.lineTo(bindLine + offsetX, offsetY + height);
         originalCtx.stroke();
     }
     originalCtx.setLineDash([]);
 
-    // 结果图
     if (params.mode === 'combined' && leftCut !== null && rightCut !== null && bindLine !== null) {
-        const lw = bindLine - leftCut;
-        const rw = rightCut - bindLine;
-        const resultW = Math.max(lw, rw);
-        const resultH = height * 2 + 4;
-        resultCanvas.width = resultW;
-        resultCanvas.height = resultH;
+        const lw = bindLine - leftCut, rw = rightCut - bindLine;
+        const resultW = Math.max(lw, rw), resultH = height * 2 + 4;
+        resultCanvas.width = resultW; resultCanvas.height = resultH;
         const leftData = originalCtx.getImageData(leftCut + offsetX, offsetY, lw, height);
         resultCtx.putImageData(leftData, 0, 0);
-        resultCtx.fillStyle = '#ddd';
-        resultCtx.fillRect(0, height, resultW, 4);
+        resultCtx.fillStyle = '#ddd'; resultCtx.fillRect(0, height, resultW, 4);
         const rightData = originalCtx.getImageData(bindLine + offsetX, offsetY, rw, height);
         resultCtx.putImageData(rightData, 0, height + 4);
     } else {
         const cropLeft = leftCut !== null ? leftCut : 0;
         const cropRight = rightCut !== null ? rightCut : width;
         const resultW = Math.max(1, cropRight - cropLeft);
-        resultCanvas.width = resultW;
-        resultCanvas.height = height;
+        resultCanvas.width = resultW; resultCanvas.height = height;
         const resData = originalCtx.getImageData(cropLeft + offsetX, offsetY, resultW, height);
         resultCtx.putImageData(resData, 0, 0);
     }
     document.getElementById('resultNote').innerText = '硬裁切结果，文字像素原封不动';
 
-    // 投影图
     drawProjectionPlot(projection, width, effThreshold, leftCut, rightCut, bindLine);
     document.getElementById('projectionPlot').style.display = 'block';
 }
@@ -524,21 +526,15 @@ function processImage() {
 function drawProjectionPlot(proj, width, threshold, leftCut, rightCut, bindLine) {
     const pw = projCanvas.width, ph = projCanvas.height;
     projCtx.clearRect(0, 0, pw, ph);
-    projCtx.fillStyle = '#faf6f0';
-    projCtx.fillRect(0, 0, pw, ph);
+    projCtx.fillStyle = '#faf6f0'; projCtx.fillRect(0, 0, pw, ph);
     const maxProj = Math.max(0.5, ...proj);
     const scaleY = ph / maxProj;
     const thY = ph - threshold * scaleY;
-    projCtx.strokeStyle = '#c4a27a';
-    projCtx.setLineDash([4,4]);
-    projCtx.beginPath();
-    projCtx.moveTo(0, thY);
-    projCtx.lineTo(pw, thY);
-    projCtx.stroke();
+    projCtx.strokeStyle = '#c4a27a'; projCtx.setLineDash([4,4]);
+    projCtx.beginPath(); projCtx.moveTo(0, thY); projCtx.lineTo(pw, thY); projCtx.stroke();
     projCtx.setLineDash([]);
 
-    projCtx.strokeStyle = '#3e2c1b';
-    projCtx.lineWidth = 2;
+    projCtx.strokeStyle = '#3e2c1b'; projCtx.lineWidth = 2;
     projCtx.beginPath();
     const step = width / pw;
     for (let i = 0; i < pw; i++) {
@@ -552,34 +548,21 @@ function drawProjectionPlot(proj, width, threshold, leftCut, rightCut, bindLine)
 
     if (leftCut !== null) {
         const lx = (leftCut / width) * pw;
-        projCtx.strokeStyle = '#d63447';
-        projCtx.beginPath();
-        projCtx.moveTo(lx, 0);
-        projCtx.lineTo(lx, ph);
-        projCtx.stroke();
-        projCtx.fillStyle = '#d63447';
-        projCtx.fillText('左切', lx + 2, 15);
+        projCtx.strokeStyle = '#d63447'; projCtx.beginPath();
+        projCtx.moveTo(lx, 0); projCtx.lineTo(lx, ph); projCtx.stroke();
+        projCtx.fillStyle = '#d63447'; projCtx.fillText('左切', lx + 2, 15);
     }
     if (rightCut !== null) {
         const rx = (rightCut / width) * pw;
-        projCtx.strokeStyle = '#d63447';
-        projCtx.beginPath();
-        projCtx.moveTo(rx, 0);
-        projCtx.lineTo(rx, ph);
-        projCtx.stroke();
-        projCtx.fillStyle = '#d63447';
-        projCtx.fillText('右切', rx - 30, 15);
+        projCtx.strokeStyle = '#d63447'; projCtx.beginPath();
+        projCtx.moveTo(rx, 0); projCtx.lineTo(rx, ph); projCtx.stroke();
+        projCtx.fillStyle = '#d63447'; projCtx.fillText('右切', rx - 30, 15);
     }
     if (bindLine !== null) {
         const bx = (bindLine / width) * pw;
-        projCtx.strokeStyle = '#1e5f9e';
-        projCtx.setLineDash([8,6]);
-        projCtx.beginPath();
-        projCtx.moveTo(bx, 0);
-        projCtx.lineTo(bx, ph);
-        projCtx.stroke();
-        projCtx.setLineDash([]);
-        projCtx.fillText('装订', bx + 2, 25);
+        projCtx.strokeStyle = '#1e5f9e'; projCtx.setLineDash([8,6]);
+        projCtx.beginPath(); projCtx.moveTo(bx, 0); projCtx.lineTo(bx, ph); projCtx.stroke();
+        projCtx.setLineDash([]); projCtx.fillText('装订', bx + 2, 25);
     }
 }
 
@@ -588,8 +571,7 @@ document.getElementById('saveBtn').onclick = () => {
     if (resultCanvas.width === 0) return;
     const data = resultCtx.getImageData(0, 0, resultCanvas.width, resultCanvas.height);
     const canvas = document.createElement('canvas');
-    canvas.width = resultCanvas.width;
-    canvas.height = resultCanvas.height;
+    canvas.width = resultCanvas.width; canvas.height = resultCanvas.height;
     canvas.getContext('2d').putImageData(data, 0, 0);
     const base64 = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
     if (window.Android && Android.saveFile) {
@@ -599,7 +581,7 @@ document.getElementById('saveBtn').onclick = () => {
     }
 };
 
-// ────── 生成裁切PDF（逐页请求原生渲染并处理） ──────
+// ────── 生成裁切PDF（逐页请求原生渲染） ──────
 document.getElementById('generatePdfBtn').onclick = async () => {
     if (!isPdfMode) { alert('请先上传PDF'); return; }
     const progressContainer = document.getElementById('progressContainer');
@@ -612,29 +594,26 @@ document.getElementById('generatePdfBtn').onclick = async () => {
         const pdf = new jsPDF({ unit: 'pt', compress: false });
         const params = getCurrentParams();
         for (let i = 0; i < totalPageCount; i++) {
-            // 请求原生渲染该页
             const pageBase64 = await new Promise(resolve => {
                 const origHandler = window.onPageRendered;
                 window.onPageRendered = (b64, pageNum, total) => {
-                    // 恢复原 handler
                     window.onPageRendered = origHandler;
                     resolve(b64);
                 };
                 Android.goToPage(i);
             });
-            // 解码图片并裁切
             const img = await new Promise(resolve => {
                 const img = new Image();
                 img.onload = () => resolve(img);
                 img.src = 'data:image/png;base64,' + pageBase64;
             });
             const canvas = document.createElement('canvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
+            canvas.width = img.width; canvas.height = img.height;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0);
             const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            // 应用算法
+
+            // 裁切算法
             const gray = new Float32Array(canvas.width * canvas.height);
             for (let j = 0; j < gray.length; j++) {
                 const r = imgData.data[j*4], g = imgData.data[j*4+1], b = imgData.data[j*4+2];
