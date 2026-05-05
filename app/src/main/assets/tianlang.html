@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -95,6 +96,9 @@
         <div class="projection-plot" id="projectionPlot" style="display:none;">
             <canvas id="projCanvas" width="600" height="120"></canvas>
         </div>
+        <div class="note">
+            ⚡ 支持图片批量上传和PDF批量处理，翻页直接切换预存图片，导出统一应用参数。
+        </div>
     </div>
 </div>
 
@@ -130,13 +134,11 @@ const prevPageBtn = document.getElementById('prevPageBtn');
 const nextPageBtn = document.getElementById('nextPageBtn');
 const generatePdfBtn = document.getElementById('generatePdfBtn');
 
+let imagePaths = [];        // 所有图片的本地文件路径数组
+let currentIndex = 0;      // 当前显示的图片索引
 let originalImage = null;
 let imageDataCache = null;
 let currentFileName = '未命名';
-let isPdfMode = false;
-let currentPageNum = 0;
-let totalPageCount = 0;
-let isProcessingPage = false;
 
 // ────── 工具函数 ──────
 function getCurrentParams() {
@@ -175,110 +177,67 @@ function fitImageToCanvas() {
     imageDataCache = originalCtx.getImageData(0, 0, originalCanvas.width, originalCanvas.height);
 }
 
-// ────── 原生桥接接收函数 ──────
-window.loadImage = function(base64, fileName) {
-    const img = new Image();
-    img.onload = () => {
-        originalImage = img;
-        currentFileName = fileName || 'image.png';
-        isPdfMode = false;
-        pdfNav.style.display = 'none';
-        generatePdfBtn.style.display = 'none';
-        fitImageToCanvas();
-        processImage();
-    };
-    img.src = 'data:image/png;base64,' + base64;
-};
-
-window.onPdfOpened = function(total, fileName) {
-    totalPageCount = total;
-    currentPageNum = 0;
-    isPdfMode = true;
-    currentFileName = fileName || 'document.pdf';
-    pdfNav.style.display = 'flex';
-    totalPagesSpan.innerText = totalPageCount;
-    pageNumInput.value = 1;
-    generatePdfBtn.style.display = 'inline-block';
-    isProcessingPage = false;
-    updateNavButtons();
-};
-
-// ★ 核心修复：在图像完全加载并处理后，才解锁翻页按钮
-window.onPageRendered = function(base64, pageNum, total) {
-    if (total !== totalPageCount) {
-        totalPageCount = total;
-        totalPagesSpan.innerText = totalPageCount;
-    }
-    currentPageNum = pageNum;
-    pageNumInput.value = pageNum + 1;
-    updateNavButtons(); // 按钮仍然禁用（isProcessingPage 仍为 true）
-
+// ────── 本地翻页核心 ──────
+function showImage(index) {
+    if (imagePaths.length === 0) return;
+    if (index < 0 || index >= imagePaths.length) return;
+    currentIndex = index;
     const img = new Image();
     img.onload = () => {
         originalImage = img;
         fitImageToCanvas();
         processImage();
-        // 所有处理完成后释放锁
-        isProcessingPage = false;
-        updateNavButtons();
+        updatePageNav();
     };
-    img.onerror = () => {
-        // 即使加载失败也要释放锁，避免界面死锁
-        isProcessingPage = false;
-        updateNavButtons();
-        alert('页面渲染失败，请重试');
-    };
-    img.src = 'data:image/png;base64,' + base64;
-};
-    // 在 window.onPageRendered 后面添加
-window.onPageRenderError = function() {
-    isProcessingPage = false;
-    updateNavButtons();
-    alert('页面渲染失败，请重试');
-
-};
-
-// ────── 翻页请求 ──────
-function requestPage(pageNum) {
-    if (!isPdfMode || isProcessingPage || pageNum < 0 || pageNum >= totalPageCount) return;
-    isProcessingPage = true;
-    updateNavButtons();
-    Android.goToPage(pageNum);
+    img.onerror = () => alert('图片加载失败: ' + imagePaths[index]);
+    img.src = 'file://' + imagePaths[index];
 }
 
-prevPageBtn.onclick = () => requestPage(currentPageNum - 1);
-nextPageBtn.onclick = () => requestPage(currentPageNum + 1);
-
-// 修正页码输入事件，避免循环触发
-pageNumInput.addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-        const num = parseInt(this.value) - 1;
-        if (isNaN(num) || num < 0 || num >= totalPageCount) {
-            this.value = currentPageNum + 1;
-        } else {
-            requestPage(num);
-        }
-    }
-});
-pageNumInput.addEventListener('blur', function() {
-    const num = parseInt(this.value) - 1;
-    if (isNaN(num) || num < 0 || num >= totalPageCount) {
-        this.value = currentPageNum + 1;
+function updatePageNav() {
+    if (imagePaths.length > 1) {
+        pdfNav.style.display = 'flex';
+        totalPagesSpan.innerText = imagePaths.length;
+        pageNumInput.value = currentIndex + 1;
+        prevPageBtn.disabled = (currentIndex <= 0);
+        nextPageBtn.disabled = (currentIndex >= imagePaths.length - 1);
+        generatePdfBtn.style.display = 'inline-block';
     } else {
-        requestPage(num);
+        pdfNav.style.display = 'none';
     }
-});
-
-function updateNavButtons() {
-    prevPageBtn.disabled = isProcessingPage || currentPageNum <= 0;
-    nextPageBtn.disabled = isProcessingPage || currentPageNum >= totalPageCount - 1;
-    pageNumInput.value = currentPageNum + 1;
 }
 
-// ────── 裁切算法（与之前一致，此处省略重复，确保包含完整函数） ──────
-// 请将 removeBackground, detectMiddleFrameLine, processImage, drawProjectionPlot 完整复制在此
-// 为了保证代码完整性，此处写出它们：
+// 原生回调：批量图片
+window.onImageBatch = function(jsonPaths) {
+    try {
+        imagePaths = JSON.parse(jsonPaths);
+    } catch(e) {
+        imagePaths = [];
+    }
+    currentFileName = '批量图片';
+    showImage(0);
+};
 
+// 原生回调：PDF批量渲染完成
+window.onPdfBatch = function(jsonPaths, fileName, total) {
+    try {
+        imagePaths = JSON.parse(jsonPaths);
+    } catch(e) {
+        imagePaths = [];
+    }
+    currentFileName = fileName;
+    showImage(0);
+};
+
+// 翻页按钮事件
+prevPageBtn.onclick = () => showImage(currentIndex - 1);
+nextPageBtn.onclick = () => showImage(currentIndex + 1);
+pageNumInput.onchange = function() {
+    const num = parseInt(this.value) - 1;
+    if (!isNaN(num) && num >= 0 && num < imagePaths.length) showImage(num);
+    else this.value = currentIndex + 1;
+};
+
+// ────── 完整裁切算法 ──────
 function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     const { data, width, height } = imageData;
     const edgePixels = [];
@@ -605,31 +564,25 @@ document.getElementById('saveBtn').onclick = () => {
     }
 };
 
-// ────── 生成裁切PDF（逐页请求原生渲染） ──────
+// ────── 导出裁切PDF（遍历所有预存页） ──────
 document.getElementById('generatePdfBtn').onclick = async () => {
-    if (!isPdfMode) { alert('请先上传PDF'); return; }
+    if (imagePaths.length === 0) { alert('没有可导出的图片'); return; }
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'pt', compress: false });
+    const params = getCurrentParams();
     const progressContainer = document.getElementById('progressContainer');
     const progressFill = document.getElementById('progressFill');
     const progressText = document.getElementById('progressText');
     progressContainer.style.display = 'flex';
     generatePdfBtn.disabled = true;
+
     try {
-        const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF({ unit: 'pt', compress: false });
-        const params = getCurrentParams();
-        for (let i = 0; i < totalPageCount; i++) {
-            const pageBase64 = await new Promise(resolve => {
-                const origHandler = window.onPageRendered;
-                window.onPageRendered = (b64, pageNum, total) => {
-                    window.onPageRendered = origHandler;
-                    resolve(b64);
-                };
-                Android.goToPage(i);
-            });
-            const img = await new Promise(resolve => {
-                const img = new Image();
-                img.onload = () => resolve(img);
-                img.src = 'data:image/png;base64,' + pageBase64;
+        for (let i = 0; i < imagePaths.length; i++) {
+            const img = await new Promise((resolve, reject) => {
+                const image = new Image();
+                image.onload = () => resolve(image);
+                image.onerror = () => reject(new Error('图片加载失败: ' + imagePaths[i]));
+                image.src = 'file://' + imagePaths[i];
             });
             const canvas = document.createElement('canvas');
             canvas.width = img.width; canvas.height = img.height;
@@ -637,6 +590,7 @@ document.getElementById('generatePdfBtn').onclick = async () => {
             ctx.drawImage(img, 0, 0);
             const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
+            // 裁切算法
             const gray = new Float32Array(canvas.width * canvas.height);
             for (let j = 0; j < gray.length; j++) {
                 const r = imgData.data[j*4], g = imgData.data[j*4+1], b = imgData.data[j*4+2];
@@ -689,15 +643,14 @@ document.getElementById('generatePdfBtn').onclick = async () => {
             pdf.internal.pageSize.setHeight(canvas.height);
             pdf.addImage(cropCanvas.toDataURL('image/png'), 'PNG', 0, 0, cropW, canvas.height);
 
-            const pct = Math.round((i+1)/totalPageCount * 100);
+            const pct = Math.round((i+1)/imagePaths.length * 100);
             progressFill.style.width = pct + '%';
             progressText.innerText = pct + '%';
         }
         const pdfBase64 = pdf.output('datauristring').split(',')[1];
-        Android.saveFile(pdfBase64, currentFileName.replace('.pdf', '') + '_天朗.pdf');
-        requestPage(currentPageNum);
+        Android.saveFile(pdfBase64, currentFileName.replace(/\.[^.]+$/, '') + '_天朗.pdf');
     } catch (e) {
-        alert('生成PDF出错: ' + e.message);
+        alert('导出失败: ' + e.message);
     } finally {
         progressContainer.style.display = 'none';
         generatePdfBtn.disabled = false;
@@ -722,3 +675,4 @@ document.getElementById('resetBtn').onclick = () => {
 </script>
 </body>
 </html>
+```
