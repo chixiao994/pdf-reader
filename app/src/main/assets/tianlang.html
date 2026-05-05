@@ -98,7 +98,7 @@
             <h3>🌤️ 堆叠切除</h3>
             <div class="mode-group" style="margin-bottom:10px;">
                 <span style="font-weight:500;">策略：</span>
-                <label><input type="radio" name="pageMode" value="auto-single" checked> 自动单侧</label>
+                <label><input type="radio" name="pageMode" value="auto-single" checked> 自动检测</label>
                 <label><input type="radio" name="pageMode" value="left-only"> 指定左</label>
                 <label><input type="radio" name="pageMode" value="right-only"> 指定右</label>
                 <label><input type="radio" name="pageMode" value="combined"> 📖 合拟面</label>
@@ -287,7 +287,7 @@ pageNumInput.onchange = function() {
     else this.value = currentIndex + 1;
 };
 
-// ────── 背景切除算法 ──────
+// ────── 背景切除算法（保持不变） ──────
 function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     const { data, width, height } = imageData;
     const edgePixels = [];
@@ -443,7 +443,7 @@ function detectMiddleFrameLine(imgData, startX, endX) {
     return bestX;
 }
 
-// ────── 综合处理（包含左右独立显示逻辑） ──────
+// ────── 综合处理（左右独立显示逻辑改进） ──────
 function processAll() {
     if (!originalImage || !imageDataCache) return;
     originalCtx.putImageData(imageDataCache, 0, 0);
@@ -489,28 +489,30 @@ function processAll() {
     });
     originalCtx.setLineDash([]);
 
-    // 4. 生成左右结果并控制显示
+    // 4. 生成左右结果并控制显示（改进版）
     const w = bgWorkData.width, h = bgWorkData.height;
     let showLeft = false, showRight = false;
 
-    // 根据模式和切割线决定哪一侧有效
+    // 判断显示逻辑
     if (stackParams.mode === 'combined' && bindLine !== null && leftCut !== null && rightCut !== null) {
         showLeft = showRight = true;
     } else if (stackParams.mode === 'left-only' && leftCut !== null) {
-        showLeft = true; showRight = false;
+        showLeft = true;
     } else if (stackParams.mode === 'right-only' && rightCut !== null) {
-        showLeft = false; showRight = true;
+        showRight = true;
     } else if (stackParams.mode === 'auto-single') {
-        showLeft = (leftCut !== null);
-        showRight = (rightCut !== null);
+        showLeft = leftCut !== null;
+        showRight = rightCut !== null;
+        if (!showLeft && !showRight) { // 如果都没有检测到，默认显示整个左侧
+            showLeft = true;
+            showRight = false;
+        }
     }
 
-    // 如果两侧都不显示（例如 auto-single 都没有检测到切割），默认显示左侧整个图
-    if (!showLeft && !showRight) {
-        showLeft = true;
-        leftStackCtx.putImageData(bgWorkData, 0, 0);
-        leftStackCanvas.width = w; leftStackCanvas.height = h;
-    }
+    // 清空画布
+    leftStackCtx.clearRect(0, 0, leftStackCanvas.width, leftStackCanvas.height);
+    rightStackCtx.clearRect(0, 0, rightStackCanvas.width, rightStackCanvas.height);
+    leftStackCanvas.width = 0; rightStackCanvas.width = 0;
 
     // 绘制左侧画布
     if (showLeft) {
@@ -548,16 +550,16 @@ function processAll() {
         rightStackContainer.style.display = 'none';
     }
 
-    // 当只有一侧显示时，让该容器占据全宽以便居中
-    if (showLeft && !showRight) {
-        leftStackContainer.style.width = '100%';
-        rightStackContainer.style.width = '0%';
-    } else if (!showLeft && showRight) {
-        rightStackContainer.style.width = '100%';
-        leftStackContainer.style.width = '0%';
-    } else {
+    // 动态调整容器宽度，实现居中
+    if (showLeft && showRight) {
         leftStackContainer.style.width = '48%';
         rightStackContainer.style.width = '48%';
+    } else if (showLeft) {
+        leftStackContainer.style.width = '100%';
+        rightStackContainer.style.width = '0';
+    } else if (showRight) {
+        rightStackContainer.style.width = '100%';
+        leftStackContainer.style.width = '0';
     }
 
     document.getElementById('leftCut').innerText = leftCut !== null ? leftCut.toFixed(1) : '无';
@@ -577,7 +579,7 @@ function saveCanvas(canvas, suffix) {
 document.getElementById('saveLeftBtn').onclick = () => saveCanvas(leftStackCanvas, '左半');
 document.getElementById('saveRightBtn').onclick = () => saveCanvas(rightStackCanvas, '右半');
 
-// ────── 导出PDF（同前，略加简化） ──────
+// ────── 导出PDF（保持） ──────
 document.getElementById('generatePdfBtn').onclick = async () => {
     if (imagePaths.length === 0) { Android.showToast('没有图片'); return; }
     exportProgress.style.display = 'flex';
