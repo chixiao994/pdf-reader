@@ -340,7 +340,7 @@ function drawProjectionPlot(proj, width, leftCut, rightCut, bindLine) {
     document.getElementById('projectionPlot').style.display = 'block';
 }
 
-// ---------- 核心处理流程 ----------
+// ---------- 核心处理流程（全尺寸图像） ----------
 function processAll() {
     if (!originalImage) return;
     const fullCanvas = document.createElement('canvas');
@@ -397,7 +397,7 @@ function processAll() {
     bgResultCtx.drawImage(bgPreviewCanvas, 0, 0, bgPreviewW, bgPreviewH);
     document.getElementById('bgNote').innerText = cropRegion ? '背景切除成功' : '无背景切除';
 
-    // 全尺寸左右结果存储
+    // 全尺寸左右结果存储（用于保存）
     const bgCanvas = document.createElement('canvas'); bgCanvas.width = w; bgCanvas.height = h;
     const bgCtx = bgCanvas.getContext('2d'); bgCtx.putImageData(bgWorkData, 0, 0);
 
@@ -494,7 +494,6 @@ document.getElementById('generatePdfBtn').onclick = async () => {
     }
 };
 
-// 滑块/模式变动自动刷新
 [bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider, contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider]
     .forEach(el => el.addEventListener('input', () => { updateSliderLabels(); processAll(); }));
 document.querySelectorAll('input[name="pageMode"]').forEach(r => r.addEventListener('change', processAll));
