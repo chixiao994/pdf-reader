@@ -6,28 +6,28 @@
     <title>天朗·堆叠切除</title>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family:'Segoe UI','Noto Serif SC',serif; background:#f5f0e8; color:#3e2c1b; padding:15px; }
+        body { font-family:'Segoe UI','Noto Serif SC',serif; background:#f5f0e8; color:#3e2c1b; padding:15px; transition: background 0.3s, color 0.3s; }
         .container { max-width:1500px; margin:0 auto; }
-        h1 { text-align:center; font-size:2.2em; font-weight:400; color:#5d3e1f; }
-        .subtitle { text-align:center; font-style:italic; margin-bottom:20px; color:#7a5a3a; }
+        h1 { text-align:center; font-size:2.2em; font-weight:400; color:#5d3e1f; transition: color 0.3s; }
+        .subtitle { text-align:center; font-style:italic; margin-bottom:20px; color:#7a5a3a; transition: color 0.3s; }
         .main-panel { display:flex; gap:15px; flex-wrap:wrap; justify-content:center; }
-        .canvas-panel { background:#fff7ed; border:1px solid #d6b89b; border-radius:16px; padding:15px; box-shadow:0 4px 12px rgba(0,0,0,0.05); flex:1 1 350px; display:flex; flex-direction:column; align-items:center; }
-        .canvas-panel h3 { margin-bottom:10px; font-weight:400; border-bottom:1px solid #d6b89b; padding-bottom:5px; width:100%; text-align:center; }
+        .canvas-panel { background:#fff7ed; border:1px solid #d6b89b; border-radius:16px; padding:15px; box-shadow:0 4px 12px rgba(0,0,0,0.05); flex:1 1 350px; display:flex; flex-direction:column; align-items:center; transition: background 0.3s, border-color 0.3s, box-shadow 0.3s; }
+        .canvas-panel h3 { margin-bottom:10px; font-weight:400; border-bottom:1px solid #d6b89b; padding-bottom:5px; width:100%; text-align:center; transition: border-color 0.3s, color 0.3s; }
         canvas { max-width:100%; border:1px solid #aaa; border-radius:8px; background:#fff; }
-        .controls { background:#fff7ed; border:1px solid #d6b89b; border-radius:16px; padding:20px; margin-top:20px; box-shadow:0 4px 12px rgba(0,0,0,0.05); }
+        .controls { background:#fff7ed; border:1px solid #d6b89b; border-radius:16px; padding:20px; margin-top:20px; box-shadow:0 4px 12px rgba(0,0,0,0.05); transition: background 0.3s, border-color 0.3s; }
         .control-row { display:flex; flex-wrap:wrap; gap:15px; align-items:center; margin-bottom:15px; }
         .control-item { display:flex; align-items:center; gap:8px; }
         label { font-weight:500; }
         input[type="range"] { width:150px; }
-        .button { background:#9b7653; border:none; color:white; padding:10px 25px; border-radius:30px; font-size:1em; cursor:pointer; white-space:nowrap; }
+        .button { background:#9b7653; border:none; color:white; padding:10px 25px; border-radius:30px; font-size:1em; cursor:pointer; white-space:nowrap; transition: background 0.3s; }
         .button:disabled { background:#aaa; cursor:not-allowed; }
         .upload-btn { background:#5d4a3a; }
         .save-btn { background:#2d6a4f; }
-        .mode-group { display:flex; flex-wrap:wrap; gap:12px; background:#ede0ce; padding:8px 15px; border-radius:30px; align-items:center; }
+        .mode-group { display:flex; flex-wrap:wrap; gap:12px; background:#ede0ce; padding:8px 15px; border-radius:30px; align-items:center; transition: background 0.3s; }
         .mode-group label { display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.9em; }
-        .cut-line-info { display:flex; gap:20px; font-family:monospace; margin-top:10px; flex-wrap:wrap; justify-content:center; }
-        .projection-plot { width:100%; height:120px; background:#faf6f0; border:1px solid #d6b89b; border-radius:8px; margin-top:10px; }
-        .note { margin-top:10px; font-size:0.8em; color:#8b6b4f; }
+        .cut-line-info { display:flex; gap:20px; font-family:monospace; margin-top:10px; flex-wrap:wrap; justify-content:center; transition: color 0.3s; }
+        .projection-plot { width:100%; height:120px; background:#faf6f0; border:1px solid #d6b89b; border-radius:8px; margin-top:10px; transition: background 0.3s, border-color 0.3s; }
+        .note { margin-top:10px; font-size:0.8em; color:#8b6b4f; transition: color 0.3s; }
         .pdf-page-nav { display:flex; align-items:center; gap:10px; margin-left:auto; }
         .pdf-page-nav input { width:60px; text-align:center; border:1px solid #d6b89b; border-radius:8px; padding:4px; }
         .progress-bar { width:150px; height:20px; background:#ddd; border-radius:10px; overflow:hidden; margin-left:10px; }
@@ -36,6 +36,22 @@
         .half-canvas-wrapper { display:flex; gap:10px; width:100%; justify-content:center; }
         .half-canvas-wrapper canvas { width:48%; }
         .off-note { color:#b22222; font-size:0.8em; margin-left:5px; display:none; }
+        /* 夜间模式 */
+        body.dark-mode { background:#2b241b; color:#d4c5b2; }
+        body.dark-mode .controls,
+        body.dark-mode .canvas-panel { background:#3e3529; border-color:#6b5843; box-shadow:0 4px 12px rgba(0,0,0,0.3); }
+        body.dark-mode .canvas-panel h3 { border-bottom-color:#6b5843; color:#e0d6c4; }
+        body.dark-mode .mode-group { background:#4a3f30; }
+        body.dark-mode .button { background:#7a6548; }
+        body.dark-mode .button:disabled { background:#5a5040; }
+        body.dark-mode .upload-btn { background:#4a3b2f; }
+        body.dark-mode .save-btn { background:#3d5a3e; }
+        body.dark-mode h1 { color:#e0d6c4; }
+        body.dark-mode .subtitle { color:#c4b393; }
+        body.dark-mode .note { color:#b8a58b; }
+        body.dark-mode .cut-line-info { color:#cdbda4; }
+        body.dark-mode .projection-plot { background:#3e3529; border-color:#6b5843; }
+        body.dark-mode .off-note { color:#ff9080; }
         @media(max-width:800px) { .main-panel { flex-direction:column; } .half-canvas-wrapper { flex-direction:column; } .half-canvas-wrapper canvas { width:100%; } }
     </style>
 </head>
@@ -48,6 +64,7 @@
         <div class="control-row">
             <button class="button upload-btn" onclick="Android.pickFile('image')">📁 上传图片</button>
             <button class="button upload-btn" onclick="Android.pickFile('pdf')">📄 上传PDF</button>
+            <button class="button upload-btn" id="darkModeBtn" onclick="toggleDarkMode()" title="切换夜间模式">🌙</button>
             <div class="pdf-page-nav" id="pdfNav" style="display:none;">
                 <button class="button" id="prevPageBtn">◀</button>
                 <span>第 <input type="number" id="pageNumInput" value="1" min="1"> / <span id="totalPages">1</span> 页</span>
@@ -77,9 +94,9 @@
             <h3>🧹 背景切除</h3>
             <div style="display:flex; flex-direction:column; align-items:center; width:100%;">
                 <div class="control-item"><label>背景容差：</label><input type="range" id="bgTolSlider" min="0" max="50" value="15"><span id="bgTolValue">15</span><span id="bgOffNote" class="off-note">背景切除已关闭</span></div>
-                <div class="control-item"><label>左右边距：</label><input type="range" id="lrMarginSlider" min="-200" max="50" value="0"><span id="lrMarginValue">0</span> px</div>
-                <div class="control-item"><label>上边距：</label><input type="range" id="topMarginSlider" min="-200" max="50" value="0"><span id="topMarginValue">0</span> px</div>
-                <div class="control-item"><label>下边距：</label><input type="range" id="bottomMarginSlider" min="-200" max="50" value="0"><span id="bottomMarginValue">0</span> px</div>
+                <div class="control-item"><label>左右边距：</label><input type="range" id="lrMarginSlider" min="-50" max="50" value="0"><span id="lrMarginValue">0</span> px</div>
+                <div class="control-item"><label>上边距：</label><input type="range" id="topMarginSlider" min="-50" max="50" value="0"><span id="topMarginValue">0</span> px</div>
+                <div class="control-item"><label>下边距：</label><input type="range" id="bottomMarginSlider" min="-50" max="50" value="0"><span id="bottomMarginValue">0</span> px</div>
             </div>
             <canvas id="bgResultCanvas"></canvas>
             <div class="note" id="bgNote">背景切除结果</div>
@@ -120,22 +137,21 @@
 </div>
 
 <script>
-// ────── 全局引用与默认参数 ──────
+// ── 全局状态 ──
 const DEFAULT_PARAMS = {
     bgTol: 15, lrMargin: 0, topMargin: 0, bottomMargin: 0,
     contrast: 1.8, thresh: 90, leftSensitivity: 0.35, rightSensitivity: 0.35,
     mode: 'auto-single'
 };
-
 let imagePaths = [];
-let pageParams = [];  // 每页定制参数，null表示使用默认
+let pageParams = [];                // 每页定制参数，null表示使用默认
 let currentIndex = 0;
 let originalImage = null;
 let currentFileName = '未命名';
 let lastComputedResult = null;
 const PREVIEW_MAX_WIDTH = 1200;
 
-// ────── DOM 元素 ──────
+// ── DOM 引用 ──
 const bgTolSlider = document.getElementById('bgTolSlider');
 const lrMarginSlider = document.getElementById('lrMarginSlider');
 const topMarginSlider = document.getElementById('topMarginSlider');
@@ -180,7 +196,7 @@ const exportProgressText = document.getElementById('exportProgressText');
 const bgOffNote = document.getElementById('bgOffNote');
 const contrastOffNote = document.getElementById('contrastOffNote');
 
-// ────── 辅助函数 ──────
+// ── 工具函数 ──
 function getBgParams() {
     return { bgTol: +bgTolSlider.value, lrMargin: +lrMarginSlider.value, topMargin: +topMarginSlider.value, bottomMargin: +bottomMarginSlider.value };
 }
@@ -200,7 +216,6 @@ function updateSliderLabels() {
     thresholdValue.innerText = thresholdSlider.value;
     leftSensitivityValue.innerText = leftSensitivitySlider.value;
     rightSensitivityValue.innerText = rightSensitivitySlider.value;
-
     bgOffNote.style.display = (bgTolSlider.value == 0) ? 'inline' : 'none';
     contrastOffNote.style.display = (contrastSlider.value == 0) ? 'inline' : 'none';
 }
@@ -217,7 +232,6 @@ function loadPageParams(index) {
     thresholdSlider.value = params.thresh;
     leftSensitivitySlider.value = params.leftSensitivity;
     rightSensitivitySlider.value = params.rightSensitivity;
-
     const modeRadio = document.querySelector(`input[name="pageMode"][value="${params.mode}"]`);
     if (modeRadio) modeRadio.checked = true;
     updateSliderLabels();
@@ -226,7 +240,7 @@ function getParamsForPage(index) {
     return pageParams[index] || DEFAULT_PARAMS;
 }
 
-// ────── 图片加载 ──────
+// ── 图片加载与页数管理 ──
 function showImage(index) {
     if (imagePaths.length === 0) return;
     if (index < 0 || index >= imagePaths.length) return;
@@ -245,6 +259,7 @@ function updatePageNav() {
     if (imagePaths.length > 1) {
         pdfNav.style.display = 'flex';
         totalPagesSpan.innerText = imagePaths.length;
+        pageNumInput.max = imagePaths.length;
         pageNumInput.value = currentIndex + 1;
         prevPageBtn.disabled = (currentIndex <= 0);
         nextPageBtn.disabled = (currentIndex >= imagePaths.length - 1);
@@ -255,21 +270,52 @@ function updatePageNav() {
 }
 
 window.onImageBatch = function(jsonPaths) {
-    try { imagePaths = JSON.parse(jsonPaths); } catch(e) { imagePaths = []; }
-    currentFileName = '批量图片';
-    pageParams = new Array(imagePaths.length).fill(null);
-    showImage(0);
+    try {
+        const parsed = JSON.parse(jsonPaths);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+            imagePaths = parsed;
+            currentFileName = '批量图片';
+            pageParams = new Array(imagePaths.length).fill(null);
+            pageNumInput.max = imagePaths.length;
+            showImage(0);
+        } else {
+            Android.showToast('图片列表解析异常');
+            imagePaths = [];
+        }
+    } catch(e) {
+        Android.showToast('图片数据解析失败: ' + e.message);
+        imagePaths = [];
+    }
 };
 window.onPdfBatch = function(jsonPaths, fileName) {
-    try { imagePaths = JSON.parse(jsonPaths); } catch(e) { imagePaths = []; }
-    currentFileName = fileName;
-    pageParams = new Array(imagePaths.length).fill(null);
-    showImage(0);
+    try {
+        const parsed = JSON.parse(jsonPaths);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+            imagePaths = parsed;
+            currentFileName = fileName || 'PDF';
+            pageParams = new Array(imagePaths.length).fill(null);
+            pageNumInput.max = imagePaths.length;
+            showImage(0);
+        } else {
+            Android.showToast('PDF 解析异常：未获得有效页路径');
+            imagePaths = [];
+        }
+    } catch(e) {
+        Android.showToast('PDF 数据解析失败: ' + e.message);
+        imagePaths = [];
+    }
 };
 window.onPdfRenderProgress = function(pageNum, total) {
-    if (total > 0) { pdfRenderProgress.style.display = 'flex'; pdfRenderFill.style.width = Math.round((pageNum/total)*100)+'%'; pdfRenderText.innerText = Math.round((pageNum/total)*100)+'%'; }
+    if (total > 0) {
+        pdfRenderProgress.style.display = 'flex';
+        pdfRenderFill.style.width = Math.round((pageNum/total)*100)+'%';
+        pdfRenderText.innerText = Math.round((pageNum/total)*100)+'%';
+    }
 };
-window.hidePdfRenderProgress = function() { pdfRenderProgress.style.display = 'none'; pdfRenderFill.style.width = '0%'; };
+window.hidePdfRenderProgress = function() {
+    pdfRenderProgress.style.display = 'none';
+    pdfRenderFill.style.width = '0%';
+};
 
 prevPageBtn.onclick = () => showImage(currentIndex - 1);
 nextPageBtn.onclick = () => showImage(currentIndex + 1);
@@ -279,7 +325,7 @@ pageNumInput.onchange = function() {
     else this.value = currentIndex + 1;
 };
 
-// ────── 算法：背景切除 ──────
+// ── 背景切除算法 ──
 function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     const { data, width, height } = imageData;
     const edgePixels = []; const ew = 2;
@@ -332,7 +378,7 @@ function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     return { left, top, width: right-left+1, height: bottom-top+1 };
 }
 
-// ────── 算法：堆叠检测与装订线（投影法） ──────
+// ── 堆叠检测与装订线（投影法） ──
 function findLeftCut(proj, w, th) {
     let start = -1; for (let x = 0; x < w*0.4; x++) if (proj[x] > th) { start = x; break; }
     if (start === -1) return null;
@@ -424,7 +470,7 @@ function processImageWithParams(imageData, params) {
     return { leftCut, rightCut, bindLine, proj };
 }
 
-// ────── 核心预览与计算 ──────
+// ── 核心预览计算 ──
 function processAll() {
     if (!originalImage) return;
     const origW = originalImage.width, origH = originalImage.height;
@@ -483,7 +529,7 @@ function processAll() {
         mode: stackParams.mode
     };
 
-    // 绘制原图及标注
+    // 原图标注
     originalCanvas.width = prevW; originalCanvas.height = prevH;
     originalCtx.drawImage(originalImage, 0, 0, prevW, prevH);
     if (!bgOff && cropRegion) {
@@ -542,7 +588,7 @@ function processAll() {
     const hasRight = (rightCut !== null);
     document.getElementById('saveLeftBtn').disabled = !hasLeft || stackOff;
     document.getElementById('saveRightBtn').disabled = !hasRight || stackOff;
-    document.getElementById('saveBgBtn').disabled = false; // 去背景保存始终可用
+    document.getElementById('saveBgBtn').disabled = false;
 
     // 信息显示
     let pageType = '未知';
@@ -583,7 +629,7 @@ function drawProjectionPlot(proj, width, leftCut, rightCut, bindLine) {
     document.getElementById('projectionPlot').style.display = 'block';
 }
 
-// ────── 保存功能 ──────
+// ── 保存功能 ──
 function saveFullSize(suffix) {
     if (!originalImage || !lastComputedResult) return;
     const res = lastComputedResult;
@@ -670,7 +716,7 @@ document.getElementById('saveLeftBtn').onclick = () => saveFullSize('z');
 document.getElementById('saveRightBtn').onclick = () => saveFullSize('y');
 document.getElementById('saveBgBtn').onclick = saveFullBg;
 
-// ────── 应用到本页 ──────
+// ── 应用到本页 ──
 document.getElementById('applyParamsBtn').onclick = function() {
     if (imagePaths.length === 0) return;
     pageParams[currentIndex] = {
@@ -687,7 +733,7 @@ document.getElementById('applyParamsBtn').onclick = function() {
     Android.showToast('参数已应用到第' + (currentIndex+1) + '页');
 };
 
-// ────── PDF导出（逐页独立参数） ──────
+// ── PDF导出（使用每页定制参数） ──
 document.getElementById('generatePdfBtn').onclick = async () => {
     if (imagePaths.length === 0) { Android.showToast('没有图片'); return; }
     Android.beginPdf(imagePaths.length, currentFileName);
@@ -776,12 +822,28 @@ document.getElementById('generatePdfBtn').onclick = async () => {
     }
 };
 
-// ────── 防抖 ──────
+// ── 防抖预览 ──
 let debounceTimer;
 const debouncedProcess = () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(processAll, 200); };
 [bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider, contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider]
     .forEach(el => el.addEventListener('input', () => { updateSliderLabels(); debouncedProcess(); }));
 document.querySelectorAll('input[name="pageMode"]').forEach(r => r.addEventListener('change', processAll));
+
+// ── 夜间模式 ──
+function toggleDarkMode() {
+    document.body.classList.toggle('dark-mode');
+    const isDark = document.body.classList.contains('dark-mode');
+    document.getElementById('darkModeBtn').innerHTML = isDark ? '☀️' : '🌙';
+    try { localStorage.setItem('tianlang-dark-mode', isDark ? '1' : '0'); } catch(e) {}
+}
+(function() {
+    try {
+        if (localStorage.getItem('tianlang-dark-mode') === '1') {
+            document.body.classList.add('dark-mode');
+            document.getElementById('darkModeBtn').innerHTML = '☀️';
+        }
+    } catch(e) {}
+})();
 </script>
 </body>
 </html>
