@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
     <title>天朗·堆叠切除</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
         body { font-family:'Segoe UI','Noto Serif SC',serif; background:#f5f0e8; color:#3e2c1b; padding:15px; }
@@ -163,17 +162,9 @@ const exportProgressText = document.getElementById('exportProgressText');
 
 let imagePaths = [];
 let currentIndex = 0;
-let originalImage = null;          // 原始全尺寸 Image 对象
+let originalImage = null;
 let currentFileName = '未命名';
-
-// ★ 关键：存储全尺寸算法结果用于保存/导出
-let fullSizeResults = {
-    bgData: null,       // 背景切除后的全尺寸 ImageData
-    leftData: null,     // 左半全尺寸 ImageData
-    rightData: null,    // 右半全尺寸 ImageData
-    width: 0,
-    height: 0
-};
+let fullSizeResults = { leftData: null, rightData: null };
 
 // ────── 参数读取 ──────
 function getBgParams() {
@@ -181,10 +172,8 @@ function getBgParams() {
 }
 function getStackParams() {
     return {
-        contrast: +contrastSlider.value,
-        thresh: +thresholdSlider.value,
-        leftSensitivity: +leftSensitivitySlider.value,
-        rightSensitivity: +rightSensitivitySlider.value,
+        contrast: +contrastSlider.value, thresh: +thresholdSlider.value,
+        leftSensitivity: +leftSensitivitySlider.value, rightSensitivity: +rightSensitivitySlider.value,
         mode: document.querySelector('input[name="pageMode"]:checked').value
     };
 }
@@ -198,21 +187,16 @@ function updateSliderLabels() {
     leftSensitivityValue.innerText = leftSensitivitySlider.value;
     rightSensitivityValue.innerText = rightSensitivitySlider.value;
 }
-[bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider,
- contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider]
+[bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider, contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider]
     .forEach(el => el.addEventListener('input', updateSliderLabels));
 
-// ────── 原始分辨率图片加载与显示 ──────
+// ────── 显示图片 ──────
 function showImage(index) {
     if (imagePaths.length === 0) return;
     if (index < 0 || index >= imagePaths.length) return;
     currentIndex = index;
     const img = new Image();
-    img.onload = () => {
-        originalImage = img; // 保持原始分辨率
-        processAll();
-        updatePageNav();
-    };
+    img.onload = () => { originalImage = img; processAll(); updatePageNav(); };
     img.onerror = () => alert('图片加载失败');
     img.src = 'file://' + imagePaths[index];
 }
@@ -229,17 +213,8 @@ function updatePageNav() {
     }
 }
 
-// 原生回调
-window.onImageBatch = function(jsonPaths) {
-    try { imagePaths = JSON.parse(jsonPaths); } catch(e) { imagePaths = []; }
-    currentFileName = '批量图片';
-    showImage(0);
-};
-window.onPdfBatch = function(jsonPaths, fileName) {
-    try { imagePaths = JSON.parse(jsonPaths); } catch(e) { imagePaths = []; }
-    currentFileName = fileName;
-    showImage(0);
-};
+window.onImageBatch = function(jsonPaths) { try { imagePaths = JSON.parse(jsonPaths); } catch(e) { imagePaths = []; } currentFileName = '批量图片'; showImage(0); };
+window.onPdfBatch = function(jsonPaths, fileName) { try { imagePaths = JSON.parse(jsonPaths); } catch(e) { imagePaths = []; } currentFileName = fileName; showImage(0); };
 window.onPdfRenderProgress = function(pageNum, total) {
     if (total > 0) {
         pdfRenderProgress.style.display = 'flex';
@@ -248,10 +223,7 @@ window.onPdfRenderProgress = function(pageNum, total) {
         pdfRenderText.innerText = pct + '%';
     }
 };
-window.hidePdfRenderProgress = function() {
-    pdfRenderProgress.style.display = 'none';
-    pdfRenderFill.style.width = '0%';
-};
+window.hidePdfRenderProgress = function() { pdfRenderProgress.style.display = 'none'; pdfRenderFill.style.width = '0%'; };
 
 prevPageBtn.onclick = () => showImage(currentIndex - 1);
 nextPageBtn.onclick = () => showImage(currentIndex + 1);
@@ -261,7 +233,7 @@ pageNumInput.onchange = function() {
     else this.value = currentIndex + 1;
 };
 
-// ────── 背景切除算法（全尺寸） ──────
+// ────── 背景切除算法 ──────
 function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     const { data, width, height } = imageData;
     const edgePixels = []; const ew = 2;
@@ -383,11 +355,10 @@ function drawProjectionPlot(proj, width, leftCut, rightCut, bindLine) {
     document.getElementById('projectionPlot').style.display = 'block';
 }
 
-// ★ 核心处理：使用全尺寸图像，仅预览缩放
+// ────── 综合处理流程（全尺寸图像，仅预览缩放） ──────
 function processAll() {
     if (!originalImage) return;
     
-    // 1. 从全尺寸图像获取原始像素数据
     const fullCanvas = document.createElement('canvas');
     fullCanvas.width = originalImage.width;
     fullCanvas.height = originalImage.height;
@@ -397,14 +368,12 @@ function processAll() {
 
     const bgParams = getBgParams(), stackParams = getStackParams();
 
-    // 2. 背景切除（全尺寸）
     let cropRegion = null;
     if (bgParams.bgTol > 0)
         cropRegion = removeBackground(fullImgData, bgParams.bgTol, bgParams.lrMargin, bgParams.topMargin, bgParams.bottomMargin);
 
     let bgWorkData;
     if (cropRegion) {
-        // 从全尺寸画布提取背景切除后的区域
         const cropCanvas = document.createElement('canvas');
         cropCanvas.width = cropRegion.width;
         cropCanvas.height = cropRegion.height;
@@ -416,26 +385,19 @@ function processAll() {
         cropRegion = { left: 0, top: 0, width: fullImgData.width, height: fullImgData.height };
     }
 
-    // 3. 存储全尺寸背景切除结果
-    fullSizeResults.bgData = bgWorkData;
-    fullSizeResults.width = bgWorkData.width;
-    fullSizeResults.height = bgWorkData.height;
-
-    // 4. 堆叠检测（全尺寸）
     const { leftCut, rightCut, bindLine, proj } = processImageWithParams(bgWorkData, stackParams);
     const w = bgWorkData.width, h = bgWorkData.height;
 
-    // 5. 预览显示：将全尺寸图像缩放到预览画布
+    // 预览缩放
     const previewScale = Math.min(500 / w, 500 / h, 1);
     
-    // 原图预览（缩放后绘制标注）
+    // 原图预览
     const previewOriginalW = originalImage.width * previewScale;
     const previewOriginalH = originalImage.height * previewScale;
     originalCanvas.width = previewOriginalW;
     originalCanvas.height = previewOriginalH;
     originalCtx.drawImage(originalImage, 0, 0, previewOriginalW, previewOriginalH);
     
-    // 在原图预览上绘制标注
     if (cropRegion) {
         originalCtx.strokeStyle = '#2d6a4f'; originalCtx.lineWidth = 2;
         originalCtx.setLineDash([4,4]);
@@ -461,30 +423,29 @@ function processAll() {
     originalCtx.setLineDash([]);
 
     // 背景切除预览
-    const bgPreviewW = w * previewScale;
-    const bgPreviewH = h * previewScale;
-    bgResultCanvas.width = bgPreviewW;
-    bgResultCanvas.height = bgPreviewH;
     const bgPreviewCanvas = document.createElement('canvas');
     bgPreviewCanvas.width = w;
     bgPreviewCanvas.height = h;
     bgPreviewCanvas.getContext('2d').putImageData(bgWorkData, 0, 0);
+    const bgPreviewW = w * previewScale;
+    const bgPreviewH = h * previewScale;
+    bgResultCanvas.width = bgPreviewW;
+    bgResultCanvas.height = bgPreviewH;
     bgResultCtx.drawImage(bgPreviewCanvas, 0, 0, bgPreviewW, bgPreviewH);
     document.getElementById('bgNote').innerText = cropRegion ? '背景切除成功' : '无背景切除';
 
-    // 6. 生成全尺寸左右图像（用于保存/导出）
+    // 全尺寸左右图像存储
     const bgCanvas = document.createElement('canvas');
     bgCanvas.width = w;
     bgCanvas.height = h;
     const bgCtx = bgCanvas.getContext('2d');
     bgCtx.putImageData(bgWorkData, 0, 0);
 
-    // 左半（全尺寸）
+    // 左半
     if (leftCut !== null && stackParams.mode !== 'right-only') {
         let lw = bindLine ? bindLine - leftCut : (rightCut || w) - leftCut;
         if (lw > 0) {
             fullSizeResults.leftData = bgCtx.getImageData(leftCut, 0, lw, h);
-            // 预览
             const leftPreviewW = lw * previewScale;
             leftStackCanvas.width = leftPreviewW;
             leftStackCanvas.height = bgPreviewH;
@@ -496,7 +457,7 @@ function processAll() {
         } else fullSizeResults.leftData = null;
     } else fullSizeResults.leftData = null;
 
-    // 右半（全尺寸）
+    // 右半
     if (rightCut !== null && stackParams.mode !== 'left-only') {
         let rLeft = bindLine || (leftCut || 0);
         let rw = rightCut - rLeft;
@@ -532,28 +493,32 @@ function saveCanvasFromData(imageData, suffix) {
 document.getElementById('saveLeftBtn').onclick = () => saveCanvasFromData(fullSizeResults.leftData, 'z');
 document.getElementById('saveRightBtn').onclick = () => saveCanvasFromData(fullSizeResults.rightData, 'y');
 
-// ────── 导出PDF（使用全尺寸数据） ──────
+// ★ 导出PDF改为原生生成
 document.getElementById('generatePdfBtn').onclick = async () => {
     if (imagePaths.length === 0) { Android.showToast('没有图片'); return; }
-    if (typeof window.jspdf === 'undefined') { Android.showToast('PDF库未加载'); return; }
-    const { jsPDF } = window.jspdf;
-    exportProgress.style.display = 'flex'; generatePdfBtn.disabled = true;
+    const total = imagePaths.length;
+    const bgParams = getBgParams(), stackParams = getStackParams();
+    
+    Android.beginPdf(total, currentFileName);
+    
+    exportProgress.style.display = 'flex';
+    generatePdfBtn.disabled = true;
+    
     try {
-        const pdf = new jsPDF({ unit: 'pt', compress: false });
-        const bgParams = getBgParams(), stackParams = getStackParams();
-        for (let i = 0; i < imagePaths.length; i++) {
-            const img = await new Promise((resolve) => {
-                const el = new Image(); el.onload = () => resolve(el);
-                el.onerror = () => alert('加载失败: ' + imagePaths[i]);
+        for (let i = 0; i < total; i++) {
+            const img = await new Promise((resolve, reject) => {
+                const el = new Image();
+                el.onload = () => resolve(el);
+                el.onerror = () => reject(new Error('加载失败: ' + imagePaths[i]));
                 el.src = 'file://' + imagePaths[i];
             });
+            
             const fullCanvas = document.createElement('canvas');
-            fullCanvas.width = img.width;
-            fullCanvas.height = img.height;
+            fullCanvas.width = img.width; fullCanvas.height = img.height;
             const fullCtx = fullCanvas.getContext('2d');
             fullCtx.drawImage(img, 0, 0);
             const fullImgData = fullCtx.getImageData(0, 0, fullCanvas.width, fullCanvas.height);
-
+            
             let cropRegion = null;
             if (bgParams.bgTol > 0) cropRegion = removeBackground(fullImgData, bgParams.bgTol, bgParams.lrMargin, bgParams.topMargin, bgParams.bottomMargin);
             let bgWorkData;
@@ -562,49 +527,52 @@ document.getElementById('generatePdfBtn').onclick = async () => {
                 cropCanvas.width = cropRegion.width; cropCanvas.height = cropRegion.height;
                 cropCanvas.getContext('2d').putImageData(fullImgData, -cropRegion.left, -cropRegion.top);
                 bgWorkData = cropCanvas.getContext('2d').getImageData(0, 0, cropRegion.width, cropRegion.height);
-            } else bgWorkData = fullImgData;
-
+            } else {
+                bgWorkData = fullImgData;
+            }
+            
             const { leftCut, rightCut, bindLine } = processImageWithParams(bgWorkData, stackParams);
             let l = leftCut ?? 0, r = rightCut ?? bgWorkData.width;
             if (l >= r) { l = 0; r = bgWorkData.width; }
-
+            
             const bgCanvas = document.createElement('canvas');
             bgCanvas.width = bgWorkData.width;
             bgCanvas.height = bgWorkData.height;
             const bgCtx = bgCanvas.getContext('2d');
             bgCtx.putImageData(bgWorkData, 0, 0);
-
+            
             if (stackParams.mode === 'combined' && bindLine && l < bindLine && bindLine < r) {
                 const lw = bindLine - l, rw = r - bindLine;
                 const leftCanvas = document.createElement('canvas'); leftCanvas.width = lw; leftCanvas.height = bgWorkData.height;
                 leftCanvas.getContext('2d').putImageData(bgCtx.getImageData(l, 0, lw, bgWorkData.height), 0, 0);
                 const rightCanvas = document.createElement('canvas'); rightCanvas.width = rw; rightCanvas.height = bgWorkData.height;
                 rightCanvas.getContext('2d').putImageData(bgCtx.getImageData(bindLine, 0, rw, bgWorkData.height), 0, 0);
-                if (i > 0) pdf.addPage();
-                pdf.internal.pageSize.setWidth(Math.max(lw, rw)); pdf.internal.pageSize.setHeight(bgWorkData.height*2+4);
-                pdf.addImage(leftCanvas.toDataURL('image/png'), 'PNG', 0, 0, lw, bgWorkData.height);
-                pdf.addImage(rightCanvas.toDataURL('image/png'), 'PNG', 0, bgWorkData.height+4, rw, bgWorkData.height);
+                Android.addPageToPdf(encodeURIComponent(leftCanvas.toDataURL('image/png').split(',')[1]));
+                Android.addPageToPdf(encodeURIComponent(rightCanvas.toDataURL('image/png').split(',')[1]));
             } else {
                 const cropW = r - l;
                 const cropCanvas = document.createElement('canvas'); cropCanvas.width = cropW; cropCanvas.height = bgWorkData.height;
                 cropCanvas.getContext('2d').putImageData(bgCtx.getImageData(l, 0, cropW, bgWorkData.height), 0, 0);
-                if (i > 0) pdf.addPage();
-                pdf.internal.pageSize.setWidth(cropW); pdf.internal.pageSize.setHeight(bgWorkData.height);
-                pdf.addImage(cropCanvas.toDataURL('image/png'), 'PNG', 0, 0, cropW, bgWorkData.height);
+                Android.addPageToPdf(encodeURIComponent(cropCanvas.toDataURL('image/png').split(',')[1]));
             }
-            const pct = Math.round((i+1)/imagePaths.length*100);
-            exportProgressFill.style.width = pct+'%'; exportProgressText.innerText = pct+'%';
+            
+            const pct = Math.round((i+1)/total * 100);
+            exportProgressFill.style.width = pct+'%';
+            exportProgressText.innerText = pct+'%';
         }
-        const pdfBase64 = pdf.output('datauristring').split(',')[1];
-        Android.saveFile(encodeURIComponent(pdfBase64), currentFileName.replace(/\.[^.]+$/, '') + '_天朗.pdf');
-    } catch(e) { Android.showToast('导出失败: '+e.message); } finally {
-        exportProgress.style.display = 'none'; generatePdfBtn.disabled = false;
+        
+        Android.finishPdf(currentFileName.replace(/\.[^.]+$/, '') + '_天朗.pdf');
+    } catch(e) {
+        Android.showToast('导出失败: ' + e.message);
+    } finally {
+        exportProgress.style.display = 'none';
+        generatePdfBtn.disabled = false;
+        exportProgressFill.style.width = '0%';
     }
 };
 
 // 滑块/模式自动刷新
-[bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider,
- contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider]
+[bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider, contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider]
     .forEach(el => el.addEventListener('input', () => { updateSliderLabels(); processAll(); }));
 document.querySelectorAll('input[name="pageMode"]').forEach(r => r.addEventListener('change', processAll));
 </script>
