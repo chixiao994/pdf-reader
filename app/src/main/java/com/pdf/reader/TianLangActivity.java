@@ -2,6 +2,7 @@ package com.pdf.reader;
 
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.AsyncTask;
@@ -20,6 +21,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import org.json.JSONArray;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -35,13 +37,17 @@ public class TianLangActivity extends AppCompatActivity {
     private int totalPages = 0;
     private String currentFileName = "未命名";
 
-    // 用于保存待写入的数据
+    // 保存待写入数据（通过系统文件选择器）
     private byte[] pendingSaveData;
     private String pendingSaveFileName;
 
     private static final int PICK_IMAGE = 1;
     private static final int PICK_PDF = 2;
     private static final int CREATE_FILE = 3;
+
+    // 原生 PDF 生成相关
+    private final List<byte[]> pdfPagesData = new ArrayList<>();
+    private String pdfOutputFileName = "output.pdf";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -90,16 +96,77 @@ public class TianLangActivity extends AppCompatActivity {
                 String base64 = URLDecoder.decode(safeBase64, "UTF-8");
                 pendingSaveData = Base64.decode(base64, Base64.DEFAULT);
                 pendingSaveFileName = fileName;
-
-                // 启动系统文件创建器，让用户选择保存位置
                 Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
-                intent.setType("*/*"); // 通用类型，系统会根据文件名自动识别
+                intent.setType("*/*");
                 intent.putExtra(Intent.EXTRA_TITLE, fileName);
                 startActivityForResult(intent, CREATE_FILE);
             } catch (Exception e) {
                 Log.e("TianLang", "保存准备失败", e);
                 showToast("保存失败: " + e.getMessage());
+            }
+        }
+
+        // ── 原生 PDF 生成 ──
+        @JavascriptInterface
+        public void beginPdf(int totalPages, String originalName) {
+            pdfPagesData.clear();
+            pdfOutputFileName = originalName;
+            showToast("开始生成PDF，共 " + totalPages + " 页");
+        }
+
+        @JavascriptInterface
+        public void addPageToPdf(String safeBase64) {
+            try {
+                String base64 = URLDecoder.decode(safeBase64, "UTF-8");
+                byte[] data = Base64.decode(base64, Base64.DEFAULT);
+                pdfPagesData.add(data);
+            } catch (Exception e) {
+                Log.e("TianLang", "添加PDF页面失败", e);
+            }
+        }
+
+        @JavascriptInterface
+        public void finishPdf(String fileName) {
+            if (pdfPagesData.isEmpty()) {
+                showToast("没有页面可生成PDF");
+                return;
+            }
+            try {
+                File tempFile = new File(getCacheDir(), fileName);
+                android.graphics.pdf.PdfDocument document = new android.graphics.pdf.PdfDocument();
+                for (int i = 0; i < pdfPagesData.size(); i++) {
+                    byte[] pngData = pdfPagesData.get(i);
+                    Bitmap bitmap = BitmapFactory.decodeByteArray(pngData, 0, pngData.length);
+                    if (bitmap == null) continue;
+                    android.graphics.pdf.PdfDocument.PageInfo pageInfo =
+                            new android.graphics.pdf.PdfDocument.PageInfo.Builder(
+                                    bitmap.getWidth(), bitmap.getHeight(), i).create();
+                    android.graphics.pdf.PdfDocument.Page page = document.startPage(pageInfo);
+                    page.getCanvas().drawBitmap(bitmap, 0, 0, null);
+                    document.finishPage(page);
+                    bitmap.recycle();
+                }
+                FileOutputStream fos = new FileOutputStream(tempFile);
+                document.writeTo(fos);
+                document.close();
+                fos.close();
+
+                pendingSaveData = readFileToBytes(tempFile);
+                pendingSaveFileName = fileName;
+
+                Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("application/pdf");
+                intent.putExtra(Intent.EXTRA_TITLE, fileName);
+                startActivityForResult(intent, CREATE_FILE);
+
+                showToast("PDF已生成，请选择保存位置");
+            } catch (Exception e) {
+                Log.e("TianLang", "生成PDF失败", e);
+                showToast("PDF生成失败: " + e.getMessage());
+            } finally {
+                pdfPagesData.clear();
             }
         }
     }
@@ -142,7 +209,7 @@ public class TianLangActivity extends AppCompatActivity {
         }
     }
 
-    // 其余方法保持不变...
+    // ── 图片导入 ──
     private void handleImageResult(Intent data) {
         List<Uri> uris = new ArrayList<>();
         if (data.getClipData() != null) {
@@ -179,6 +246,7 @@ public class TianLangActivity extends AppCompatActivity {
         }
     }
 
+    // ── PDF 导入并预渲染所有页面 ──
     private void handlePdfUri(Uri uri) {
         try {
             closePdf();
@@ -254,6 +322,7 @@ public class TianLangActivity extends AppCompatActivity {
         }.execute();
     }
 
+    // ── 工具方法 ──
     private String escapeJson(String json) {
         if (json == null) return "";
         return json.replace("\\", "\\\\").replace("'", "\\'");
@@ -292,6 +361,16 @@ public class TianLangActivity extends AppCompatActivity {
             try { fileDescriptor.close(); } catch (Exception e) { /* ignore */ }
             fileDescriptor = null;
         }
+    }
+
+    private byte[] readFileToBytes(File file) throws Exception {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        FileInputStream fis = new FileInputStream(file);
+        byte[] buf = new byte[4096];
+        int len;
+        while ((len = fis.read(buf)) != -1) baos.write(buf, 0, len);
+        fis.close();
+        return baos.toByteArray();
     }
 
     private void showToastSafe(final String msg) {
