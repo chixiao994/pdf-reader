@@ -62,8 +62,8 @@
 
     <div class="controls">
         <div class="control-row">
-            <button class="button upload-btn" onclick="Android.pickFile('image')">📁 上传图片</button>
-            <button class="button upload-btn" onclick="Android.pickFile('pdf')">📄 上传PDF</button>
+            <button class="button upload-btn" onclick="clearAndPick('image')">📁 上传图片</button>
+            <button class="button upload-btn" onclick="clearAndPick('pdf')">📄 上传PDF</button>
             <button class="button upload-btn" id="darkModeBtn" onclick="toggleDarkMode()" title="切换夜间模式">🌙</button>
             <div class="pdf-page-nav" id="pdfNav" style="display:none;">
                 <button class="button" id="prevPageBtn">◀</button>
@@ -94,9 +94,9 @@
             <h3>🧹 背景切除</h3>
             <div style="display:flex; flex-direction:column; align-items:center; width:100%;">
                 <div class="control-item"><label>背景容差：</label><input type="range" id="bgTolSlider" min="0" max="50" value="15"><span id="bgTolValue">15</span><span id="bgOffNote" class="off-note">背景切除已关闭</span></div>
-                <div class="control-item"><label>左右边距：</label><input type="range" id="lrMarginSlider" min="-200" max="50" value="0"><span id="lrMarginValue">0</span> px</div>
-                <div class="control-item"><label>上边距：</label><input type="range" id="topMarginSlider" min="-200" max="50" value="0"><span id="topMarginValue">0</span> px</div>
-                <div class="control-item"><label>下边距：</label><input type="range" id="bottomMarginSlider" min="-200" max="50" value="0"><span id="bottomMarginValue">0</span> px</div>
+                <div class="control-item"><label>左右边距：</label><input type="range" id="lrMarginSlider" min="-50" max="50" value="0"><span id="lrMarginValue">0</span> px</div>
+                <div class="control-item"><label>上边距：</label><input type="range" id="topMarginSlider" min="-50" max="50" value="0"><span id="topMarginValue">0</span> px</div>
+                <div class="control-item"><label>下边距：</label><input type="range" id="bottomMarginSlider" min="-50" max="50" value="0"><span id="bottomMarginValue">0</span> px</div>
             </div>
             <canvas id="bgResultCanvas"></canvas>
             <div class="note" id="bgNote">背景切除结果</div>
@@ -144,7 +144,7 @@ const DEFAULT_PARAMS = {
     mode: 'auto-single'
 };
 let imagePaths = [];
-let pageParams = [];                // 每页定制参数，null表示使用默认
+let pageParams = [];                // 每页定制参数，null表示使用当前滑块值
 let currentIndex = 0;
 let originalImage = null;
 let currentFileName = '未命名';
@@ -223,21 +223,63 @@ function updateSliderLabels() {
     .forEach(el => el.addEventListener('input', updateSliderLabels));
 
 function loadPageParams(index) {
-    const params = pageParams[index] || DEFAULT_PARAMS;
-    bgTolSlider.value = params.bgTol;
-    lrMarginSlider.value = params.lrMargin;
-    topMarginSlider.value = params.topMargin;
-    bottomMarginSlider.value = params.bottomMargin;
-    contrastSlider.value = params.contrast;
-    thresholdSlider.value = params.thresh;
-    leftSensitivitySlider.value = params.leftSensitivity;
-    rightSensitivitySlider.value = params.rightSensitivity;
-    const modeRadio = document.querySelector(`input[name="pageMode"][value="${params.mode}"]`);
-    if (modeRadio) modeRadio.checked = true;
-    updateSliderLabels();
+    const params = pageParams[index];
+    if (params) {
+        bgTolSlider.value = params.bgTol;
+        lrMarginSlider.value = params.lrMargin;
+        topMarginSlider.value = params.topMargin;
+        bottomMarginSlider.value = params.bottomMargin;
+        contrastSlider.value = params.contrast;
+        thresholdSlider.value = params.thresh;
+        leftSensitivitySlider.value = params.leftSensitivity;
+        rightSensitivitySlider.value = params.rightSensitivity;
+        const modeRadio = document.querySelector(`input[name="pageMode"][value="${params.mode}"]`);
+        if (modeRadio) modeRadio.checked = true;
+        updateSliderLabels();
+    }
 }
 function getParamsForPage(index) {
-    return pageParams[index] || DEFAULT_PARAMS;
+    const p = pageParams[index];
+    if (p) return p;
+    return {
+        bgTol: +bgTolSlider.value,
+        lrMargin: +lrMarginSlider.value,
+        topMargin: +topMarginSlider.value,
+        bottomMargin: +bottomMarginSlider.value,
+        contrast: +contrastSlider.value,
+        thresh: +thresholdSlider.value,
+        leftSensitivity: +leftSensitivitySlider.value,
+        rightSensitivity: +rightSensitivitySlider.value,
+        mode: document.querySelector('input[name="pageMode"]:checked').value
+    };
+}
+
+// 清理并获取新文件
+function clearAndPick(type) {
+    imagePaths = [];
+    pageParams = [];
+    currentIndex = 0;
+    originalImage = null;
+    lastComputedResult = null;
+    currentFileName = '未命名';
+    [originalCanvas, bgResultCanvas, leftStackCanvas, rightStackCanvas].forEach(c => {
+        c.width = 1; c.height = 1;
+    });
+    pdfNav.style.display = 'none';
+    generatePdfBtn.style.display = 'none';
+    document.getElementById('leftCut').innerText = '--';
+    document.getElementById('rightCut').innerText = '--';
+    document.getElementById('cutInfo').innerHTML = '左侧切割线：-- px &nbsp;&nbsp; 右侧切割线：-- px';
+    document.getElementById('projectionPlot').style.display = 'none';
+    document.getElementById('saveLeftBtn').disabled = true;
+    document.getElementById('saveRightBtn').disabled = true;
+    document.getElementById('saveBgBtn').disabled = true;
+    pdfRenderProgress.style.display = 'none';
+    exportProgress.style.display = 'none';
+    pageNumInput.value = 1;
+    totalPagesSpan.innerText = '1';
+    if (type === 'pdf') Android.pickFile('pdf');
+    else if (type === 'image') Android.pickFile('image');
 }
 
 // ── 图片加载与页数管理 ──
@@ -252,9 +294,13 @@ function showImage(index) {
         processAll();
         updatePageNav();
     };
-    img.onerror = () => alert('图片加载失败');
+    img.onerror = () => {
+        Android.showToast('图片加载失败: ' + imagePaths[index]);
+        if (index+1 < imagePaths.length) showImage(index+1);
+    };
     img.src = 'file://' + imagePaths[index];
 }
+
 function updatePageNav() {
     if (imagePaths.length > 1) {
         pdfNav.style.display = 'flex';
@@ -266,6 +312,10 @@ function updatePageNav() {
         generatePdfBtn.style.display = 'inline-block';
     } else {
         pdfNav.style.display = 'none';
+        totalPagesSpan.innerText = imagePaths.length;
+        pageNumInput.value = currentIndex + 1;
+        pageNumInput.max = imagePaths.length || 1;
+        generatePdfBtn.style.display = (imagePaths.length === 1) ? 'inline-block' : 'none';
     }
 }
 
@@ -277,6 +327,7 @@ window.onImageBatch = function(jsonPaths) {
             currentFileName = '批量图片';
             pageParams = new Array(imagePaths.length).fill(null);
             pageNumInput.max = imagePaths.length;
+            Android.showToast('已加载 ' + imagePaths.length + ' 张图片');
             showImage(0);
         } else {
             Android.showToast('图片列表解析异常');
@@ -295,6 +346,7 @@ window.onPdfBatch = function(jsonPaths, fileName) {
             currentFileName = fileName || 'PDF';
             pageParams = new Array(imagePaths.length).fill(null);
             pageNumInput.max = imagePaths.length;
+            Android.showToast('已加载 ' + imagePaths.length + ' 页 PDF');
             showImage(0);
         } else {
             Android.showToast('PDF 解析异常：未获得有效页路径');
@@ -325,7 +377,7 @@ pageNumInput.onchange = function() {
     else this.value = currentIndex + 1;
 };
 
-// ── 背景切除算法 ──
+// ── 算法：背景切除 ──
 function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     const { data, width, height } = imageData;
     const edgePixels = []; const ew = 2;
@@ -634,19 +686,13 @@ function saveFullSize(suffix) {
     if (!originalImage || !lastComputedResult) return;
     const res = lastComputedResult;
     const fullCanvas = document.createElement('canvas');
-    fullCanvas.width = originalImage.width;
-    fullCanvas.height = originalImage.height;
+    fullCanvas.width = originalImage.width; fullCanvas.height = originalImage.height;
     const fullCtx = fullCanvas.getContext('2d');
     fullCtx.drawImage(originalImage, 0, 0);
 
-    const cropLeft = res.bgCrop.left;
-    const cropTop = res.bgCrop.top;
-    const cropWidth = res.bgCrop.width;
-    const cropHeight = res.bgCrop.height;
-
+    const cropLeft = res.bgCrop.left, cropTop = res.bgCrop.top, cropWidth = res.bgCrop.width, cropHeight = res.bgCrop.height;
     const workCanvas = document.createElement('canvas');
-    workCanvas.width = cropWidth;
-    workCanvas.height = cropHeight;
+    workCanvas.width = cropWidth; workCanvas.height = cropHeight;
     const workCtx = workCanvas.getContext('2d');
     workCtx.putImageData(fullCtx.getImageData(cropLeft, cropTop, cropWidth, cropHeight), 0, 0);
 
@@ -691,22 +737,13 @@ function saveFullBg() {
     if (!originalImage || !lastComputedResult) return;
     const res = lastComputedResult;
     const fullCanvas = document.createElement('canvas');
-    fullCanvas.width = originalImage.width;
-    fullCanvas.height = originalImage.height;
+    fullCanvas.width = originalImage.width; fullCanvas.height = originalImage.height;
     const fullCtx = fullCanvas.getContext('2d');
     fullCtx.drawImage(originalImage, 0, 0);
-
-    const cropLeft = res.bgCrop.left;
-    const cropTop = res.bgCrop.top;
-    const cropWidth = res.bgCrop.width;
-    const cropHeight = res.bgCrop.height;
-
+    const cropLeft = res.bgCrop.left, cropTop = res.bgCrop.top, cropWidth = res.bgCrop.width, cropHeight = res.bgCrop.height;
     const outCanvas = document.createElement('canvas');
-    outCanvas.width = cropWidth;
-    outCanvas.height = cropHeight;
-    outCanvas.getContext('2d').putImageData(
-        fullCtx.getImageData(cropLeft, cropTop, cropWidth, cropHeight), 0, 0
-    );
+    outCanvas.width = cropWidth; outCanvas.height = cropHeight;
+    outCanvas.getContext('2d').putImageData(fullCtx.getImageData(cropLeft, cropTop, cropWidth, cropHeight), 0, 0);
     const base64 = outCanvas.toDataURL('image/png').split(',')[1];
     const outName = currentFileName.replace(/\.[^.]+$/, '') + '_bg.png';
     Android.saveFile(encodeURIComponent(base64), outName);
@@ -733,7 +770,7 @@ document.getElementById('applyParamsBtn').onclick = function() {
     Android.showToast('参数已应用到第' + (currentIndex+1) + '页');
 };
 
-// ── PDF导出（使用每页定制参数） ──
+// ── PDF导出（使用每页定制参数或当前滑块值） ──
 document.getElementById('generatePdfBtn').onclick = async () => {
     if (imagePaths.length === 0) { Android.showToast('没有图片'); return; }
     Android.beginPdf(imagePaths.length, currentFileName);
@@ -741,9 +778,9 @@ document.getElementById('generatePdfBtn').onclick = async () => {
     generatePdfBtn.disabled = true;
     try {
         for (let i = 0; i < imagePaths.length; i++) {
-            const img = await new Promise((resolve) => {
+            const img = await new Promise((resolve, reject) => {
                 const el = new Image(); el.onload = () => resolve(el);
-                el.onerror = () => alert('加载失败: ' + imagePaths[i]);
+                el.onerror = () => reject('加载失败: ' + imagePaths[i]);
                 el.src = 'file://' + imagePaths[i];
             });
             const fullCanvas = document.createElement('canvas');
@@ -753,15 +790,9 @@ document.getElementById('generatePdfBtn').onclick = async () => {
             const fullImgData = fullCtx.getImageData(0, 0, fullCanvas.width, fullCanvas.height);
 
             const params = getParamsForPage(i);
-            const bgTol = params.bgTol;
-            const lrMargin = params.lrMargin;
-            const topMargin = params.topMargin;
-            const bottomMargin = params.bottomMargin;
-            const contrast = params.contrast;
-            const thresh = params.thresh;
-            const leftSensitivity = params.leftSensitivity;
-            const rightSensitivity = params.rightSensitivity;
-            const mode = params.mode;
+            const bgTol = params.bgTol, lrMargin = params.lrMargin, topMargin = params.topMargin, bottomMargin = params.bottomMargin;
+            const contrast = params.contrast, thresh = params.thresh;
+            const leftSensitivity = params.leftSensitivity, rightSensitivity = params.rightSensitivity, mode = params.mode;
 
             let cropRegion = null;
             if (bgTol > 0) {
@@ -780,17 +811,14 @@ document.getElementById('generatePdfBtn').onclick = async () => {
             let leftCut = null, rightCut = null, bindLine = null;
             if (contrast > 0) {
                 const result = processImageWithParams(bgWorkData, { contrast, thresh, leftSensitivity, rightSensitivity, mode });
-                leftCut = result.leftCut;
-                rightCut = result.rightCut;
-                bindLine = result.bindLine;
+                leftCut = result.leftCut; rightCut = result.rightCut; bindLine = result.bindLine;
             }
 
             let l = leftCut ?? 0, r = rightCut ?? bgWorkData.width;
             if (l >= r) { l = 0; r = bgWorkData.width; }
 
             const bgCanvas = document.createElement('canvas');
-            bgCanvas.width = bgWorkData.width;
-            bgCanvas.height = bgWorkData.height;
+            bgCanvas.width = bgWorkData.width; bgCanvas.height = bgWorkData.height;
             const bgCtx = bgCanvas.getContext('2d');
             bgCtx.putImageData(bgWorkData, 0, 0);
 
