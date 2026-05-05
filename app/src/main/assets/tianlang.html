@@ -230,6 +230,13 @@ window.onPageRendered = function(base64, pageNum, total) {
     };
     img.src = 'data:image/png;base64,' + base64;
 };
+    // 在 window.onPageRendered 后面添加
+window.onPageRenderError = function() {
+    isProcessingPage = false;
+    updateNavButtons();
+    alert('页面渲染失败，请重试');
+
+};
 
 // ────── 翻页请求 ──────
 function requestPage(pageNum) {
