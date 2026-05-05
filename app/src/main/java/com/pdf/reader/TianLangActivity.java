@@ -160,7 +160,14 @@ public class TianLangActivity extends AppCompatActivity {
     }
 
     private void renderAllPagesInBackground() {
-        new AsyncTask<Void, Void, List<String>>() {
+        new AsyncTask<Void, Integer, List<String>>() {
+            @Override
+            protected void onPreExecute() {
+                webView.evaluateJavascript(
+                        "javascript:if(window.onPdfRenderProgress) onPdfRenderProgress(0, " + totalPages + ")",
+                        null);
+            }
+
             @Override
             protected List<String> doInBackground(Void... voids) {
                 List<String> paths = new ArrayList<>();
@@ -178,6 +185,7 @@ public class TianLangActivity extends AppCompatActivity {
                         }
                         bitmap.recycle();
                         paths.add(tempFile.getAbsolutePath());
+                        publishProgress(i + 1);
                     } catch (Exception e) {
                         Log.e("TianLang", "渲染第" + i + "页失败", e);
                     }
@@ -186,7 +194,16 @@ public class TianLangActivity extends AppCompatActivity {
             }
 
             @Override
+            protected void onProgressUpdate(Integer... values) {
+                int progress = values[0];
+                webView.evaluateJavascript(
+                        "javascript:if(window.onPdfRenderProgress) onPdfRenderProgress(" + progress + ", " + totalPages + ")",
+                        null);
+            }
+
+            @Override
             protected void onPostExecute(List<String> paths) {
+                webView.evaluateJavascript("javascript:hidePdfRenderProgress()", null);
                 if (!paths.isEmpty()) {
                     String json = new JSONArray(paths).toString();
                     webView.evaluateJavascript(
