@@ -34,9 +34,10 @@
         .progress-bar { width:150px; height:20px; background:#ddd; border-radius:10px; overflow:hidden; margin-left:10px; }
         .progress-fill { height:100%; background:#2d6a4f; width:0%; transition: width 0.2s; }
         .progress-container { display:flex; align-items:center; gap:8px; }
-        .half-canvas-wrapper { display:flex; gap:10px; width:100%; justify-content:center; flex-wrap:wrap; }
-        .half-canvas-wrapper > div { display:flex; flex-direction:column; align-items:center; justify-content:center; }
-        .half-canvas-wrapper canvas { max-width:100%; height:auto; }
+        /* 上下排列容器 */
+        .stack-vertical-wrapper { display:flex; flex-direction:column; gap:10px; width:100%; align-items:center; }
+        .stack-vertical-wrapper > div { display:flex; flex-direction:column; align-items:center; justify-content:center; width:100%; }
+        .stack-vertical-wrapper canvas { max-width:100%; height:auto; }
         @media(max-width:800px) { .main-panel { flex-direction:column; } }
     </style>
 </head>
@@ -93,7 +94,7 @@
             <canvas id="bgResultCanvas"></canvas>
             <div class="note" id="bgNote">背景切除结果</div>
         </div>
-        <!-- 堆叠切除（左右独立显示） -->
+        <!-- 堆叠切除（上下排列） -->
         <div class="canvas-panel">
             <h3>🌤️ 堆叠切除</h3>
             <div class="mode-group" style="margin-bottom:10px;">
@@ -109,12 +110,12 @@
                 <div class="control-item"><label>左敏感度：</label><input type="range" id="leftSensitivitySlider" min="0.1" max="0.9" step="0.05" value="0.35"><span id="leftSensitivityValue">0.35</span></div>
                 <div class="control-item"><label>右敏感度：</label><input type="range" id="rightSensitivitySlider" min="0.1" max="0.9" step="0.05" value="0.35"><span id="rightSensitivityValue">0.35</span></div>
             </div>
-            <div class="half-canvas-wrapper">
-                <div id="leftStackContainer" style="width:48%;">
+            <div class="stack-vertical-wrapper">
+                <div id="leftStackContainer">
                     <canvas id="leftStackCanvas"></canvas>
                     <div class="note">左侧切除结果</div>
                 </div>
-                <div id="rightStackContainer" style="width:48%;">
+                <div id="rightStackContainer">
                     <canvas id="rightStackCanvas"></canvas>
                     <div class="note">右侧切除结果</div>
                 </div>
@@ -287,30 +288,18 @@ pageNumInput.onchange = function() {
     else this.value = currentIndex + 1;
 };
 
-// ────── 背景切除算法（完整） ──────
+// ────── 背景切除算法 ──────
 function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     const { data, width, height } = imageData;
     const edgePixels = [];
     const ew = 2;
     for (let y = 0; y < height; y++) {
-        for (let x = 0; x < ew; x++) {
-            const i = (y * width + x) * 4;
-            edgePixels.push([data[i], data[i+1], data[i+2]]);
-        }
-        for (let x = width - ew; x < width; x++) {
-            const i = (y * width + x) * 4;
-            edgePixels.push([data[i], data[i+1], data[i+2]]);
-        }
+        for (let x = 0; x < ew; x++) { edgePixels.push([data[(y*width+x)*4], data[(y*width+x)*4+1], data[(y*width+x)*4+2]]); }
+        for (let x = width - ew; x < width; x++) { edgePixels.push([data[(y*width+x)*4], data[(y*width+x)*4+1], data[(y*width+x)*4+2]]); }
     }
     for (let x = ew; x < width - ew; x++) {
-        for (let y = 0; y < ew; y++) {
-            const i = (y * width + x) * 4;
-            edgePixels.push([data[i], data[i+1], data[i+2]]);
-        }
-        for (let y = height - ew; y < height; y++) {
-            const i = (y * width + x) * 4;
-            edgePixels.push([data[i], data[i+1], data[i+2]]);
-        }
+        for (let y = 0; y < ew; y++) { edgePixels.push([data[(y*width+x)*4], data[(y*width+x)*4+1], data[(y*width+x)*4+2]]); }
+        for (let y = height - ew; y < height; y++) { edgePixels.push([data[(y*width+x)*4], data[(y*width+x)*4+1], data[(y*width+x)*4+2]]); }
     }
     if (edgePixels.length === 0) return null;
 
@@ -320,9 +309,7 @@ function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     mr /= n; mg /= n; mb /= n;
     let vr = 0, vg = 0, vb = 0;
     edgePixels.forEach(p => {
-        vr += (p[0] - mr) ** 2;
-        vg += (p[1] - mg) ** 2;
-        vb += (p[2] - mb) ** 2;
+        vr += (p[0] - mr) ** 2; vg += (p[1] - mg) ** 2; vb += (p[2] - mb) ** 2;
     });
     const stdR = Math.sqrt(vr / n), stdG = Math.sqrt(vg / n), stdB = Math.sqrt(vb / n);
     const maxStd = Math.max(stdR, stdG, stdB, 1);
@@ -341,9 +328,7 @@ function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
         for (let y = 1; y < height - 1; y++) {
             for (let x = 1; x < width - 1; x++) {
                 let max = 0;
-                for (let dy = -1; dy <= 1; dy++)
-                    for (let dx = -1; dx <= 1; dx++)
-                        max = Math.max(max, src[(y+dy)*width + (x+dx)]);
+                for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) max = Math.max(max, src[(y+dy)*width + (x+dx)]);
                 dst[y*width + x] = max;
             }
         }
@@ -354,9 +339,7 @@ function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
         for (let y = 1; y < height - 1; y++) {
             for (let x = 1; x < width - 1; x++) {
                 let min = 255;
-                for (let dy = -1; dy <= 1; dy++)
-                    for (let dx = -1; dx <= 1; dx++)
-                        min = Math.min(min, src[(y+dy)*width + (x+dx)]);
+                for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) min = Math.min(min, src[(y+dy)*width + (x+dx)]);
                 dst[y*width + x] = min;
             }
         }
@@ -378,24 +361,16 @@ function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
                 const x = idx % width, y = Math.floor(idx / width);
                 if (x < minX) minX = x; if (x > maxX) maxX = x;
                 if (y < minY) minY = y; if (y > maxY) maxY = y;
-                const neighbors = [idx - 1, idx + 1, idx - width, idx + width];
-                for (const nb of neighbors) {
-                    if (nb >= 0 && nb < width * height && closed[nb] === 255 && visited[nb] === 0) {
-                        visited[nb] = 1; stack.push(nb);
-                    }
+                for (const nb of [idx - 1, idx + 1, idx - width, idx + width]) {
+                    if (nb >= 0 && nb < width * height && closed[nb] === 255 && visited[nb] === 0) { visited[nb] = 1; stack.push(nb); }
                 }
             }
-            if (area > maxArea) {
-                maxArea = area;
-                maxRect = { left: minX, top: minY, right: maxX, bottom: maxY };
-            }
+            if (area > maxArea) { maxArea = area; maxRect = { left: minX, top: minY, right: maxX, bottom: maxY }; }
         }
     }
 
-    let left = maxRect.left - lrMargin;
-    let right = maxRect.right + lrMargin;
-    let top = maxRect.top - topMargin;
-    let bottom = maxRect.bottom + bottomMargin;
+    let left = maxRect.left - lrMargin, right = maxRect.right + lrMargin;
+    let top = maxRect.top - topMargin, bottom = maxRect.bottom + bottomMargin;
     left = Math.max(0, left); right = Math.min(width - 1, right);
     top = Math.max(0, top); bottom = Math.min(height - 1, bottom);
     if (right - left < 10 || bottom - top < 10) return null;
@@ -469,7 +444,7 @@ function detectMiddleFrameLine(imgData, startX, endX) {
     return bestX;
 }
 
-// ────── 综合处理（改进后） ──────
+// ────── 综合处理（左右独立显示，上下排列） ──────
 function processAll() {
     if (!originalImage || !imageDataCache) return;
     originalCtx.putImageData(imageDataCache, 0, 0);
@@ -477,6 +452,7 @@ function processAll() {
     const bgParams = getBgParams();
     const stackParams = getStackParams();
 
+    // 1. 背景切除
     let cropRegion = null;
     if (bgParams.bgTol > 0) cropRegion = removeBackground(fullImgData, bgParams.bgTol, bgParams.lrMargin, bgParams.topMargin, bgParams.bottomMargin);
     let bgWorkData;
@@ -490,9 +466,11 @@ function processAll() {
         bgResultCtx.putImageData(fullImgData, 0, 0);
     }
 
+    // 2. 堆叠切割线
     const cuts = findCuts(bgWorkData, stackParams);
     const { leftCut, rightCut, bindLine } = cuts;
 
+    // 3. 标注原图
     originalCtx.putImageData(fullImgData, 0, 0);
     if (cropRegion) {
         originalCtx.strokeStyle = '#2d6a4f'; originalCtx.lineWidth = 2;
@@ -512,25 +490,29 @@ function processAll() {
     });
     originalCtx.setLineDash([]);
 
+    // 4. 生成左右结果并控制显示（上下排列）
     const w = bgWorkData.width, h = bgWorkData.height;
     let showLeft = false, showRight = false;
 
     if (stackParams.mode === 'combined' && bindLine !== null && leftCut !== null && rightCut !== null) {
         showLeft = showRight = true;
     } else if (stackParams.mode === 'left-only' && leftCut !== null) {
-        showLeft = true;
+        showLeft = true; showRight = false;
     } else if (stackParams.mode === 'right-only' && rightCut !== null) {
-        showRight = true;
+        showLeft = false; showRight = true;
     } else if (stackParams.mode === 'auto-single') {
-        showLeft = leftCut !== null;
-        showRight = rightCut !== null;
-        if (!showLeft && !showRight) { showLeft = true; }
+        showLeft = (leftCut !== null);
+        showRight = (rightCut !== null);
     }
 
-    leftStackCtx.clearRect(0, 0, leftStackCanvas.width, leftStackCanvas.height);
-    rightStackCtx.clearRect(0, 0, rightStackCanvas.width, rightStackCanvas.height);
-    leftStackCanvas.width = 0; rightStackCanvas.width = 0;
+    if (!showLeft && !showRight) {
+        // 都没有检测到时默认显示左侧整图
+        showLeft = true;
+        leftStackCtx.putImageData(bgWorkData, 0, 0);
+        leftStackCanvas.width = w; leftStackCanvas.height = h;
+    }
 
+    // 绘制左侧画布（显示在上方）
     if (showLeft) {
         let lw, leftData;
         if (stackParams.mode === 'combined' && bindLine !== null) {
@@ -548,6 +530,7 @@ function processAll() {
         leftStackContainer.style.display = 'none';
     }
 
+    // 绘制右侧画布（显示在下方）
     if (showRight) {
         let rw, rightData;
         if (stackParams.mode === 'combined' && bindLine !== null) {
@@ -563,17 +546,6 @@ function processAll() {
         rightStackContainer.style.display = 'flex';
     } else {
         rightStackContainer.style.display = 'none';
-    }
-
-    if (showLeft && showRight) {
-        leftStackContainer.style.width = '48%';
-        rightStackContainer.style.width = '48%';
-    } else if (showLeft) {
-        leftStackContainer.style.width = '100%';
-        rightStackContainer.style.width = '0';
-    } else if (showRight) {
-        rightStackContainer.style.width = '100%';
-        leftStackContainer.style.width = '0';
     }
 
     document.getElementById('leftCut').innerText = leftCut !== null ? leftCut.toFixed(1) : '无';
@@ -627,7 +599,7 @@ document.getElementById('generatePdfBtn').onclick = async () => {
             } else workData = imgData;
 
             const cuts = findCuts(workData, stackParams);
-            let leftCut = cuts.leftCut, rightCut = cuts.rightCut, bindLine = cuts.bindLine;
+            let { leftCut, rightCut, bindLine } = cuts;
             if (leftCut === null) leftCut = 0;
             if (rightCut === null) rightCut = workData.width;
             if (leftCut >= rightCut) { leftCut = 0; rightCut = workData.width; }
