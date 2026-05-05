@@ -100,7 +100,6 @@ public class TianLangActivity extends AppCompatActivity {
             if (uri == null) return;
             try {
                 if (requestCode == PICK_IMAGE) {
-                    // 图片仍通过 Base64 传递（体积较小）
                     InputStream inputStream = getContentResolver().openInputStream(uri);
                     ByteArrayOutputStream baos = new ByteArrayOutputStream();
                     byte[] buffer = new byte[4096];
@@ -109,9 +108,10 @@ public class TianLangActivity extends AppCompatActivity {
                     inputStream.close();
                     String base64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
                     String fileName = getFileName(uri);
-                    webView.evaluateJavascript("javascript:loadImage('" + base64 + "', '" + fileName + "')", null);
+                    // 安全传递 Base64 字符串
+                    String js = String.format("javascript:loadImage('%s', '%s')", escapeJsString(base64), escapeJsString(fileName));
+                    webView.evaluateJavascript(js, null);
                 } else if (requestCode == PICK_PDF) {
-                    // 打开 PDF，原生渲染第一页图片传回
                     if (pdfRenderer != null) pdfRenderer.close();
                     if (fileDescriptor != null) try { fileDescriptor.close(); } catch (Exception e) {}
                     fileDescriptor = getContentResolver().openFileDescriptor(uri, "r");
@@ -119,7 +119,7 @@ public class TianLangActivity extends AppCompatActivity {
                     totalPages = pdfRenderer.getPageCount();
                     currentPage = 0;
                     currentFileName = getFileName(uri);
-                    webView.evaluateJavascript("javascript:onPdfOpened(" + totalPages + ", '" + currentFileName + "')", null);
+                    webView.evaluateJavascript(String.format("javascript:onPdfOpened(%d, '%s')", totalPages, escapeJsString(currentFileName)), null);
                     renderAndSendPage();
                 }
             } catch (Exception e) {
@@ -140,11 +140,24 @@ public class TianLangActivity extends AppCompatActivity {
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, baos);
             String base64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
             bitmap.recycle();
-            webView.evaluateJavascript(
-                "javascript:onPageRendered('" + base64 + "', " + currentPage + ", " + totalPages + ")", null);
+            // 安全传递 Base64 字符串
+            String js = String.format("javascript:onPageRendered('%s', %d, %d)", escapeJsString(base64), currentPage, totalPages);
+            webView.evaluateJavascript(js, null);
         } catch (Exception e) {
             Toast.makeText(this, "页面渲染失败", Toast.LENGTH_SHORT).show();
+            // 发送错误通知，释放锁
+            webView.evaluateJavascript("javascript:onPageRenderError()", null);
         }
+    }
+
+    // 转义 JavaScript 字符串中特殊字符
+    private String escapeJsString(String s) {
+        if (s == null) return "";
+        return s.replace("\\", "\\\\")
+                .replace("'", "\\'")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
     }
 
     private String getFileName(Uri uri) {
@@ -159,7 +172,7 @@ public class TianLangActivity extends AppCompatActivity {
                 }
             } catch (Exception e) {}
         }
-        return name != null ? name : "file";
+        return name != null ? name : "file.txt";
     }
 
     @Override
