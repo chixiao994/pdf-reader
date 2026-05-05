@@ -16,10 +16,12 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+import org.json.JSONArray;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -62,7 +64,7 @@ public class TianLangActivity extends AppCompatActivity {
             Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
             if ("image".equals(type)) {
                 intent.setType("image/*");
-                intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true); // 多选
+                intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
                 startActivityForResult(intent, PICK_IMAGE);
             } else if ("pdf".equals(type)) {
                 intent.setType("application/pdf");
@@ -76,8 +78,9 @@ public class TianLangActivity extends AppCompatActivity {
         }
 
         @JavascriptInterface
-        public void saveFile(String base64, String fileName) {
+        public void saveFile(String safeBase64, String fileName) {
             try {
+                String base64 = URLDecoder.decode(safeBase64, "UTF-8");
                 byte[] data = Base64.decode(base64, Base64.DEFAULT);
                 File file = new File(getExternalFilesDir(null), fileName);
                 try (FileOutputStream fos = new FileOutputStream(file)) {
@@ -85,6 +88,7 @@ public class TianLangActivity extends AppCompatActivity {
                 }
                 showToast("已保存: " + file.getAbsolutePath());
             } catch (Exception e) {
+                Log.e("TianLang", "保存失败", e);
                 showToast("保存失败: " + e.getMessage());
             }
         }
@@ -98,7 +102,9 @@ public class TianLangActivity extends AppCompatActivity {
                 handleImageResult(data);
             } else if (requestCode == PICK_PDF) {
                 Uri uri = data.getData();
-                if (uri != null) handlePdfUri(uri);
+                if (uri != null) {
+                    handlePdfUri(uri);
+                }
             }
         }
     }
@@ -131,8 +137,11 @@ public class TianLangActivity extends AppCompatActivity {
             }
         }
         if (!paths.isEmpty()) {
-            String json = new org.json.JSONArray(paths).toString();
-            webView.evaluateJavascript("javascript:onImageBatch('" + escapeJson(json) + "')", null);
+            String json = new JSONArray(paths).toString();
+            webView.evaluateJavascript(
+                    String.format("javascript:onImageBatch('%s')", escapeJson(json)),
+                    null
+            );
         }
     }
 
@@ -143,14 +152,14 @@ public class TianLangActivity extends AppCompatActivity {
             pdfRenderer = new PdfRenderer(fileDescriptor);
             totalPages = pdfRenderer.getPageCount();
             currentFileName = getFileName(uri);
-            renderAllPages();
+            renderAllPagesInBackground();
         } catch (Exception e) {
             Log.e("TianLang", "PDF打开失败", e);
-            Toast.makeText(this, "PDF打开失败", Toast.LENGTH_SHORT).show();
+            showToastSafe("PDF打开失败");
         }
     }
 
-    private void renderAllPages() {
+    private void renderAllPagesInBackground() {
         new AsyncTask<Void, Void, List<String>>() {
             @Override
             protected List<String> doInBackground(Void... voids) {
@@ -179,27 +188,33 @@ public class TianLangActivity extends AppCompatActivity {
             @Override
             protected void onPostExecute(List<String> paths) {
                 if (!paths.isEmpty()) {
-                    String json = new org.json.JSONArray(paths).toString();
+                    String json = new JSONArray(paths).toString();
                     webView.evaluateJavascript(
-                        String.format("javascript:onPdfBatch('%s', '%s', %d)",
-                            escapeJson(json),
-                            escapeJsString(currentFileName),
-                            paths.size()),
-                        null);
+                            String.format("javascript:onPdfBatch('%s', '%s', %d)",
+                                    escapeJson(json),
+                                    escapeJsString(currentFileName),
+                                    paths.size()),
+                            null
+                    );
                 } else {
-                    Toast.makeText(TianLangActivity.this, "PDF渲染失败", Toast.LENGTH_SHORT).show();
+                    showToastSafe("PDF渲染失败");
                 }
             }
         }.execute();
     }
 
     private String escapeJson(String json) {
+        if (json == null) return "";
         return json.replace("\\", "\\\\").replace("'", "\\'");
     }
 
     private String escapeJsString(String s) {
         if (s == null) return "";
-        return s.replace("\\", "\\\\").replace("'", "\\'");
+        return s.replace("\\", "\\\\")
+                .replace("'", "\\'")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
     }
 
     private String getFileName(Uri uri) {
@@ -212,7 +227,7 @@ public class TianLangActivity extends AppCompatActivity {
                     int nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
                     if (nameIndex != -1) name = cursor.getString(nameIndex);
                 }
-            } catch (Exception e) {}
+            } catch (Exception e) { /* ignore */ }
         }
         return name != null ? name : "file.txt";
     }
@@ -223,19 +238,26 @@ public class TianLangActivity extends AppCompatActivity {
             pdfRenderer = null;
         }
         if (fileDescriptor != null) {
-            try { fileDescriptor.close(); } catch (Exception e) {}
+            try { fileDescriptor.close(); } catch (Exception e) { /* ignore */ }
             fileDescriptor = null;
         }
+    }
+
+    private void showToastSafe(final String msg) {
+        runOnUiThread(() -> Toast.makeText(TianLangActivity.this, msg, Toast.LENGTH_SHORT).show());
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
         closePdf();
-        // 清理缓存图片
-        for (File f : getCacheDir().listFiles()) {
-            if (f.getName().startsWith("img_") || f.getName().startsWith("pdf_page_")) {
-                f.delete();
+        // 清理临时图片
+        File[] files = getCacheDir().listFiles();
+        if (files != null) {
+            for (File f : files) {
+                if (f.getName().startsWith("img_") || f.getName().startsWith("pdf_page_")) {
+                    f.delete();
+                }
             }
         }
     }
