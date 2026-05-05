@@ -134,7 +134,7 @@ let originalImage = null;
 let imageDataCache = null;
 let currentFileName = '未命名';
 let isPdfMode = false;
-let currentPageNum = 0;   // 0-based
+let currentPageNum = 0;
 let totalPageCount = 0;
 let isProcessingPage = false;
 
@@ -203,6 +203,7 @@ window.onPdfOpened = function(total, fileName) {
     updateNavButtons();
 };
 
+// ★ 核心修复：在图像完全加载并处理后，才解锁翻页按钮
 window.onPageRendered = function(base64, pageNum, total) {
     if (total !== totalPageCount) {
         totalPageCount = total;
@@ -210,15 +211,27 @@ window.onPageRendered = function(base64, pageNum, total) {
     }
     currentPageNum = pageNum;
     pageNumInput.value = pageNum + 1;
-    updateNavButtons();
-    isProcessingPage = false;
+    updateNavButtons(); // 按钮仍然禁用（isProcessingPage 仍为 true）
 
     const img = new Image();
-    img.onload = () => { originalImage = img; fitImageToCanvas(); processImage(); };
+    img.onload = () => {
+        originalImage = img;
+        fitImageToCanvas();
+        processImage();
+        // 所有处理完成后释放锁
+        isProcessingPage = false;
+        updateNavButtons();
+    };
+    img.onerror = () => {
+        // 即使加载失败也要释放锁，避免界面死锁
+        isProcessingPage = false;
+        updateNavButtons();
+        alert('页面渲染失败，请重试');
+    };
     img.src = 'data:image/png;base64,' + base64;
 };
 
-// ────── 翻页请求（防止并发） ──────
+// ────── 翻页请求 ──────
 function requestPage(pageNum) {
     if (!isPdfMode || isProcessingPage || pageNum < 0 || pageNum >= totalPageCount) return;
     isProcessingPage = true;
@@ -229,6 +242,7 @@ function requestPage(pageNum) {
 prevPageBtn.onclick = () => requestPage(currentPageNum - 1);
 nextPageBtn.onclick = () => requestPage(currentPageNum + 1);
 
+// 修正页码输入事件，避免循环触发
 pageNumInput.addEventListener('keypress', function(e) {
     if (e.key === 'Enter') {
         const num = parseInt(this.value) - 1;
@@ -254,7 +268,10 @@ function updateNavButtons() {
     pageNumInput.value = currentPageNum + 1;
 }
 
-// ────── 完整裁切算法 ──────
+// ────── 裁切算法（与之前一致，此处省略重复，确保包含完整函数） ──────
+// 请将 removeBackground, detectMiddleFrameLine, processImage, drawProjectionPlot 完整复制在此
+// 为了保证代码完整性，此处写出它们：
+
 function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     const { data, width, height } = imageData;
     const edgePixels = [];
@@ -613,7 +630,6 @@ document.getElementById('generatePdfBtn').onclick = async () => {
             ctx.drawImage(img, 0, 0);
             const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-            // 裁切算法
             const gray = new Float32Array(canvas.width * canvas.height);
             for (let j = 0; j < gray.length; j++) {
                 const r = imgData.data[j*4], g = imgData.data[j*4+1], b = imgData.data[j*4+2];
@@ -672,7 +688,6 @@ document.getElementById('generatePdfBtn').onclick = async () => {
         }
         const pdfBase64 = pdf.output('datauristring').split(',')[1];
         Android.saveFile(pdfBase64, currentFileName.replace('.pdf', '') + '_天朗.pdf');
-        // 恢复预览当前页
         requestPage(currentPageNum);
     } catch (e) {
         alert('生成PDF出错: ' + e.message);
