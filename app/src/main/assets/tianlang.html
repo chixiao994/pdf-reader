@@ -10,6 +10,7 @@
         body { font-family: 'Segoe UI','Noto Serif SC',serif; background:#f5f0e8; color:#3e2c1b; padding:15px; }
         .container { max-width:1500px; margin:0 auto; }
         h1 { text-align:center; font-size:2.2em; font-weight:400; color:#5d3e1f; }
+        .subtitle { text-align:center; font-style:italic; margin-bottom:20px; color:#7a5a3a; }
         .main-panel { display:flex; gap:15px; flex-wrap:wrap; justify-content:center; }
         .canvas-panel { background:#fff7ed; border:1px solid #d6b89b; border-radius:16px; padding:15px; box-shadow:0 4px 12px rgba(0,0,0,0.05); flex:1 1 350px; display:flex; flex-direction:column; align-items:center; }
         .canvas-panel h3 { margin-bottom:10px; font-weight:400; border-bottom:1px solid #d6b89b; padding-bottom:5px; width:100%; text-align:center; }
@@ -117,6 +118,7 @@
 </div>
 
 <script>
+// ────── 全局引用 ──────
 const bgTolSlider = document.getElementById('bgTolSlider');
 const lrMarginSlider = document.getElementById('lrMarginSlider');
 const topMarginSlider = document.getElementById('topMarginSlider');
@@ -165,8 +167,14 @@ let originalImage = null;
 let imageDataCache = null;
 let currentFileName = '未命名';
 
+// ────── 参数读取 ──────
 function getBgParams() {
-    return { bgTol: +bgTolSlider.value, lrMargin: +lrMarginSlider.value, topMargin: +topMarginSlider.value, bottomMargin: +bottomMarginSlider.value };
+    return {
+        bgTol: +bgTolSlider.value,
+        lrMargin: +lrMarginSlider.value,
+        topMargin: +topMarginSlider.value,
+        bottomMargin: +bottomMarginSlider.value
+    };
 }
 function getStackParams() {
     return {
@@ -187,8 +195,11 @@ function updateSliderLabels() {
     leftSensitivityValue.innerText = leftSensitivitySlider.value;
     rightSensitivityValue.innerText = rightSensitivitySlider.value;
 }
-[bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider, contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider].forEach(el => el.addEventListener('input', updateSliderLabels));
+[bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider,
+ contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider]
+    .forEach(el => el.addEventListener('input', updateSliderLabels));
 
+// ────── 图片适配 ──────
 function fitImageToCanvas() {
     if (!originalImage) return;
     const maxWidth = 500, maxHeight = 500;
@@ -199,6 +210,7 @@ function fitImageToCanvas() {
     imageDataCache = originalCtx.getImageData(0, 0, originalCanvas.width, originalCanvas.height);
 }
 
+// ────── 显示图片（翻页） ──────
 function showImage(index) {
     if (imagePaths.length === 0) return;
     if (index < 0 || index >= imagePaths.length) return;
@@ -220,12 +232,31 @@ function updatePageNav() {
         pdfNav.style.display = 'none';
     }
 }
-window.onImageBatch = function(jsonPaths) { try { imagePaths = JSON.parse(jsonPaths); } catch(e) { imagePaths = []; } currentFileName = '批量图片'; showImage(0); };
-window.onPdfBatch = function(jsonPaths, fileName) { try { imagePaths = JSON.parse(jsonPaths); } catch(e) { imagePaths = []; } currentFileName = fileName; showImage(0); };
-window.onPdfRenderProgress = function(pageNum, total) {
-    if (total > 0) { pdfRenderProgress.style.display = 'flex'; const pct = Math.round((pageNum / total) * 100); pdfRenderFill.style.width = pct + '%'; pdfRenderText.innerText = pct + '%'; }
+
+// ────── 原生回调 ──────
+window.onImageBatch = function(jsonPaths) {
+    try { imagePaths = JSON.parse(jsonPaths); } catch(e) { imagePaths = []; }
+    currentFileName = '批量图片';
+    showImage(0);
 };
-window.hidePdfRenderProgress = function() { pdfRenderProgress.style.display = 'none'; pdfRenderFill.style.width = '0%'; };
+window.onPdfBatch = function(jsonPaths, fileName) {
+    try { imagePaths = JSON.parse(jsonPaths); } catch(e) { imagePaths = []; }
+    currentFileName = fileName;
+    showImage(0);
+};
+window.onPdfRenderProgress = function(pageNum, total) {
+    if (total > 0) {
+        pdfRenderProgress.style.display = 'flex';
+        const pct = Math.round((pageNum / total) * 100);
+        pdfRenderFill.style.width = pct + '%';
+        pdfRenderText.innerText = pct + '%';
+    }
+};
+window.hidePdfRenderProgress = function() {
+    pdfRenderProgress.style.display = 'none';
+    pdfRenderFill.style.width = '0%';
+};
+
 prevPageBtn.onclick = () => showImage(currentIndex - 1);
 nextPageBtn.onclick = () => showImage(currentIndex + 1);
 pageNumInput.onchange = function() {
@@ -234,71 +265,95 @@ pageNumInput.onchange = function() {
     else this.value = currentIndex + 1;
 };
 
-// ────── 背景切除（同早期版本） ──────
+// ────── 背景切除算法 ──────
 function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     const { data, width, height } = imageData;
-    const edgePixels = []; const ew = 2;
+    const edgePixels = [];
+    const ew = 2;
     for (let y = 0; y < height; y++) {
-        for (let x = 0; x < ew; x++) { edgePixels.push([data[(y*width+x)*4], data[(y*width+x)*4+1], data[(y*width+x)*4+2]]); }
-        for (let x = width - ew; x < width; x++) { edgePixels.push([data[(y*width+x)*4], data[(y*width+x)*4+1], data[(y*width+x)*4+2]]); }
+        for (let x = 0; x < ew; x++) edgePixels.push([data[(y*width+x)*4], data[(y*width+x)*4+1], data[(y*width+x)*4+2]]);
+        for (let x = width - ew; x < width; x++) edgePixels.push([data[(y*width+x)*4], data[(y*width+x)*4+1], data[(y*width+x)*4+2]]);
     }
     for (let x = ew; x < width - ew; x++) {
-        for (let y = 0; y < ew; y++) { edgePixels.push([data[(y*width+x)*4], data[(y*width+x)*4+1], data[(y*width+x)*4+2]]); }
-        for (let y = height - ew; y < height; y++) { edgePixels.push([data[(y*width+x)*4], data[(y*width+x)*4+1], data[(y*width+x)*4+2]]); }
+        for (let y = 0; y < ew; y++) edgePixels.push([data[(y*width+x)*4], data[(y*width+x)*4+1], data[(y*width+x)*4+2]]);
+        for (let y = height - ew; y < height; y++) edgePixels.push([data[(y*width+x)*4], data[(y*width+x)*4+1], data[(y*width+x)*4+2]]);
     }
     if (edgePixels.length === 0) return null;
     const n = edgePixels.length;
-    let mr = 0, mg = 0, mb = 0; edgePixels.forEach(p => { mr += p[0]; mg += p[1]; mb += p[2]; }); mr /= n; mg /= n; mb /= n;
-    let vr = 0, vg = 0, vb = 0; edgePixels.forEach(p => { vr += (p[0]-mr)**2; vg += (p[1]-mg)**2; vb += (p[2]-mb)**2; });
-    const stdR = Math.sqrt(vr/n), stdG = Math.sqrt(vg/n), stdB = Math.sqrt(vb/n), maxStd = Math.max(stdR, stdG, stdB, 1), th = tol * maxStd;
+    let mr = 0, mg = 0, mb = 0;
+    edgePixels.forEach(p => { mr += p[0]; mg += p[1]; mb += p[2]; });
+    mr /= n; mg /= n; mb /= n;
+    let vr = 0, vg = 0, vb = 0;
+    edgePixels.forEach(p => { vr += (p[0]-mr)**2; vg += (p[1]-mg)**2; vb += (p[2]-mb)**2; });
+    const stdR = Math.sqrt(vr/n), stdG = Math.sqrt(vg/n), stdB = Math.sqrt(vb/n);
+    const maxStd = Math.max(stdR, stdG, stdB, 1);
+    const th = tol * maxStd;
     const mask = new Uint8Array(width*height);
     for (let i = 0; i < width*height; i++) {
-        const r = data[i*4], g = data[i*4+1], b = data[i*4+2], dr = r - mr, dg = g - mg, db = b - mb;
+        const r = data[i*4], g = data[i*4+1], b = data[i*4+2];
+        const dr = r - mr, dg = g - mg, db = b - mb;
         mask[i] = (Math.sqrt(dr*dr+dg*dg+db*db) <= th) ? 0 : 255;
     }
     function dilate(src) {
         const dst = new Uint8Array(src.length);
-        for (let y=1; y<height-1; y++) for (let x=1; x<width-1; x++) {
-            let max=0; for (let dy=-1; dy<=1; dy++) for (let dx=-1; dx<=1; dx++) max = Math.max(max, src[(y+dy)*width+(x+dx)]); dst[y*width+x]=max;
-        } return dst;
+        for (let y = 1; y < height-1; y++) for (let x = 1; x < width-1; x++) {
+            let max = 0;
+            for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) max = Math.max(max, src[(y+dy)*width+(x+dx)]);
+            dst[y*width+x] = max;
+        }
+        return dst;
     }
     function erode(src) {
         const dst = new Uint8Array(src.length);
-        for (let y=1; y<height-1; y++) for (let x=1; x<width-1; x++) {
-            let min=255; for (let dy=-1; dy<=1; dy++) for (let dx=-1; dx<=1; dx++) min = Math.min(min, src[(y+dy)*width+(x+dx)]); dst[y*width+x]=min;
-        } return dst;
+        for (let y = 1; y < height-1; y++) for (let x = 1; x < width-1; x++) {
+            let min = 255;
+            for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) min = Math.min(min, src[(y+dy)*width+(x+dx)]);
+            dst[y*width+x] = min;
+        }
+        return dst;
     }
     let closed = dilate(mask); closed = erode(closed);
-    const visited = new Uint8Array(width*height); let maxArea = 0, maxRect = {left:0, top:0, right:width-1, bottom:height-1};
-    for (let i=0; i<width*height; i++) {
-        if (closed[i]===255 && visited[i]===0) {
-            let stack=[i], area=0, minX=width, maxX=0, minY=height, maxY=0; visited[i]=1;
+    const visited = new Uint8Array(width*height);
+    let maxArea = 0, maxRect = { left:0, top:0, right:width-1, bottom:height-1 };
+    for (let i = 0; i < width*height; i++) {
+        if (closed[i] === 255 && visited[i] === 0) {
+            let stack = [i], area = 0, minX = width, maxX = 0, minY = height, maxY = 0;
+            visited[i] = 1;
             while (stack.length) {
-                const idx=stack.pop(); area++; const x=idx%width, y=Math.floor(idx/width);
-                if (x<minX) minX=x; if (x>maxX) maxX=x; if (y<minY) minY=y; if (y>maxY) maxY=y;
-                for (const nb of [idx-1, idx+1, idx-width, idx+width]) if (nb>=0 && nb<width*height && closed[nb]===255 && visited[nb]===0) { visited[nb]=1; stack.push(nb); }
+                const idx = stack.pop(); area++;
+                const x = idx % width, y = Math.floor(idx / width);
+                if (x < minX) minX = x; if (x > maxX) maxX = x;
+                if (y < minY) minY = y; if (y > maxY) maxY = y;
+                for (const nb of [idx-1, idx+1, idx-width, idx+width])
+                    if (nb >= 0 && nb < width*height && closed[nb] === 255 && visited[nb] === 0) { visited[nb] = 1; stack.push(nb); }
             }
-            if (area>maxArea) { maxArea=area; maxRect={left:minX, top:minY, right:maxX, bottom:maxY}; }
+            if (area > maxArea) { maxArea = area; maxRect = { left:minX, top:minY, right:maxX, bottom:maxY }; }
         }
     }
-    let left = maxRect.left - lrMargin, right = maxRect.right + lrMargin, top = maxRect.top - topMargin, bottom = maxRect.bottom + bottomMargin;
-    left = Math.max(0, left); right = Math.min(width-1, right); top = Math.max(0, top); bottom = Math.min(height-1, bottom);
+    let left = maxRect.left - lrMargin, right = maxRect.right + lrMargin;
+    let top = maxRect.top - topMargin, bottom = maxRect.bottom + bottomMargin;
+    left = Math.max(0, left); right = Math.min(width-1, right);
+    top = Math.max(0, top); bottom = Math.min(height-1, bottom);
     if (right-left < 10 || bottom-top < 10) return null;
     return { left, top, width: right-left+1, height: bottom-top+1 };
 }
 
-// ────── 堆叠检测（早期算法核心） ──────
+// ────── 堆叠检测 ──────
 function findLeftCut(proj, w, th) {
-    let start = -1; for (let x = 0; x < w*0.4; x++) if (proj[x] > th) { start = x; break; }
+    let start = -1;
+    for (let x = 0; x < w*0.4; x++) if (proj[x] > th) { start = x; break; }
     if (start === -1) return null;
-    let peak = start; for (let x = start; x < w*0.5; x++) if (proj[x] > proj[peak]) peak = x;
+    let peak = start;
+    for (let x = start; x < w*0.5; x++) if (proj[x] > proj[peak]) peak = x;
     for (let x = peak; x < w*0.5; x++) if (proj[x] < th*0.5) return x;
     return peak + 5;
 }
 function findRightCut(proj, w, th) {
-    let start = -1; for (let x = w-1; x > w*0.6; x--) if (proj[x] > th) { start = x; break; }
+    let start = -1;
+    for (let x = w-1; x > w*0.6; x--) if (proj[x] > th) { start = x; break; }
     if (start === -1) return null;
-    let peak = start; for (let x = start; x > w*0.4; x--) if (proj[x] > proj[peak]) peak = x;
+    let peak = start;
+    for (let x = start; x > w*0.4; x--) if (proj[x] > proj[peak]) peak = x;
     for (let x = peak; x > w*0.4; x--) if (proj[x] < th*0.5) return x;
     return peak - 5;
 }
@@ -313,22 +368,23 @@ function detectFrameLineInRegion(imageData, xStart, xEnd, width, height) {
     for (let x=xStart+2; x<xEnd-2; x++) if (colEdge[x]>colEdge[x-1] && colEdge[x]>colEdge[x+1] && colEdge[x]>bestVal) { bestVal=colEdge[x]; bestX=x; }
     return bestX;
 }
-
 function processImageWithParams(imageData, params) {
     const { data, width, height } = imageData;
     const gray = new Float32Array(width*height);
     for (let i=0; i<width*height; i++) {
-        const r=data[i*4], g=data[i*4+1], b=data[i*4+2], lum=0.299*r+0.587*g+0.114*b;
+        const r=data[i*4], g=data[i*4+1], b=data[i*4+2];
+        const lum = 0.299*r + 0.587*g + 0.114*b;
         gray[i] = Math.min(255, Math.max(0, Math.pow(lum/255, 1/params.contrast) * 255));
     }
     const binary = new Uint8Array(width*height);
     for (let i=0; i<width*height; i++) binary[i] = gray[i] < params.thresh ? 1 : 0;
     const proj = new Float32Array(width);
-    for (let x=0; x<width; x++) { let sum=0; for (let y=0; y<height; y++) sum+=binary[y*width+x]; proj[x] = sum/height; }
+    for (let x=0; x<width; x++) { let s=0; for (let y=0; y<height; y++) s+=binary[y*width+x]; proj[x] = s/height; }
     const avgDensity = proj.reduce((a,b)=>a+b,0)/width;
     const baseTh = Math.max(0.25, avgDensity*1.8);
     const leftEff = baseTh*(1+params.leftSensitivity), rightEff = baseTh*(1+params.rightSensitivity);
-    let leftCut = findLeftCut(proj, width, leftEff), rightCut = findRightCut(proj, width, rightEff);
+    let leftCut = findLeftCut(proj, width, leftEff);
+    let rightCut = findRightCut(proj, width, rightEff);
     let bindLine = null;
     if (params.mode === 'left-only') rightCut = null;
     else if (params.mode === 'right-only') leftCut = null;
@@ -339,6 +395,7 @@ function processImageWithParams(imageData, params) {
     return { leftCut, rightCut, bindLine, proj };
 }
 
+// ────── 投影图绘制 ──────
 function drawProjectionPlot(proj, width, leftCut, rightCut, bindLine) {
     const pw = projCanvas.width, ph = projCanvas.height;
     projCtx.clearRect(0, 0, pw, ph);
@@ -356,13 +413,17 @@ function drawProjectionPlot(proj, width, leftCut, rightCut, bindLine) {
     document.getElementById('projectionPlot').style.display = 'block';
 }
 
+// ────── 综合处理流程 ──────
 function processAll() {
     if (!originalImage || !imageDataCache) return;
     originalCtx.putImageData(imageDataCache, 0, 0);
     const fullImgData = imageDataCache;
     const bgParams = getBgParams(), stackParams = getStackParams();
+
     let cropRegion = null;
-    if (bgParams.bgTol > 0) cropRegion = removeBackground(fullImgData, bgParams.bgTol, bgParams.lrMargin, bgParams.topMargin, bgParams.bottomMargin);
+    if (bgParams.bgTol > 0)
+        cropRegion = removeBackground(fullImgData, bgParams.bgTol, bgParams.lrMargin, bgParams.topMargin, bgParams.bottomMargin);
+
     let bgWorkData;
     if (cropRegion) {
         bgWorkData = originalCtx.getImageData(cropRegion.left, cropRegion.top, cropRegion.width, cropRegion.height);
@@ -375,10 +436,11 @@ function processAll() {
         bgResultCtx.putImageData(fullImgData, 0, 0);
         document.getElementById('bgNote').innerText = '无背景切除';
     }
+
     const { leftCut, rightCut, bindLine, proj } = processImageWithParams(bgWorkData, stackParams);
     const w = bgWorkData.width, h = bgWorkData.height;
 
-    // 标注
+    // 在原图上画标注
     originalCtx.putImageData(fullImgData, 0, 0);
     if (cropRegion) {
         originalCtx.strokeStyle = '#2d6a4f'; originalCtx.lineWidth = 2;
@@ -398,18 +460,19 @@ function processAll() {
     drawLine(bindLine, '#1e5f9e', [8,6]);
     originalCtx.setLineDash([]);
 
-    // 左右结果
+    // 生成左右结果图像
     if (leftCut !== null && stackParams.mode !== 'right-only') {
         let lw = bindLine ? bindLine - leftCut : (rightCut || w) - leftCut;
         if (lw > 0) {
             let startOff = leftCut * 4, endOff = (leftCut + lw) * 4;
             let buf = bgWorkData.data.buffer.slice(startOff, endOff);
             let data = new Uint8ClampedArray(buf);
-            if (data.length < lw*h*4) { let fix = new Uint8ClampedArray(lw*h*4); fix.set(data); data = fix; }
+            if (data.length < lw * h * 4) { let fixed = new Uint8ClampedArray(lw * h * 4); fixed.set(data); data = fixed; }
             leftStackCanvas.width = lw; leftStackCanvas.height = h;
             leftStackCtx.putImageData(new ImageData(data, lw, h), 0, 0);
         }
     } else { leftStackCanvas.width = 0; }
+
     if (rightCut !== null && stackParams.mode !== 'left-only') {
         let rLeft = bindLine || (leftCut || 0);
         let rw = rightCut - rLeft;
@@ -417,7 +480,7 @@ function processAll() {
             let startOff = rLeft * 4, endOff = rightCut * 4;
             let buf = bgWorkData.data.buffer.slice(startOff, endOff);
             let data = new Uint8ClampedArray(buf);
-            if (data.length < rw*h*4) { let fix = new Uint8ClampedArray(rw*h*4); fix.set(data); data = fix; }
+            if (data.length < rw * h * 4) { let fixed = new Uint8ClampedArray(rw * h * 4); fixed.set(data); data = fixed; }
             rightStackCanvas.width = rw; rightStackCanvas.height = h;
             rightStackCtx.putImageData(new ImageData(data, rw, h), 0, 0);
         }
@@ -428,7 +491,7 @@ function processAll() {
     drawProjectionPlot(proj, w, leftCut, rightCut, bindLine);
 }
 
-// 保存命名修正
+// ────── 保存左右半（_z / _y） ──────
 function saveCanvas(canvas, suffix) {
     if (canvas.width === 0) return;
     const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
@@ -442,7 +505,7 @@ function saveCanvas(canvas, suffix) {
 document.getElementById('saveLeftBtn').onclick = () => saveCanvas(leftStackCanvas, 'z');
 document.getElementById('saveRightBtn').onclick = () => saveCanvas(rightStackCanvas, 'y');
 
-// 导出PDF（保持原有逻辑，也使用_z/_y后缀？可根据需要）
+// ────── 导出PDF ──────
 document.getElementById('generatePdfBtn').onclick = async () => {
     if (imagePaths.length === 0) { Android.showToast('没有图片'); return; }
     if (typeof window.jspdf === 'undefined') { Android.showToast('PDF库未加载'); return; }
@@ -452,9 +515,10 @@ document.getElementById('generatePdfBtn').onclick = async () => {
         const pdf = new jsPDF({ unit: 'pt', compress: false });
         const bgParams = getBgParams(), stackParams = getStackParams();
         for (let i = 0; i < imagePaths.length; i++) {
-            const img = await new Promise(resolve => {
-                const imgEl = new Image(); imgEl.onload = () => resolve(imgEl);
-                imgEl.onerror = () => alert('图片加载失败: ' + imagePaths[i]); imgEl.src = 'file://' + imagePaths[i];
+            const img = await new Promise((resolve) => {
+                const el = new Image(); el.onload = () => resolve(el);
+                el.onerror = () => alert('加载失败: ' + imagePaths[i]);
+                el.src = 'file://' + imagePaths[i];
             });
             const canvas = document.createElement('canvas'); canvas.width = img.width; canvas.height = img.height;
             const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0);
@@ -470,20 +534,20 @@ document.getElementById('generatePdfBtn').onclick = async () => {
             const { leftCut, rightCut, bindLine } = processImageWithParams(workData, stackParams);
             let l = leftCut ?? 0, r = rightCut ?? workData.width;
             if (l >= r) { l = 0; r = workData.width; }
-            if (stackParams.mode === 'combined' && bindLine && l<bindLine && bindLine<r) {
-                const lw = bindLine-l, rw = r-bindLine;
-                const lc = document.createElement('canvas'); lc.width = lw; lc.height = workData.height;
-                lc.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(workData.data.buffer.slice(l*4, bindLine*4)), lw, workData.height), 0, 0);
-                const rc = document.createElement('canvas'); rc.width = rw; rc.height = workData.height;
-                rc.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(workData.data.buffer.slice(bindLine*4, r*4)), rw, workData.height), 0, 0);
-                if (i>0) pdf.addPage();
+            if (stackParams.mode === 'combined' && bindLine && l < bindLine && bindLine < r) {
+                const lw = bindLine - l, rw = r - bindLine;
+                const leftCanvas = document.createElement('canvas'); leftCanvas.width = lw; leftCanvas.height = workData.height;
+                leftCanvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(workData.data.buffer.slice(l*4, bindLine*4)), lw, workData.height), 0, 0);
+                const rightCanvas = document.createElement('canvas'); rightCanvas.width = rw; rightCanvas.height = workData.height;
+                rightCanvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(workData.data.buffer.slice(bindLine*4, r*4)), rw, workData.height), 0, 0);
+                if (i > 0) pdf.addPage();
                 pdf.internal.pageSize.setWidth(Math.max(lw, rw)); pdf.internal.pageSize.setHeight(workData.height*2+4);
-                pdf.addImage(lc.toDataURL('image/png'), 'PNG', 0, 0, lw, workData.height);
-                pdf.addImage(rc.toDataURL('image/png'), 'PNG', 0, workData.height+4, rw, workData.height);
+                pdf.addImage(leftCanvas.toDataURL('image/png'), 'PNG', 0, 0, lw, workData.height);
+                pdf.addImage(rightCanvas.toDataURL('image/png'), 'PNG', 0, workData.height+4, rw, workData.height);
             } else {
                 const cropCanvas = document.createElement('canvas'); cropCanvas.width = r-l; cropCanvas.height = workData.height;
                 cropCanvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(workData.data.buffer.slice(l*4, r*4)), r-l, workData.height), 0, 0);
-                if (i>0) pdf.addPage();
+                if (i > 0) pdf.addPage();
                 pdf.internal.pageSize.setWidth(r-l); pdf.internal.pageSize.setHeight(workData.height);
                 pdf.addImage(cropCanvas.toDataURL('image/png'), 'PNG', 0, 0, r-l, workData.height);
             }
@@ -497,7 +561,10 @@ document.getElementById('generatePdfBtn').onclick = async () => {
     }
 };
 
-[bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider, contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider].forEach(el => el.addEventListener('input', () => { updateSliderLabels(); processAll(); }));
+// ────── 滑块/模式变化自动刷新 ──────
+[bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider,
+ contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider]
+    .forEach(el => el.addEventListener('input', () => { updateSliderLabels(); processAll(); }));
 document.querySelectorAll('input[name="pageMode"]').forEach(r => r.addEventListener('change', processAll));
 </script>
 </body>
