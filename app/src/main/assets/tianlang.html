@@ -65,14 +65,14 @@
             <button class="button upload-btn" onclick="clearAndPick('image')">📁 上传图片</button>
             <button class="button upload-btn" onclick="clearAndPick('pdf')">📄 上传PDF</button>
             <button class="button upload-btn" id="darkModeBtn" onclick="toggleDarkMode()" title="切换夜间模式">🌙</button>
-            <div class="pdf-page-nav" id="pdfNav" style="display:none;">
-                <button class="button" id="prevPageBtn">◀</button>
-                <span>第 <input type="number" id="pageNumInput" value="1" min="1"> / <span id="totalPages">1</span> 页</span>
-                <button class="button" id="nextPageBtn">▶</button>
+            <div class="pdf-page-nav" id="pdfNav">
+                <button class="button" id="prevPageBtn" disabled>◀</button>
+                <span>第 <input type="number" id="pageNumInput" value="1" min="1"> / <span id="totalPages">0</span> 页</span>
+                <button class="button" id="nextPageBtn" disabled>▶</button>
             </div>
-            <button class="button save-btn" id="saveLeftBtn">💾 保存左半 (_z)</button>
-            <button class="button save-btn" id="saveRightBtn">💾 保存右半 (_y)</button>
-            <button class="button save-btn" id="saveBgBtn">💾 去背景保存</button>
+            <button class="button save-btn" id="saveLeftBtn" disabled>💾 保存左半 (_z)</button>
+            <button class="button save-btn" id="saveRightBtn" disabled>💾 保存右半 (_y)</button>
+            <button class="button save-btn" id="saveBgBtn" disabled>💾 去背景保存</button>
             <button class="button" id="applyParamsBtn" style="background:#b8860b;">📌 应用到本页</button>
             <button class="button save-btn" id="generatePdfBtn" style="display:none;">📑 生成裁切PDF</button>
             <div id="pdfRenderProgress" class="progress-container" style="display:none;">
@@ -94,9 +94,9 @@
             <h3>🧹 背景切除</h3>
             <div style="display:flex; flex-direction:column; align-items:center; width:100%;">
                 <div class="control-item"><label>背景容差：</label><input type="range" id="bgTolSlider" min="0" max="50" value="15"><span id="bgTolValue">15</span><span id="bgOffNote" class="off-note">背景切除已关闭</span></div>
-                <div class="control-item"><label>左右边距：</label><input type="range" id="lrMarginSlider" min="-200" max="50" value="0"><span id="lrMarginValue">0</span> px</div>
-                <div class="control-item"><label>上边距：</label><input type="range" id="topMarginSlider" min="-200" max="50" value="0"><span id="topMarginValue">0</span> px</div>
-                <div class="control-item"><label>下边距：</label><input type="range" id="bottomMarginSlider" min="-200" max="50" value="0"><span id="bottomMarginValue">0</span> px</div>
+                <div class="control-item"><label>左右边距：</label><input type="range" id="lrMarginSlider" min="-50" max="50" value="0"><span id="lrMarginValue">0</span> px</div>
+                <div class="control-item"><label>上边距：</label><input type="range" id="topMarginSlider" min="-50" max="50" value="0"><span id="topMarginValue">0</span> px</div>
+                <div class="control-item"><label>下边距：</label><input type="range" id="bottomMarginSlider" min="-50" max="50" value="0"><span id="bottomMarginValue">0</span> px</div>
             </div>
             <canvas id="bgResultCanvas"></canvas>
             <div class="note" id="bgNote">背景切除结果</div>
@@ -137,21 +137,21 @@
 </div>
 
 <script>
-// ── 全局状态 ──
+// ═══════ 全局状态 ═══════
 const DEFAULT_PARAMS = {
     bgTol: 15, lrMargin: 0, topMargin: 0, bottomMargin: 0,
     contrast: 1.8, thresh: 90, leftSensitivity: 0.35, rightSensitivity: 0.35,
     mode: 'auto-single'
 };
 let imagePaths = [];
-let pageParams = [];
+let pageParams = [];               // 每页定制参数 (null=使用当前滑块)
 let currentIndex = 0;
 let originalImage = null;
 let currentFileName = '未命名';
 let lastComputedResult = null;
 const PREVIEW_MAX_WIDTH = 1200;
 
-// DOM 引用
+// DOM 元素
 const bgTolSlider = document.getElementById('bgTolSlider');
 const lrMarginSlider = document.getElementById('lrMarginSlider');
 const topMarginSlider = document.getElementById('topMarginSlider');
@@ -193,12 +193,16 @@ const exportProgressText = document.getElementById('exportProgressText');
 const bgOffNote = document.getElementById('bgOffNote');
 const contrastOffNote = document.getElementById('contrastOffNote');
 
-// ── 工具函数 ──
+// ═══════ 工具函数 ═══════
 function getBgParams() {
     return { bgTol: +bgTolSlider.value, lrMargin: +lrMarginSlider.value, topMargin: +topMarginSlider.value, bottomMargin: +bottomMarginSlider.value };
 }
 function getStackParams() {
-    return { contrast: +contrastSlider.value, thresh: +thresholdSlider.value, leftSensitivity: +leftSensitivitySlider.value, rightSensitivity: +rightSensitivitySlider.value, mode: document.querySelector('input[name="pageMode"]:checked').value };
+    return {
+        contrast: +contrastSlider.value, thresh: +thresholdSlider.value,
+        leftSensitivity: +leftSensitivitySlider.value, rightSensitivity: +rightSensitivitySlider.value,
+        mode: document.querySelector('input[name="pageMode"]:checked').value
+    };
 }
 function updateSliderLabels() {
     bgTolValue.innerText = bgTolSlider.value;
@@ -212,8 +216,7 @@ function updateSliderLabels() {
     bgOffNote.style.display = (bgTolSlider.value == 0) ? 'inline' : 'none';
     contrastOffNote.style.display = (contrastSlider.value == 0) ? 'inline' : 'none';
 }
-[bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider, contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider]
-    .forEach(el => el.addEventListener('input', updateSliderLabels));
+[...document.querySelectorAll('input[type=range]')].forEach(el => el.addEventListener('input', updateSliderLabels));
 
 function loadPageParams(index) {
     const params = pageParams[index];
@@ -234,10 +237,20 @@ function loadPageParams(index) {
 function getParamsForPage(index) {
     const p = pageParams[index];
     if (p) return p;
-    return getStackParams(); // 使用当前滑块值
+    return {
+        bgTol: +bgTolSlider.value,
+        lrMargin: +lrMarginSlider.value,
+        topMargin: +topMarginSlider.value,
+        bottomMargin: +bottomMarginSlider.value,
+        contrast: +contrastSlider.value,
+        thresh: +thresholdSlider.value,
+        leftSensitivity: +leftSensitivitySlider.value,
+        rightSensitivity: +rightSensitivitySlider.value,
+        mode: document.querySelector('input[name="pageMode"]:checked').value
+    };
 }
 
-// ── 清理并获取新文件 ──
+// ═══════ 清理并获取新文件 ═══════
 function clearAndPick(type) {
     imagePaths = [];
     pageParams = [];
@@ -246,8 +259,13 @@ function clearAndPick(type) {
     lastComputedResult = null;
     currentFileName = '未命名';
     [originalCanvas, bgResultCanvas, leftStackCanvas, rightStackCanvas].forEach(c => { c.width = 1; c.height = 1; });
-    pdfNav.style.display = 'none';
+    // 重置导航
+    totalPagesSpan.innerText = '0';
+    pageNumInput.value = 1;
+    prevPageBtn.disabled = true;
+    nextPageBtn.disabled = true;
     generatePdfBtn.style.display = 'none';
+    // 清空信息
     document.getElementById('leftCut').innerText = '--';
     document.getElementById('rightCut').innerText = '--';
     document.getElementById('cutInfo').innerHTML = '左侧切割线：-- px &nbsp;&nbsp; 右侧切割线：-- px';
@@ -257,13 +275,12 @@ function clearAndPick(type) {
     document.getElementById('saveBgBtn').disabled = true;
     pdfRenderProgress.style.display = 'none';
     exportProgress.style.display = 'none';
-    pageNumInput.value = 1;
-    totalPagesSpan.innerText = '1';
+    // 调用原生选择器
     if (type === 'pdf') Android.pickFile('pdf');
     else if (type === 'image') Android.pickFile('image');
 }
 
-// ── 图片加载与页数管理 ──
+// ═══════ 图片加载与翻页 ═══════
 function showImage(index) {
     if (imagePaths.length === 0) return;
     if (index < 0 || index >= imagePaths.length) return;
@@ -282,22 +299,31 @@ function showImage(index) {
     img.src = 'file://' + imagePaths[index];
 }
 function updatePageNav() {
-    if (imagePaths.length > 1) {
-        pdfNav.style.display = 'flex';
+    if (imagePaths.length > 0) {
         totalPagesSpan.innerText = imagePaths.length;
-        pageNumInput.max = imagePaths.length;
         pageNumInput.value = currentIndex + 1;
+        pageNumInput.max = imagePaths.length;
         prevPageBtn.disabled = (currentIndex <= 0);
         nextPageBtn.disabled = (currentIndex >= imagePaths.length - 1);
         generatePdfBtn.style.display = 'inline-block';
+        // 单页时隐藏翻页按钮，但保留页码显示
+        if (imagePaths.length === 1) {
+            prevPageBtn.style.display = 'none';
+            nextPageBtn.style.display = 'none';
+        } else {
+            prevPageBtn.style.display = '';
+            nextPageBtn.style.display = '';
+        }
     } else {
-        pdfNav.style.display = 'none';
-        totalPagesSpan.innerText = imagePaths.length;
-        pageNumInput.value = currentIndex + 1;
-        pageNumInput.max = imagePaths.length || 1;
-        generatePdfBtn.style.display = (imagePaths.length === 1) ? 'inline-block' : 'none';
+        totalPagesSpan.innerText = '0';
+        pageNumInput.value = 1;
+        prevPageBtn.disabled = true;
+        nextPageBtn.disabled = true;
+        generatePdfBtn.style.display = 'none';
     }
 }
+
+// 原生回调
 window.onImageBatch = function(jsonPaths) {
     try {
         const parsed = JSON.parse(jsonPaths);
@@ -308,8 +334,8 @@ window.onImageBatch = function(jsonPaths) {
             pageNumInput.max = imagePaths.length;
             Android.showToast('已加载 ' + imagePaths.length + ' 张图片');
             showImage(0);
-        } else { Android.showToast('图片列表解析异常'); imagePaths = []; }
-    } catch(e) { Android.showToast('图片数据解析失败: ' + e.message); imagePaths = []; }
+        } else { Android.showToast('图片列表解析异常'); }
+    } catch(e) { Android.showToast('图片数据解析失败: ' + e.message); }
 };
 window.onPdfBatch = function(jsonPaths, fileName) {
     try {
@@ -321,8 +347,8 @@ window.onPdfBatch = function(jsonPaths, fileName) {
             pageNumInput.max = imagePaths.length;
             Android.showToast('已加载 ' + imagePaths.length + ' 页 PDF');
             showImage(0);
-        } else { Android.showToast('PDF 解析异常：未获得有效页路径'); imagePaths = []; }
-    } catch(e) { Android.showToast('PDF 数据解析失败: ' + e.message); imagePaths = []; }
+        } else { Android.showToast('PDF 解析异常：未获得有效页路径'); }
+    } catch(e) { Android.showToast('PDF 数据解析失败: ' + e.message); }
 };
 window.onPdfRenderProgress = function(pageNum, total) {
     if (total > 0) {
@@ -333,6 +359,7 @@ window.onPdfRenderProgress = function(pageNum, total) {
 };
 window.hidePdfRenderProgress = function() { pdfRenderProgress.style.display = 'none'; pdfRenderFill.style.width = '0%'; };
 
+// 翻页按钮事件
 prevPageBtn.onclick = () => showImage(currentIndex - 1);
 nextPageBtn.onclick = () => showImage(currentIndex + 1);
 pageNumInput.onchange = function() {
@@ -341,12 +368,12 @@ pageNumInput.onchange = function() {
     else this.value = currentIndex + 1;
 };
 pageNumInput.addEventListener('input', function() {
-    const num = parseInt(this.value);
-    if (isNaN(num) || num < 1) this.value = 1;
-    else if (num > imagePaths.length) this.value = imagePaths.length;
+    const val = parseInt(this.value);
+    if (isNaN(val) || val < 1) this.value = 1;
+    else if (val > imagePaths.length) this.value = imagePaths.length;
 });
 
-// ── 背景切除算法 ──
+// ═══════ 背景切除算法 ═══════
 function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     const { data, width, height } = imageData;
     const edgePixels = []; const ew = 2;
@@ -399,7 +426,7 @@ function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     return { left, top, width: right-left+1, height: bottom-top+1 };
 }
 
-// ── 堆叠检测与投影法装订线 ──
+// ═══════ 堆叠检测与投影装订线 ═══════
 function findLeftCut(proj, w, th) {
     let start = -1; for (let x = 0; x < w*0.4; x++) if (proj[x] > th) { start = x; break; }
     if (start === -1) return null;
@@ -479,7 +506,7 @@ function processImageWithParams(imageData, params) {
     return { leftCut, rightCut, bindLine, proj };
 }
 
-// ── 核心预览计算 ──
+// ═══════ 核心预览 ═══════
 function processAll() {
     if (!originalImage) return;
     const origW = originalImage.width, origH = originalImage.height;
@@ -566,7 +593,6 @@ function processAll() {
     bgCanvas.width = bgWorkData.width; bgCanvas.height = bgWorkData.height;
     const bgCtx = bgCanvas.getContext('2d');
     bgCtx.putImageData(bgWorkData, 0, 0);
-
     if (!stackOff && leftCut !== null && stackParams.mode !== 'right-only') {
         const bind = (bindLine && stackParams.mode === 'combined') ? bindLine : (rightCut || bgWorkData.width);
         const lw = bind - leftCut;
@@ -575,7 +601,6 @@ function processAll() {
             leftStackCtx.putImageData(bgCtx.getImageData(leftCut, 0, lw, bgWorkData.height), 0, 0);
         } else leftStackCanvas.width = 0;
     } else leftStackCanvas.width = 0;
-
     if (!stackOff && rightCut !== null && stackParams.mode !== 'left-only') {
         const bind = (bindLine && stackParams.mode === 'combined') ? bindLine : (leftCut || 0);
         const rw = rightCut - bind;
@@ -592,7 +617,7 @@ function processAll() {
     document.getElementById('saveRightBtn').disabled = !hasRight || stackOff;
     document.getElementById('saveBgBtn').disabled = false;
 
-    // 信息显示
+    // 信息
     let pageType = '未知';
     if (stackOff) pageType = '⚫ 堆叠切除关闭';
     else if (stackParams.mode === 'auto-single') {
@@ -603,7 +628,6 @@ function processAll() {
     document.getElementById('leftCut').innerText = stackOff ? '已关闭' : (fullLeftCut !== null ? fullLeftCut + ' (原图)' : '无');
     document.getElementById('rightCut').innerText = stackOff ? '已关闭' : (fullRightCut !== null ? fullRightCut + ' (原图)' : '无');
     document.getElementById('cutInfo').innerHTML = `左侧切割线：${document.getElementById('leftCut').innerText} px &nbsp;&nbsp; 右侧切割线：${document.getElementById('rightCut').innerText} px &nbsp;&nbsp; 类型：${pageType}`;
-
     if (!stackOff && proj.length > 0) drawProjectionPlot(proj, bgWorkData.width, leftCut, rightCut, bindLine);
     else document.getElementById('projectionPlot').style.display = 'none';
 }
@@ -625,7 +649,7 @@ function drawProjectionPlot(proj, width, leftCut, rightCut, bindLine) {
     document.getElementById('projectionPlot').style.display = 'block';
 }
 
-// ── 保存功能 ──
+// ═══════ 保存 ═══════
 function saveFullSize(suffix) {
     if (!originalImage || !lastComputedResult) return;
     const res = lastComputedResult;
@@ -669,7 +693,6 @@ function saveFullSize(suffix) {
     const outName = currentFileName.replace(/\.[^.]+$/, '') + (suffix === 'z' ? '_z.png' : '_y.png');
     Android.saveFile(encodeURIComponent(base64), outName);
 }
-
 function saveFullBg() {
     if (!originalImage || !lastComputedResult) return;
     const res = lastComputedResult;
@@ -682,25 +705,30 @@ function saveFullBg() {
     outCanvas.width = cropWidth; outCanvas.height = cropHeight;
     outCanvas.getContext('2d').putImageData(fullCtx.getImageData(cropLeft, cropTop, cropWidth, cropHeight), 0, 0);
     const base64 = outCanvas.toDataURL('image/png').split(',')[1];
-    const outName = currentFileName.replace(/\.[^.]+$/, '') + '_bg.png';
-    Android.saveFile(encodeURIComponent(base64), outName);
+    Android.saveFile(encodeURIComponent(base64), currentFileName.replace(/\.[^.]+$/, '') + '_bg.png');
 }
 document.getElementById('saveLeftBtn').onclick = () => saveFullSize('z');
 document.getElementById('saveRightBtn').onclick = () => saveFullSize('y');
 document.getElementById('saveBgBtn').onclick = saveFullBg;
 
-// ── 应用到本页 ──
+// ═══════ 应用到本页 ═══════
 document.getElementById('applyParamsBtn').onclick = function() {
     if (imagePaths.length === 0) return;
     pageParams[currentIndex] = {
-        bgTol: +bgTolSlider.value, lrMargin: +lrMarginSlider.value, topMargin: +topMarginSlider.value, bottomMargin: +bottomMarginSlider.value,
-        contrast: +contrastSlider.value, thresh: +thresholdSlider.value, leftSensitivity: +leftSensitivitySlider.value, rightSensitivity: +rightSensitivitySlider.value,
+        bgTol: +bgTolSlider.value,
+        lrMargin: +lrMarginSlider.value,
+        topMargin: +topMarginSlider.value,
+        bottomMargin: +bottomMarginSlider.value,
+        contrast: +contrastSlider.value,
+        thresh: +thresholdSlider.value,
+        leftSensitivity: +leftSensitivitySlider.value,
+        rightSensitivity: +rightSensitivitySlider.value,
         mode: document.querySelector('input[name="pageMode"]:checked').value
     };
     Android.showToast('参数已应用到第' + (currentIndex+1) + '页');
 };
 
-// ── PDF 导出（逐页参数） ──
+// ═══════ PDF 导出 ═══════
 document.getElementById('generatePdfBtn').onclick = async () => {
     if (imagePaths.length === 0) { Android.showToast('没有图片'); return; }
     Android.beginPdf(imagePaths.length, currentFileName);
@@ -769,14 +797,14 @@ document.getElementById('generatePdfBtn').onclick = async () => {
     }
 };
 
-// ── 防抖与事件绑定 ──
+// ═══════ 防抖 ═══════
 let debounceTimer;
 const debouncedProcess = () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(processAll, 200); };
 [bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider, contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider]
     .forEach(el => el.addEventListener('input', () => { updateSliderLabels(); debouncedProcess(); }));
 document.querySelectorAll('input[name="pageMode"]').forEach(r => r.addEventListener('change', processAll));
 
-// ── 夜间模式 ──
+// ═══════ 夜间模式 ═══════
 function toggleDarkMode() {
     document.body.classList.toggle('dark-mode');
     const isDark = document.body.classList.contains('dark-mode');
