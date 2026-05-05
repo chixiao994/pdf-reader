@@ -6,6 +6,7 @@ import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.ParcelFileDescriptor;
 import android.util.Base64;
 import android.util.Log;
@@ -82,11 +83,14 @@ public class TianLangActivity extends AppCompatActivity {
             try {
                 String base64 = URLDecoder.decode(safeBase64, "UTF-8");
                 byte[] data = Base64.decode(base64, Base64.DEFAULT);
-                File file = new File(getExternalFilesDir(null), fileName);
+                // 保存到公共下载目录
+                File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                if (!downloadDir.exists()) downloadDir.mkdirs();
+                File file = new File(downloadDir, fileName);
                 try (FileOutputStream fos = new FileOutputStream(file)) {
                     fos.write(data);
                 }
-                showToast("已保存: " + file.getAbsolutePath());
+                showToast("已保存到下载目录: " + file.getAbsolutePath());
             } catch (Exception e) {
                 Log.e("TianLang", "保存失败", e);
                 showToast("保存失败: " + e.getMessage());
