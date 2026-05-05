@@ -74,9 +74,9 @@
             <h3>🧹 背景切除</h3>
             <div style="display:flex; flex-direction:column; align-items:center; width:100%;">
                 <div class="control-item"><label>背景容差：</label><input type="range" id="bgTolSlider" min="0" max="50" value="15"><span id="bgTolValue">15</span></div>
-                <div class="control-item"><label>左右边距：</label><input type="range" id="lrMarginSlider" min="-50" max="50" value="0"><span id="lrMarginValue">0</span> px</div>
-                <div class="control-item"><label>上边距：</label><input type="range" id="topMarginSlider" min="-50" max="50" value="0"><span id="topMarginValue">0</span> px</div>
-                <div class="control-item"><label>下边距：</label><input type="range" id="bottomMarginSlider" min="-50" max="50" value="0"><span id="bottomMarginValue">0</span> px</div>
+                <div class="control-item"><label>左右边距：</label><input type="range" id="lrMarginSlider" min="-200" max="50" value="0"><span id="lrMarginValue">0</span> px</div>
+                <div class="control-item"><label>上边距：</label><input type="range" id="topMarginSlider" min="-200" max="50" value="0"><span id="topMarginValue">0</span> px</div>
+                <div class="control-item"><label>下边距：</label><input type="range" id="bottomMarginSlider" min="-200" max="50" value="0"><span id="bottomMarginValue">0</span> px</div>
             </div>
             <canvas id="bgResultCanvas"></canvas>
             <div class="note" id="bgNote">背景切除结果</div>
@@ -117,7 +117,7 @@
 </div>
 
 <script>
-// ─── 全局引用 ───
+// ── 全局引用 ──
 const bgTolSlider = document.getElementById('bgTolSlider');
 const lrMarginSlider = document.getElementById('lrMarginSlider');
 const topMarginSlider = document.getElementById('topMarginSlider');
@@ -164,10 +164,10 @@ let imagePaths = [];
 let currentIndex = 0;
 let originalImage = null;
 let currentFileName = '未命名';
-let lastComputedResult = null;       // 保存全尺寸坐标
+let lastComputedResult = null;
 const PREVIEW_MAX_WIDTH = 1200;
 
-// ─── 参数读取 ───
+// ── 参数读取 ──
 function getBgParams() {
     return { bgTol: +bgTolSlider.value, lrMargin: +lrMarginSlider.value, topMargin: +topMarginSlider.value, bottomMargin: +bottomMarginSlider.value };
 }
@@ -179,19 +179,15 @@ function getStackParams() {
     };
 }
 function updateSliderLabels() {
-    bgTolValue.innerText = bgTolSlider.value;
-    lrMarginValue.innerText = lrMarginSlider.value;
-    topMarginValue.innerText = topMarginSlider.value;
-    bottomMarginValue.innerText = bottomMarginSlider.value;
-    contrastValue.innerText = contrastSlider.value;
-    thresholdValue.innerText = thresholdSlider.value;
-    leftSensitivityValue.innerText = leftSensitivitySlider.value;
-    rightSensitivityValue.innerText = rightSensitivitySlider.value;
+    bgTolValue.innerText = bgTolSlider.value; lrMarginValue.innerText = lrMarginSlider.value;
+    topMarginValue.innerText = topMarginSlider.value; bottomMarginValue.innerText = bottomMarginSlider.value;
+    contrastValue.innerText = contrastSlider.value; thresholdValue.innerText = thresholdSlider.value;
+    leftSensitivityValue.innerText = leftSensitivitySlider.value; rightSensitivityValue.innerText = rightSensitivitySlider.value;
 }
 [bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider, contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider]
     .forEach(el => el.addEventListener('input', updateSliderLabels));
 
-// ─── 图片加载 ───
+// ── 图片加载 ──
 function showImage(index) {
     if (imagePaths.length === 0) return;
     if (index < 0 || index >= imagePaths.length) return;
@@ -203,11 +199,9 @@ function showImage(index) {
 }
 function updatePageNav() {
     if (imagePaths.length > 1) {
-        pdfNav.style.display = 'flex';
-        totalPagesSpan.innerText = imagePaths.length;
+        pdfNav.style.display = 'flex'; totalPagesSpan.innerText = imagePaths.length;
         pageNumInput.value = currentIndex + 1;
-        prevPageBtn.disabled = (currentIndex <= 0);
-        nextPageBtn.disabled = (currentIndex >= imagePaths.length - 1);
+        prevPageBtn.disabled = (currentIndex <= 0); nextPageBtn.disabled = (currentIndex >= imagePaths.length - 1);
         generatePdfBtn.style.display = 'inline-block';
     } else { pdfNav.style.display = 'none'; }
 }
@@ -225,7 +219,7 @@ pageNumInput.onchange = function() {
     else this.value = currentIndex + 1;
 };
 
-// ─── 背景切除算法 ───
+// ── 背景切除算法 ──
 function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     const { data, width, height } = imageData;
     const edgePixels = []; const ew = 2;
@@ -278,7 +272,7 @@ function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     return { left, top, width: right-left+1, height: bottom-top+1 };
 }
 
-// ─── 堆叠检测 ───
+// ── 堆叠检测（改进装订线） ──
 function findLeftCut(proj, w, th) {
     let start = -1; for (let x = 0; x < w*0.4; x++) if (proj[x] > th) { start = x; break; }
     if (start === -1) return null;
@@ -304,6 +298,12 @@ function detectFrameLineInRegion(imageData, xStart, xEnd, width, height) {
     for (let x=xStart+2; x<xEnd-2; x++) if (colEdge[x]>colEdge[x-1] && colEdge[x]>colEdge[x+1] && colEdge[x]>bestVal) { bestVal=colEdge[x]; bestX=x; }
     return bestX;
 }
+function findBindLineFromProjection(proj, width, startX, endX) {
+    let minVal = Infinity, best = Math.floor(width/2);
+    for (let x = startX; x <= endX; x++) { if (proj[x] < minVal) { minVal = proj[x]; best = x; } }
+    return best;
+}
+
 function processImageWithParams(imageData, params) {
     const { data, width, height } = imageData;
     const gray = new Float32Array(width*height);
@@ -321,60 +321,47 @@ function processImageWithParams(imageData, params) {
     let leftCut = findLeftCut(proj, width, leftEff);
     let rightCut = findRightCut(proj, width, rightEff);
     let bindLine = null;
-    if (params.mode === 'left-only') rightCut = null;
-    else if (params.mode === 'right-only') leftCut = null;
-    else if (params.mode === 'combined') {
-        bindLine = detectFrameLineInRegion(imageData, Math.floor(width*0.35), Math.floor(width*0.65), width, height);
-        if (bindLine === null) bindLine = Math.floor(width/2);
+    if (params.mode === 'combined') {
+        const leftLine = detectFrameLineInRegion(imageData, Math.floor(width*0.3), Math.floor(width*0.49), width, height);
+        const rightLine = detectFrameLineInRegion(imageData, Math.floor(width*0.51), Math.floor(width*0.7), width, height);
+        if (leftLine !== null && rightLine !== null) {
+            bindLine = Math.round((leftLine + rightLine) / 2);
+        } else {
+            bindLine = findBindLineFromProjection(proj, width, Math.floor(width*0.35), Math.floor(width*0.65));
+        }
+        if (leftCut !== null && leftCut >= bindLine) leftCut = bindLine - 1;
+        if (rightCut !== null && rightCut <= bindLine) rightCut = bindLine + 1;
     }
     return { leftCut, rightCut, bindLine, proj };
 }
 
-// ─── 核心流程（压缩预览 + 全尺寸坐标） ───
+// ── 核心流程（压缩预览 + 全尺寸坐标） ──
 function processAll() {
     if (!originalImage) return;
     const origW = originalImage.width, origH = originalImage.height;
     const previewScale = Math.min(1, PREVIEW_MAX_WIDTH / origW);
-    const prevW = Math.round(origW * previewScale);
-    const prevH = Math.round(origH * previewScale);
+    const prevW = Math.round(origW * previewScale), prevH = Math.round(origH * previewScale);
     const previewCanvas = document.createElement('canvas');
     previewCanvas.width = prevW; previewCanvas.height = prevH;
     const previewCtx = previewCanvas.getContext('2d');
     previewCtx.drawImage(originalImage, 0, 0, prevW, prevH);
     const previewImgData = previewCtx.getImageData(0, 0, prevW, prevH);
 
-    const bgParams = getBgParams();
-    const stackParams = getStackParams();
-
+    const bgParams = getBgParams(); const stackParams = getStackParams();
     let cropRegion = null;
-    if (bgParams.bgTol > 0)
-        cropRegion = removeBackground(previewImgData, bgParams.bgTol, bgParams.lrMargin, bgParams.topMargin, bgParams.bottomMargin);
+    if (bgParams.bgTol > 0) cropRegion = removeBackground(previewImgData, bgParams.bgTol, bgParams.lrMargin, bgParams.topMargin, bgParams.bottomMargin);
 
     let bgWorkData;
-    if (cropRegion) {
-        bgWorkData = previewCtx.getImageData(cropRegion.left, cropRegion.top, cropRegion.width, cropRegion.height);
-    } else {
-        bgWorkData = previewImgData;
-        cropRegion = { left:0, top:0, width:prevW, height:prevH };
-    }
+    if (cropRegion) { bgWorkData = previewCtx.getImageData(cropRegion.left, cropRegion.top, cropRegion.width, cropRegion.height); }
+    else { bgWorkData = previewImgData; cropRegion = { left:0, top:0, width:prevW, height:prevH }; }
 
     const { leftCut, rightCut, bindLine, proj } = processImageWithParams(bgWorkData, stackParams);
     const invScale = 1 / previewScale;
-    const fullBgCrop = {
-        left: Math.round(cropRegion.left * invScale),
-        top: Math.round(cropRegion.top * invScale),
-        width: Math.round(cropRegion.width * invScale),
-        height: Math.round(cropRegion.height * invScale)
-    };
-    const fullLeftCut  = leftCut !== null ? Math.round(leftCut * invScale) : null;
-    const fullRightCut = rightCut !== null ? Math.round(rightCut * invScale) : null;
-    const fullBindLine = bindLine !== null ? Math.round(bindLine * invScale) : null;
-
     lastComputedResult = {
-        bgCrop: fullBgCrop,
-        leftCut: fullLeftCut,
-        rightCut: fullRightCut,
-        bindLine: fullBindLine,
+        bgCrop: { left: Math.round(cropRegion.left*invScale), top: Math.round(cropRegion.top*invScale), width: Math.round(cropRegion.width*invScale), height: Math.round(cropRegion.height*invScale) },
+        leftCut: leftCut !== null ? Math.round(leftCut*invScale) : null,
+        rightCut: rightCut !== null ? Math.round(rightCut*invScale) : null,
+        bindLine: bindLine !== null ? Math.round(bindLine*invScale) : null,
         mode: stackParams.mode
     };
 
@@ -382,8 +369,7 @@ function processAll() {
     originalCanvas.width = prevW; originalCanvas.height = prevH;
     originalCtx.drawImage(originalImage, 0, 0, prevW, prevH);
     if (cropRegion && bgParams.bgTol > 0) {
-        originalCtx.strokeStyle = '#2d6a4f'; originalCtx.lineWidth = 2;
-        originalCtx.setLineDash([4,4]);
+        originalCtx.strokeStyle = '#2d6a4f'; originalCtx.lineWidth = 2; originalCtx.setLineDash([4,4]);
         originalCtx.strokeRect(cropRegion.left, cropRegion.top, cropRegion.width, cropRegion.height);
     }
     const drawLine = (x, color, dash) => {
@@ -395,89 +381,46 @@ function processAll() {
         originalCtx.lineTo(xPos, cropRegion ? (cropRegion.top + bgWorkData.height) : prevH);
         originalCtx.stroke();
     };
-    drawLine(leftCut, '#d63447', [6,4]);
-    drawLine(rightCut, '#d63447', [6,4]);
-    drawLine(bindLine, '#1e5f9e', [8,6]);
+    drawLine(leftCut, '#d63447', [6,4]); drawLine(rightCut, '#d63447', [6,4]); drawLine(bindLine, '#1e5f9e', [8,6]);
     originalCtx.setLineDash([]);
 
-    bgResultCanvas.width = cropRegion.width;
-    bgResultCanvas.height = cropRegion.height;
+    bgResultCanvas.width = cropRegion.width; bgResultCanvas.height = cropRegion.height;
     bgResultCtx.putImageData(bgWorkData, 0, 0);
 
-    // 左右堆叠（独立画布）
-    const bgCanvas = document.createElement('canvas');
-    bgCanvas.width = bgWorkData.width; bgCanvas.height = bgWorkData.height;
-    const bgCtx = bgCanvas.getContext('2d');
-    bgCtx.putImageData(bgWorkData, 0, 0);
+    const bgCanvas = document.createElement('canvas'); bgCanvas.width = bgWorkData.width; bgCanvas.height = bgWorkData.height;
+    const bgCtx = bgCanvas.getContext('2d'); bgCtx.putImageData(bgWorkData, 0, 0);
 
-    let leftData = null, rightData = null;
-    let leftWidth = 0, rightWidth = 0;
-
+    let leftData = null, rightData = null, leftWidth = 0, rightWidth = 0;
     if (stackParams.mode === 'combined') {
-        // 左半：从左切割线到装订线
-        if (leftCut !== null) {
-            const lw = (bindLine ?? Math.floor(bgWorkData.width/2)) - leftCut;
-            if (lw > 0) {
-                leftData = bgCtx.getImageData(leftCut, 0, lw, bgWorkData.height);
-                leftWidth = lw;
-            }
+        if (leftCut !== null && bindLine !== null && leftCut < bindLine) {
+            const lw = bindLine - leftCut; if (lw > 0) { leftData = bgCtx.getImageData(leftCut, 0, lw, bgWorkData.height); leftWidth = lw; }
         }
-        // 右半：从装订线到右切割线
-        if (rightCut !== null) {
-            const rw = rightCut - (bindLine ?? Math.floor(bgWorkData.width/2));
-            if (rw > 0) {
-                rightData = bgCtx.getImageData(bindLine ?? Math.floor(bgWorkData.width/2), 0, rw, bgWorkData.height);
-                rightWidth = rw;
-            }
+        if (rightCut !== null && bindLine !== null && rightCut > bindLine) {
+            const rw = rightCut - bindLine; if (rw > 0) { rightData = bgCtx.getImageData(bindLine, 0, rw, bgWorkData.height); rightWidth = rw; }
         }
     } else if (stackParams.mode === 'left-only') {
-        if (leftCut !== null) {
-            const lw = bgWorkData.width - leftCut;
-            if (lw > 0) { leftData = bgCtx.getImageData(leftCut, 0, lw, bgWorkData.height); leftWidth = lw; }
-        }
+        if (leftCut !== null) { const lw = bgWorkData.width - leftCut; if (lw > 0) { leftData = bgCtx.getImageData(leftCut, 0, lw, bgWorkData.height); leftWidth = lw; } }
     } else if (stackParams.mode === 'right-only') {
-        if (rightCut !== null) {
-            const rw = rightCut;
-            if (rw > 0) { rightData = bgCtx.getImageData(0, 0, rw, bgWorkData.height); rightWidth = rw; }
-        }
-    } else { // auto-single
-        if (leftCut !== null && rightCut === null) {
-            const lw = bgWorkData.width - leftCut;
-            if (lw > 0) { leftData = bgCtx.getImageData(leftCut, 0, lw, bgWorkData.height); leftWidth = lw; }
-        } else if (rightCut !== null && leftCut === null) {
-            const rw = rightCut;
-            if (rw > 0) { rightData = bgCtx.getImageData(0, 0, rw, bgWorkData.height); rightWidth = rw; }
-        } else if (leftCut !== null && rightCut !== null) {
-            // 自动单侧但检测到两侧，默认只保留左侧
-            const lw = bgWorkData.width - leftCut;
-            if (lw > 0) { leftData = bgCtx.getImageData(leftCut, 0, lw, bgWorkData.height); leftWidth = lw; }
-        }
+        if (rightCut !== null) { const rw = rightCut; if (rw > 0) { rightData = bgCtx.getImageData(0, 0, rw, bgWorkData.height); rightWidth = rw; } }
+    } else {
+        if (leftCut !== null && rightCut === null) { const lw = bgWorkData.width - leftCut; if (lw > 0) { leftData = bgCtx.getImageData(leftCut, 0, lw, bgWorkData.height); leftWidth = lw; } }
+        else if (rightCut !== null && leftCut === null) { const rw = rightCut; if (rw > 0) { rightData = bgCtx.getImageData(0, 0, rw, bgWorkData.height); rightWidth = rw; } }
+        else if (leftCut !== null && rightCut !== null) { const lw = bgWorkData.width - leftCut; if (lw > 0) { leftData = bgCtx.getImageData(leftCut, 0, lw, bgWorkData.height); leftWidth = lw; } }
     }
 
-    if (leftData) {
-        leftStackCanvas.width = leftWidth;
-        leftStackCanvas.height = bgWorkData.height;
-        leftStackCtx.putImageData(leftData, 0, 0);
-    } else {
-        leftStackCanvas.width = 0;
-    }
-    if (rightData) {
-        rightStackCanvas.width = rightWidth;
-        rightStackCanvas.height = bgWorkData.height;
-        rightStackCtx.putImageData(rightData, 0, 0);
-    } else {
-        rightStackCanvas.width = 0;
-    }
+    if (leftData) { leftStackCanvas.width = leftWidth; leftStackCanvas.height = bgWorkData.height; leftStackCtx.putImageData(leftData, 0, 0); }
+    else { leftStackCanvas.width = 0; }
+    if (rightData) { rightStackCanvas.width = rightWidth; rightStackCanvas.height = bgWorkData.height; rightStackCtx.putImageData(rightData, 0, 0); }
+    else { rightStackCanvas.width = 0; }
 
-    document.getElementById('leftCut').innerText = fullLeftCut !== null ? fullLeftCut + ' (原图)' : '无';
-    document.getElementById('rightCut').innerText = fullRightCut !== null ? fullRightCut + ' (原图)' : '无';
+    document.getElementById('leftCut').innerText = lastComputedResult.leftCut !== null ? lastComputedResult.leftCut + ' (原图)' : '无';
+    document.getElementById('rightCut').innerText = lastComputedResult.rightCut !== null ? lastComputedResult.rightCut + ' (原图)' : '无';
     if (proj) drawProjectionPlot(proj, bgWorkData.width, leftCut, rightCut, bindLine);
 }
 
 function drawProjectionPlot(proj, width, leftCut, rightCut, bindLine) {
     const pw = projCanvas.width, ph = projCanvas.height;
-    projCtx.clearRect(0, 0, pw, ph);
-    projCtx.fillStyle = '#faf6f0'; projCtx.fillRect(0, 0, pw, ph);
+    projCtx.clearRect(0, 0, pw, ph); projCtx.fillStyle = '#faf6f0'; projCtx.fillRect(0, 0, pw, ph);
     const maxProj = Math.max(0.5, ...proj), scaleY = ph / maxProj;
     projCtx.strokeStyle = '#3e2c1b'; projCtx.lineWidth = 2; projCtx.beginPath();
     for (let i = 0; i < pw; i++) {
@@ -491,80 +434,66 @@ function drawProjectionPlot(proj, width, leftCut, rightCut, bindLine) {
     document.getElementById('projectionPlot').style.display = 'block';
 }
 
-// 防抖
 let debounceTimer;
 const debouncedProcess = () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(processAll, 200); };
 [bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider, contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider]
     .forEach(el => el.addEventListener('input', () => { updateSliderLabels(); debouncedProcess(); }));
 document.querySelectorAll('input[name="pageMode"]').forEach(r => r.addEventListener('change', processAll));
 
-// 保存全尺寸图片（逻辑与预览一致，但操作原图）
+// ── 保存全尺寸图片 ──
 function saveFullSize(suffix) {
     if (!originalImage || !lastComputedResult) return;
     const res = lastComputedResult;
     const fullCanvas = document.createElement('canvas');
     fullCanvas.width = originalImage.width; fullCanvas.height = originalImage.height;
-    const fullCtx = fullCanvas.getContext('2d');
-    fullCtx.drawImage(originalImage, 0, 0);
-    
-    // 背景切除区域
-    const cropLeft = res.bgCrop.left, cropTop = res.bgCrop.top, cropW = res.bgCrop.width, cropH = res.bgCrop.height;
-    const workCanvas = document.createElement('canvas');
-    workCanvas.width = cropW; workCanvas.height = cropH;
-    const workCtx = workCanvas.getContext('2d');
-    workCtx.putImageData(fullCtx.getImageData(cropLeft, cropTop, cropW, cropH), 0, 0);
-
+    const fullCtx = fullCanvas.getContext('2d'); fullCtx.drawImage(originalImage, 0, 0);
+    const { left: cL, top: cT, width: cW, height: cH } = res.bgCrop;
+    const workCanvas = document.createElement('canvas'); workCanvas.width = cW; workCanvas.height = cH;
+    const workCtx = workCanvas.getContext('2d'); workCtx.putImageData(fullCtx.getImageData(cL, cT, cW, cH), 0, 0);
     const mode = res.mode;
-    const leftCut = res.leftCut !== null ? res.leftCut - cropLeft : null;
-    const rightCut = res.rightCut !== null ? res.rightCut - cropLeft : null;
-    const bindLine = res.bindLine !== null ? res.bindLine - cropLeft : null;
+    const leftCut = res.leftCut !== null ? res.leftCut - cL : null;
+    const rightCut = res.rightCut !== null ? res.rightCut - cL : null;
+    const bindLine = res.bindLine !== null ? res.bindLine - cL : null;
 
-    let resultCanvas, resultData;
+    let resultCanvas = null;
     if (mode === 'combined') {
-        if (suffix === 'z' && leftCut !== null) {
-            const lw = (bindLine ?? Math.floor(cropW/2)) - leftCut;
-            if (lw > 0) resultCanvas = extractCanvas(workCtx, leftCut, 0, lw, cropH);
-        } else if (suffix === 'y' && rightCut !== null) {
-            const rw = rightCut - (bindLine ?? Math.floor(cropW/2));
-            if (rw > 0) resultCanvas = extractCanvas(workCtx, bindLine ?? Math.floor(cropW/2), 0, rw, cropH);
+        if (suffix === 'z' && leftCut !== null && bindLine !== null && leftCut < bindLine) {
+            const lw = bindLine - leftCut;
+            if (lw > 0) resultCanvas = extractCanvas(workCtx, leftCut, 0, lw, cH);
+        } else if (suffix === 'y' && rightCut !== null && bindLine !== null && rightCut > bindLine) {
+            const rw = rightCut - bindLine;
+            if (rw > 0) resultCanvas = extractCanvas(workCtx, bindLine, 0, rw, cH);
         }
     } else if (mode === 'left-only' && suffix === 'z' && leftCut !== null) {
-        const lw = cropW - leftCut;
-        if (lw > 0) resultCanvas = extractCanvas(workCtx, leftCut, 0, lw, cropH);
+        const lw = cW - leftCut; if (lw > 0) resultCanvas = extractCanvas(workCtx, leftCut, 0, lw, cH);
     } else if (mode === 'right-only' && suffix === 'y' && rightCut !== null) {
-        const rw = rightCut;
-        if (rw > 0) resultCanvas = extractCanvas(workCtx, 0, 0, rw, cropH);
-    } else {
-        // auto-single
-        if (suffix === 'z' && leftCut !== null) {
-            const lw = cropW - leftCut;
-            if (lw > 0) resultCanvas = extractCanvas(workCtx, leftCut, 0, lw, cropH);
-        } else if (suffix === 'y' && rightCut !== null) {
-            const rw = rightCut;
-            if (rw > 0) resultCanvas = extractCanvas(workCtx, 0, 0, rw, cropH);
-        }
+        const rw = rightCut; if (rw > 0) resultCanvas = extractCanvas(workCtx, 0, 0, rw, cH);
+    } else { // auto-single
+        if (suffix === 'z' && leftCut !== null) { const lw = cW - leftCut; if (lw > 0) resultCanvas = extractCanvas(workCtx, leftCut, 0, lw, cH); }
+        else if (suffix === 'y' && rightCut !== null && leftCut === null) { const rw = rightCut; if (rw > 0) resultCanvas = extractCanvas(workCtx, 0, 0, rw, cH); }
+        else if (suffix === 'z' && leftCut !== null && rightCut !== null) { const lw = cW - leftCut; if (lw > 0) resultCanvas = extractCanvas(workCtx, leftCut, 0, lw, cH); }
     }
     if (resultCanvas) {
         const base64 = resultCanvas.toDataURL('image/png').split(',')[1];
-        Android.saveFile(encodeURIComponent(base64), currentFileName.replace(/\.[^.]+$/, '') + '_' + suffix + '.png');
-    }
+        const fileName = currentFileName.replace(/\.[^.]+$/, '') + '_' + suffix + '.png';
+        Android.saveFile(encodeURIComponent(base64), fileName);
+    } else { Android.showToast('无需保存的' + suffix + '侧内容'); }
 }
 function extractCanvas(ctx, x, y, w, h) {
-    const canvas = document.createElement('canvas');
-    canvas.width = w; canvas.height = h;
+    const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
     canvas.getContext('2d').putImageData(ctx.getImageData(x, y, w, h), 0, 0);
     return canvas;
 }
 document.getElementById('saveLeftBtn').onclick = () => saveFullSize('z');
 document.getElementById('saveRightBtn').onclick = () => saveFullSize('y');
 
-// 导出PDF（逐页全尺寸处理，通过原生合成）
+// ── 导出PDF（逐页全尺寸处理，调用原生合成） ──
 document.getElementById('generatePdfBtn').onclick = async () => {
     if (imagePaths.length === 0) { Android.showToast('没有图片'); return; }
     Android.beginPdf(imagePaths.length, currentFileName);
     exportProgress.style.display = 'flex'; generatePdfBtn.disabled = true;
     try {
-        const bgParams = getBgParams(), stackParams = getStackParams();
+        const bgParams = getBgParams(); const stackParams = getStackParams();
         for (let i = 0; i < imagePaths.length; i++) {
             const img = await new Promise((resolve) => {
                 const el = new Image(); el.onload = () => resolve(el);
@@ -574,48 +503,52 @@ document.getElementById('generatePdfBtn').onclick = async () => {
             fullCanvas.width = img.width; fullCanvas.height = img.height;
             const fullCtx = fullCanvas.getContext('2d'); fullCtx.drawImage(img, 0, 0);
             const fullImgData = fullCtx.getImageData(0, 0, fullCanvas.width, fullCanvas.height);
+
             let cropRegion = null;
             if (bgParams.bgTol > 0) cropRegion = removeBackground(fullImgData, bgParams.bgTol, bgParams.lrMargin, bgParams.topMargin, bgParams.bottomMargin);
-            let bgWorkData;
+            let workData;
             if (cropRegion) {
-                const cvs = document.createElement('canvas'); cvs.width = cropRegion.width; cvs.height = cropRegion.height;
-                cvs.getContext('2d').putImageData(fullImgData, -cropRegion.left, -cropRegion.top);
-                bgWorkData = cvs.getContext('2d').getImageData(0, 0, cropRegion.width, cropRegion.height);
-            } else bgWorkData = fullImgData;
-            const { leftCut, rightCut, bindLine } = processImageWithParams(bgWorkData, stackParams);
-            const bgCanvas = document.createElement('canvas'); bgCanvas.width = bgWorkData.width; bgCanvas.height = bgWorkData.height;
-            const bgCtx = bgCanvas.getContext('2d'); bgCtx.putImageData(bgWorkData, 0, 0);
+                const rc = document.createElement('canvas'); rc.width = cropRegion.width; rc.height = cropRegion.height;
+                rc.getContext('2d').putImageData(fullImgData, -cropRegion.left, -cropRegion.top);
+                workData = rc.getContext('2d').getImageData(0, 0, cropRegion.width, cropRegion.height);
+            } else workData = fullImgData;
+
+            const { leftCut, rightCut, bindLine } = processImageWithParams(workData, stackParams);
+            const bgCanvas = document.createElement('canvas'); bgCanvas.width = workData.width; bgCanvas.height = workData.height;
+            const bgCtx = bgCanvas.getContext('2d'); bgCtx.putImageData(workData, 0, 0);
+
             if (stackParams.mode === 'combined') {
-                if (leftCut !== null) {
-                    const lw = (bindLine ?? Math.floor(bgWorkData.width/2)) - leftCut;
+                if (leftCut !== null && bindLine !== null && leftCut < bindLine) {
+                    const lw = bindLine - leftCut;
                     if (lw > 0) {
-                        const canvas = document.createElement('canvas'); canvas.width = lw; canvas.height = bgWorkData.height;
-                        canvas.getContext('2d').putImageData(bgCtx.getImageData(leftCut, 0, lw, bgWorkData.height), 0, 0);
+                        const canvas = document.createElement('canvas'); canvas.width = lw; canvas.height = workData.height;
+                        canvas.getContext('2d').putImageData(bgCtx.getImageData(leftCut, 0, lw, workData.height), 0, 0);
                         Android.addPageToPdf(encodeURIComponent(canvas.toDataURL('image/png').split(',')[1]));
                     }
                 }
-                if (rightCut !== null) {
-                    const rw = rightCut - (bindLine ?? Math.floor(bgWorkData.width/2));
+                if (rightCut !== null && bindLine !== null && rightCut > bindLine) {
+                    const rw = rightCut - bindLine;
                     if (rw > 0) {
-                        const canvas = document.createElement('canvas'); canvas.width = rw; canvas.height = bgWorkData.height;
-                        canvas.getContext('2d').putImageData(bgCtx.getImageData(bindLine ?? Math.floor(bgWorkData.width/2), 0, rw, bgWorkData.height), 0, 0);
+                        const canvas = document.createElement('canvas'); canvas.width = rw; canvas.height = workData.height;
+                        canvas.getContext('2d').putImageData(bgCtx.getImageData(bindLine, 0, rw, workData.height), 0, 0);
                         Android.addPageToPdf(encodeURIComponent(canvas.toDataURL('image/png').split(',')[1]));
                     }
                 }
             } else {
-                let l = leftCut ?? 0, r = rightCut ?? bgWorkData.width;
-                if (l >= r) { l = 0; r = bgWorkData.width; }
+                let l = leftCut ?? 0, r = rightCut ?? workData.width;
+                if (l >= r) { l = 0; r = workData.width; }
                 const cropW = r - l;
-                const canvas = document.createElement('canvas'); canvas.width = cropW; canvas.height = bgWorkData.height;
-                canvas.getContext('2d').putImageData(bgCtx.getImageData(l, 0, cropW, bgWorkData.height), 0, 0);
+                const canvas = document.createElement('canvas'); canvas.width = cropW; canvas.height = workData.height;
+                canvas.getContext('2d').putImageData(bgCtx.getImageData(l, 0, cropW, workData.height), 0, 0);
                 Android.addPageToPdf(encodeURIComponent(canvas.toDataURL('image/png').split(',')[1]));
             }
+
             const pct = Math.round((i+1)/imagePaths.length * 100);
             exportProgressFill.style.width = pct+'%'; exportProgressText.innerText = pct+'%';
         }
         Android.finishPdf(currentFileName.replace(/\.[^.]+$/, '') + '_天朗.pdf');
     } catch(e) { Android.showToast('导出失败: '+e.message); } finally {
-        exportProgress.style.display = 'none'; generatePdfBtn.disabled = false;
+        exportProgress.style.display = 'none'; generatePdfBtn.disabled = false; exportProgressFill.style.width = '0%';
     }
 };
 </script>
