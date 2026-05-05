@@ -22,6 +22,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,8 +35,13 @@ public class TianLangActivity extends AppCompatActivity {
     private int totalPages = 0;
     private String currentFileName = "未命名";
 
+    // 用于保存待写入的数据
+    private byte[] pendingSaveData;
+    private String pendingSaveFileName;
+
     private static final int PICK_IMAGE = 1;
     private static final int PICK_PDF = 2;
+    private static final int CREATE_FILE = 3;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -82,17 +88,17 @@ public class TianLangActivity extends AppCompatActivity {
         public void saveFile(String safeBase64, String fileName) {
             try {
                 String base64 = URLDecoder.decode(safeBase64, "UTF-8");
-                byte[] data = Base64.decode(base64, Base64.DEFAULT);
-                // 保存到公共下载目录
-                File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                if (!downloadDir.exists()) downloadDir.mkdirs();
-                File file = new File(downloadDir, fileName);
-                try (FileOutputStream fos = new FileOutputStream(file)) {
-                    fos.write(data);
-                }
-                showToast("已保存到下载目录: " + file.getAbsolutePath());
+                pendingSaveData = Base64.decode(base64, Base64.DEFAULT);
+                pendingSaveFileName = fileName;
+
+                // 启动系统文件创建器，让用户选择保存位置
+                Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("*/*"); // 通用类型，系统会根据文件名自动识别
+                intent.putExtra(Intent.EXTRA_TITLE, fileName);
+                startActivityForResult(intent, CREATE_FILE);
             } catch (Exception e) {
-                Log.e("TianLang", "保存失败", e);
+                Log.e("TianLang", "保存准备失败", e);
                 showToast("保存失败: " + e.getMessage());
             }
         }
@@ -109,10 +115,34 @@ public class TianLangActivity extends AppCompatActivity {
                 if (uri != null) {
                     handlePdfUri(uri);
                 }
+            } else if (requestCode == CREATE_FILE) {
+                Uri uri = data.getData();
+                if (uri != null && pendingSaveData != null) {
+                    writeDataToUri(uri, pendingSaveData, pendingSaveFileName);
+                    pendingSaveData = null;
+                    pendingSaveFileName = null;
+                }
             }
         }
     }
 
+    private void writeDataToUri(Uri uri, byte[] data, String fileName) {
+        try {
+            OutputStream outputStream = getContentResolver().openOutputStream(uri);
+            if (outputStream != null) {
+                outputStream.write(data);
+                outputStream.close();
+                showToastSafe("已保存: " + fileName);
+            } else {
+                showToastSafe("无法写入文件");
+            }
+        } catch (Exception e) {
+            Log.e("TianLang", "写入失败", e);
+            showToastSafe("保存失败: " + e.getMessage());
+        }
+    }
+
+    // 其余方法保持不变...
     private void handleImageResult(Intent data) {
         List<Uri> uris = new ArrayList<>();
         if (data.getClipData() != null) {
