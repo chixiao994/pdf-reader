@@ -12,7 +12,7 @@
         h1 { text-align:center; font-size:2.2em; letter-spacing:0.1em; margin-bottom:10px; font-weight:400; color:#5d3e1f; }
         .subtitle { text-align:center; font-style:italic; margin-bottom:20px; color:#7a5a3a; }
         .main-panel { display:flex; gap:15px; flex-wrap:wrap; justify-content:center; }
-        .canvas-panel { background:#fff7ed; border:1px solid #d6b89b; border-radius:16px; padding:15px; box-shadow:0 4px 12px rgba(0,0,0,0.05); flex:1 1 400px; display:flex; flex-direction:column; align-items:center; }
+        .canvas-panel { background:#fff7ed; border:1px solid #d6b89b; border-radius:16px; padding:15px; box-shadow:0 4px 12px rgba(0,0,0,0.05); flex:1 1 350px; display:flex; flex-direction:column; align-items:center; }
         .canvas-panel h3 { margin-bottom:10px; font-weight:400; border-bottom:1px solid #d6b89b; padding-bottom:5px; width:100%; text-align:center; }
         canvas { max-width:100%; border:1px solid #aaa; border-radius:8px; background:#fff; }
         .controls { background:#fff7ed; border:1px solid #d6b89b; border-radius:16px; padding:20px; margin-top:20px; box-shadow:0 4px 12px rgba(0,0,0,0.05); }
@@ -27,8 +27,8 @@
         .save-btn { background:#2d6a4f; }
         .mode-group { display:flex; flex-wrap:wrap; gap:12px; background:#ede0ce; padding:8px 15px; border-radius:30px; align-items:center; }
         .mode-group label { display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.9em; }
-        .cut-line-info { display:flex; gap:20px; font-family:monospace; margin-top:10px; flex-wrap:wrap; }
-        .projection-plot { width:100%; height:120px; background:#faf6f0; border:1px solid #d6b89b; border-radius:8px; margin-top:10px; }
+        .cut-line-info { display:flex; gap:20px; font-family:monospace; margin-top:10px; flex-wrap:wrap; justify-content:center; }
+        .projection-plot { width:100%; height:120px; background:#faf6f0; border:1px solid #d6b89b; border-radius:8px; margin-top:10px; display:none; }
         .note { margin-top:10px; font-size:0.8em; color:#8b6b4f; }
         .pdf-page-nav { display:flex; align-items:center; gap:10px; margin-left:auto; }
         .pdf-page-nav input { width:60px; text-align:center; border:1px solid #d6b89b; border-radius:8px; padding:4px; }
@@ -43,7 +43,7 @@
     <h1>天朗 · 堆叠切除</h1>
     <p class="subtitle">原图 → 背景切除 → 堆叠切除</p>
 
-    <!-- 公用工具栏：上传、翻页、模式、导出 -->
+    <!-- 公用工具栏 -->
     <div class="controls">
         <div class="control-row">
             <button class="button upload-btn" onclick="Android.pickFile('image')">📁 上传图片</button>
@@ -70,19 +70,19 @@
         </div>
     </div>
 
-    <!-- 三列预览区域 -->
+    <!-- 三列预览 -->
     <div class="main-panel">
         <!-- 原图 -->
         <div class="canvas-panel">
             <h3>📜 原拟面</h3>
             <canvas id="originalCanvas"></canvas>
-            <div class="note">所有标注将叠加在原图上</div>
+            <div class="note">标注将显示在原图上</div>
         </div>
 
-        <!-- 背景切除预览 + 背景参数 -->
+        <!-- 背景切除 -->
         <div class="canvas-panel">
             <h3>🧹 背景切除</h3>
-            <div class="control-row" style="display:flex; flex-direction:column; align-items:center; width:100%;">
+            <div style="display:flex; flex-direction:column; align-items:center; width:100%;">
                 <div class="control-item"><label>背景容差：</label><input type="range" id="bgTolSlider" min="0" max="50" value="15"><span id="bgTolValue">15</span></div>
                 <div class="control-item"><label>左右边距：</label><input type="range" id="lrMarginSlider" min="-50" max="50" value="0"><span id="lrMarginValue">0</span> px</div>
                 <div class="control-item"><label>上边距：</label><input type="range" id="topMarginSlider" min="-50" max="50" value="0"><span id="topMarginValue">0</span> px</div>
@@ -92,10 +92,10 @@
             <div class="note" id="bgNote">背景切除结果</div>
         </div>
 
-        <!-- 堆叠切除预览 + 堆叠参数 -->
+        <!-- 堆叠切除 -->
         <div class="canvas-panel">
             <h3>🌤️ 堆叠切除</h3>
-            <div class="control-row" style="display:flex; flex-direction:column; align-items:center; width:100%;">
+            <div style="display:flex; flex-direction:column; align-items:center; width:100%;">
                 <div class="control-item"><label>对比度：</label><input type="range" id="contrastSlider" min="0.5" max="3.0" step="0.1" value="1.8"><span id="contrastValue">1.8</span></div>
                 <div class="control-item"><label>二值化：</label><input type="range" id="thresholdSlider" min="40" max="200" value="90"><span id="thresholdValue">90</span></div>
                 <div class="control-item"><label>敏感度：</label><input type="range" id="sensitivitySlider" min="0.1" max="0.9" step="0.05" value="0.35"><span id="sensitivityValue">0.35</span></div>
@@ -105,11 +105,11 @@
         </div>
     </div>
 
-    <!-- 额外信息：切割线数值 -->
-    <div class="cut-line-info" id="cutInfo" style="margin-top:15px; text-align:center;">
+    <!-- 切割线信息 -->
+    <div class="cut-line-info" id="cutInfo">
         左侧切割线：<span id="leftCut">--</span> px &nbsp;&nbsp; 右侧切割线：<span id="rightCut">--</span> px
     </div>
-    <div class="projection-plot" id="projectionPlot" style="display:none; margin-top:10px;">
+    <div class="projection-plot" id="projectionPlot">
         <canvas id="projCanvas" width="600" height="120"></canvas>
     </div>
 </div>
@@ -148,14 +148,13 @@ const prevPageBtn = document.getElementById('prevPageBtn');
 const nextPageBtn = document.getElementById('nextPageBtn');
 const generatePdfBtn = document.getElementById('generatePdfBtn');
 
-let imagePaths = [];
+let imagePaths = [];          // 所有页面/图片的本地文件路径
 let currentIndex = 0;
-let originalImage = null;         // 当前显示的原始图片 Image 对象
-let imageDataCache = null;        // 原图 ImageData（用于重置）
-let bgCroppedImageData = null;   // 背景切除后的 ImageData
+let originalImage = null;     // 当前显示的原始图片 Image 对象
+let imageDataCache = null;    // 原图 ImageData
 let currentFileName = '未命名';
 
-// ────── 工具函数 ──────
+// ────── 参数对象 ──────
 function getBgParams() {
     return {
         bgTol: +bgTolSlider.value,
@@ -174,6 +173,7 @@ function getStackParams() {
     };
 }
 
+// 更新滑块数值标签
 function updateSliderLabels() {
     bgTolValue.innerText = bgTolSlider.value;
     lrMarginValue.innerText = lrMarginSlider.value;
@@ -186,6 +186,7 @@ function updateSliderLabels() {
 [bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider,
  contrastSlider, thresholdSlider, sensitivitySlider].forEach(el => el.addEventListener('input', updateSliderLabels));
 
+// 适配画布大小
 function fitImageToCanvas() {
     if (!originalImage) return;
     const maxWidth = 500, maxHeight = 500;
@@ -196,7 +197,7 @@ function fitImageToCanvas() {
     imageDataCache = originalCtx.getImageData(0, 0, originalCanvas.width, originalCanvas.height);
 }
 
-// ────── 显示图片并重新处理两步骤 ──────
+// ────── 显示指定索引的图片 ──────
 function showImage(index) {
     if (imagePaths.length === 0) return;
     if (index < 0 || index >= imagePaths.length) return;
@@ -205,7 +206,7 @@ function showImage(index) {
     img.onload = () => {
         originalImage = img;
         fitImageToCanvas();
-        processAll(); // 重新计算背景和堆叠
+        processAll();
         updatePageNav();
     };
     img.onerror = () => alert('图片加载失败: ' + imagePaths[index]);
@@ -404,8 +405,8 @@ function findCuts(imgData, params) {
     let rightCut = findRightCut(projection, width, effThreshold);
     let bindLine = null;
     if (params.mode === 'combined') {
-        // 简化装订线检测（利用前面定义的 detectMiddleFrameLine 函数，此处省略，使用中间值）
-        bindLine = Math.floor(width / 2); // 实际项目中应调用完整的 detectMiddleFrameLine
+        bindLine = detectMiddleFrameLine(imgData, Math.floor(width * 0.35), Math.floor(width * 0.65));
+        if (bindLine === null) bindLine = Math.floor(width / 2);
     }
     if (params.mode === 'left-only') rightCut = null;
     else if (params.mode === 'right-only') leftCut = null;
@@ -441,7 +442,6 @@ function detectMiddleFrameLine(imageData, startX, endX) {
 // ────── 综合处理流程 ──────
 function processAll() {
     if (!originalImage || !imageDataCache) return;
-    // 恢复原图
     originalCtx.putImageData(imageDataCache, 0, 0);
     const fullImgData = imageDataCache;
     const bgParams = getBgParams();
@@ -455,11 +455,10 @@ function processAll() {
     let bgWorkData;
     if (cropRegion) {
         bgWorkData = originalCtx.getImageData(cropRegion.left, cropRegion.top, cropRegion.width, cropRegion.height);
-        // 绘制背景切除结果
         bgResultCanvas.width = cropRegion.width;
         bgResultCanvas.height = cropRegion.height;
         bgResultCtx.putImageData(bgWorkData, 0, 0);
-        document.getElementById('bgNote').innerText = '背景已切除';
+        document.getElementById('bgNote').innerText = '背景切除成功';
     } else {
         bgWorkData = fullImgData;
         bgResultCanvas.width = fullImgData.width;
@@ -468,11 +467,11 @@ function processAll() {
         document.getElementById('bgNote').innerText = '无背景切除';
     }
 
-    // 2. 堆叠切除（基于背景切除后的图像）
+    // 2. 堆叠切除
     const cuts = findCuts(bgWorkData, stackParams);
-    let { leftCut, rightCut } = cuts;
+    let { leftCut, rightCut, bindLine } = cuts;
 
-    // 在原图上绘制标注（背景框+切割线）
+    // 3. 在原图上绘制标注
     originalCtx.putImageData(fullImgData, 0, 0);
     if (cropRegion) {
         originalCtx.strokeStyle = '#2d6a4f'; originalCtx.lineWidth = 2;
@@ -483,36 +482,106 @@ function processAll() {
         originalCtx.setLineDash([6,4]); originalCtx.beginPath();
         const xPos = leftCut + (cropRegion ? cropRegion.left : 0);
         originalCtx.moveTo(xPos, (cropRegion ? cropRegion.top : 0));
-        originalCtx.lineTo(xPos, (cropRegion ? cropRegion.top + cropRegion.height : fullImgData.height));
+        originalCtx.lineTo(xPos, (cropRegion ? cropRegion.top + (cropRegion ? cropRegion.height : fullImgData.height) : fullImgData.height));
         originalCtx.stroke();
     }
     if (rightCut !== null) {
         originalCtx.strokeStyle = '#d63447'; originalCtx.setLineDash([6,4]); originalCtx.beginPath();
         const xPos = rightCut + (cropRegion ? cropRegion.left : 0);
         originalCtx.moveTo(xPos, (cropRegion ? cropRegion.top : 0));
-        originalCtx.lineTo(xPos, (cropRegion ? cropRegion.top + cropRegion.height : fullImgData.height));
+        originalCtx.lineTo(xPos, (cropRegion ? cropRegion.top + (cropRegion ? cropRegion.height : fullImgData.height) : fullImgData.height));
+        originalCtx.stroke();
+    }
+    if (bindLine !== null) {
+        originalCtx.strokeStyle = '#1e5f9e'; originalCtx.lineWidth = 2;
+        originalCtx.setLineDash([8,6]); originalCtx.beginPath();
+        const xPos = bindLine + (cropRegion ? cropRegion.left : 0);
+        originalCtx.moveTo(xPos, (cropRegion ? cropRegion.top : 0));
+        originalCtx.lineTo(xPos, (cropRegion ? cropRegion.top + (cropRegion ? cropRegion.height : fullImgData.height) : fullImgData.height));
         originalCtx.stroke();
     }
     originalCtx.setLineDash([]);
 
-    // 生成堆叠切除结果
-    const cropLeft = leftCut !== null ? leftCut : 0;
-    const cropRight = rightCut !== null ? rightCut : bgWorkData.width;
-    const stackWidth = cropRight - cropLeft;
-    stackResultCanvas.width = stackWidth;
-    stackResultCanvas.height = bgWorkData.height;
-    const stackData = new Uint8ClampedArray(bgWorkData.data.buffer.slice(cropLeft*4, cropRight*4 + bgWorkData.height*bgWorkData.width*4));
-    stackResultCtx.putImageData(new ImageData(stackData, stackWidth, bgWorkData.height), 0, 0);
-    document.getElementById('stackNote').innerText = '堆叠切除结果';
+    // 4. 生成堆叠切除结果
+    if (stackParams.mode === 'combined' && leftCut !== null && rightCut !== null && bindLine !== null) {
+        const lw = bindLine - leftCut;
+        const rw = rightCut - bindLine;
+        const resultW = Math.max(lw, rw);
+        const resultH = bgWorkData.height * 2 + 4;
+        stackResultCanvas.width = resultW;
+        stackResultCanvas.height = resultH;
+        // 左半
+        const leftData = new Uint8ClampedArray(bgWorkData.data.buffer.slice(leftCut*4, bindLine*4 + bgWorkData.height*bgWorkData.width*4));
+        stackResultCtx.putImageData(new ImageData(leftData, lw, bgWorkData.height), 0, 0);
+        stackResultCtx.fillStyle = '#ddd';
+        stackResultCtx.fillRect(0, bgWorkData.height, resultW, 4);
+        // 右半
+        const rightData = new Uint8ClampedArray(bgWorkData.data.buffer.slice(bindLine*4, rightCut*4 + bgWorkData.height*bgWorkData.width*4));
+        stackResultCtx.putImageData(new ImageData(rightData, rw, bgWorkData.height), 0, bgWorkData.height + 4);
+        document.getElementById('stackNote').innerText = '合拟面（上左下右）';
+    } else {
+        const cropLeft = leftCut !== null ? leftCut : 0;
+        const cropRight = rightCut !== null ? rightCut : bgWorkData.width;
+        const stackWidth = cropRight - cropLeft;
+        stackResultCanvas.width = stackWidth;
+        stackResultCanvas.height = bgWorkData.height;
+        const stackData = new Uint8ClampedArray(bgWorkData.data.buffer.slice(cropLeft*4, cropRight*4 + bgWorkData.height*bgWorkData.width*4));
+        stackResultCtx.putImageData(new ImageData(stackData, stackWidth, bgWorkData.height), 0, 0);
+        document.getElementById('stackNote').innerText = '堆叠切除结果';
+    }
 
-    // 显示切割线数值
     document.getElementById('leftCut').innerText = leftCut !== null ? leftCut.toFixed(1) : '无';
     document.getElementById('rightCut').innerText = rightCut !== null ? rightCut.toFixed(1) : '无';
 
-    // 投影图（可选）
+    // 5. 投影图（简化）
+    drawProjectionPlot(bgWorkData, leftCut, rightCut, bindLine);
 }
 
-// 滑块改变时自动重新处理
+function drawProjectionPlot(imgData, leftCut, rightCut, bindLine) {
+    const { data, width, height } = imgData;
+    const gray = new Float32Array(width * height);
+    for (let i = 0; i < width * height; i++) {
+        const r = data[i*4], g = data[i*4+1], b = data[i*4+2];
+        gray[i] = 0.299*r + 0.587*g + 0.114*b;
+    }
+    const proj = new Float32Array(width);
+    for (let x = 0; x < width; x++) {
+        let sum = 0;
+        for (let y = 0; y < height; y++) sum += gray[y*width + x] < 128 ? 1 : 0;
+        proj[x] = sum / height;
+    }
+    const pw = projCanvas.width, ph = projCanvas.height;
+    projCtx.clearRect(0, 0, pw, ph);
+    projCtx.fillStyle = '#faf6f0';
+    projCtx.fillRect(0, 0, pw, ph);
+    const maxProj = Math.max(0.5, ...proj);
+    const scaleY = ph / maxProj;
+    projCtx.strokeStyle = '#3e2c1b';
+    projCtx.lineWidth = 2;
+    projCtx.beginPath();
+    const step = width / pw;
+    for (let i = 0; i < pw; i++) {
+        const idx = Math.floor(i * step);
+        const val = proj[Math.min(idx, width - 1)];
+        const y = ph - val * scaleY;
+        if (i === 0) projCtx.moveTo(i, y);
+        else projCtx.lineTo(i, y);
+    }
+    projCtx.stroke();
+    if (leftCut !== null) {
+        const lx = (leftCut / width) * pw;
+        projCtx.strokeStyle = '#d63447'; projCtx.beginPath();
+        projCtx.moveTo(lx, 0); projCtx.lineTo(lx, ph); projCtx.stroke();
+    }
+    if (rightCut !== null) {
+        const rx = (rightCut / width) * pw;
+        projCtx.strokeStyle = '#d63447'; projCtx.beginPath();
+        projCtx.moveTo(rx, 0); projCtx.lineTo(rx, ph); projCtx.stroke();
+    }
+    document.getElementById('projectionPlot').style.display = 'block';
+}
+
+// ────── 参数改变时自动刷新 ──────
 [bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider,
  contrastSlider, thresholdSlider, sensitivitySlider].forEach(el => {
     el.addEventListener('input', () => {
@@ -521,40 +590,36 @@ function processAll() {
     });
 });
 
-// 模式切换
 document.querySelectorAll('input[name="pageMode"]').forEach(radio => {
     radio.addEventListener('change', processAll);
 });
 
-// 保存堆叠结果
+// ────── 保存当前堆叠结果 ──────
 document.getElementById('saveBtn').onclick = () => {
     if (stackResultCanvas.width === 0) return;
     const data = stackResultCtx.getImageData(0, 0, stackResultCanvas.width, stackResultCanvas.height);
     const canvas = document.createElement('canvas');
-    canvas.width = stackResultCanvas.width; canvas.height = stackResultCanvas.height;
+    canvas.width = stackResultCanvas.width;
+    canvas.height = stackResultCanvas.height;
     canvas.getContext('2d').putImageData(data, 0, 0);
-    const base64 = canvas.toDataURL('image/png').replace('data:image/png;base64,', '');
-    if (window.Android && Android.saveFile) {
-        Android.saveFile(base64, currentFileName.replace(/\.[^.]+$/, '') + '_clean.png');
-    } else {
-        alert('保存功能需要原生环境支持');
-    }
+    const base64 = canvas.toDataURL('image/png').split(',')[1];
+    const safeBase64 = encodeURIComponent(base64);
+    Android.saveFile(safeBase64, currentFileName.replace(/\.[^.]+$/, '') + '_clean.png');
 };
 
-// 导出PDF（基于堆叠结果）
+// ────── 生成裁切PDF ──────
 document.getElementById('generatePdfBtn').onclick = async () => {
-    if (imagePaths.length === 0) { alert('没有可导出的图片'); return; }
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ unit: 'pt', compress: false });
-    const bgParams = getBgParams();
-    const stackParams = getStackParams();
+    if (imagePaths.length === 0) { Android.showToast('没有可导出的图片'); return; }
     const progressContainer = document.getElementById('progressContainer');
     const progressFill = document.getElementById('progressFill');
     const progressText = document.getElementById('progressText');
     progressContainer.style.display = 'flex';
     generatePdfBtn.disabled = true;
-
     try {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ unit: 'pt', compress: false });
+        const bgParams = getBgParams();
+        const stackParams = getStackParams();
         for (let i = 0; i < imagePaths.length; i++) {
             const img = await new Promise((resolve, reject) => {
                 const image = new Image();
@@ -603,9 +668,10 @@ document.getElementById('generatePdfBtn').onclick = async () => {
             progressText.innerText = pct + '%';
         }
         const pdfBase64 = pdf.output('datauristring').split(',')[1];
-        Android.saveFile(pdfBase64, currentFileName.replace(/\.[^.]+$/, '') + '_天朗.pdf');
+        const safeBase64 = encodeURIComponent(pdfBase64);
+        Android.saveFile(safeBase64, currentFileName.replace(/\.[^.]+$/, '') + '_天朗.pdf');
     } catch (e) {
-        alert('导出失败: ' + e.message);
+        Android.showToast('导出失败: ' + e.message);
     } finally {
         progressContainer.style.display = 'none';
         generatePdfBtn.disabled = false;
