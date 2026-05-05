@@ -34,9 +34,10 @@
         .progress-bar { width:150px; height:20px; background:#ddd; border-radius:10px; overflow:hidden; margin-left:10px; }
         .progress-fill { height:100%; background:#2d6a4f; width:0%; transition: width 0.2s; }
         .progress-container { display:flex; align-items:center; gap:8px; }
-        .half-canvas-wrapper { display:flex; gap:10px; width:100%; justify-content:center; }
-        .half-canvas-wrapper canvas { width:48%; }
-        @media(max-width:800px) { .main-panel { flex-direction:column; } .half-canvas-wrapper { flex-direction:column; } .half-canvas-wrapper canvas { width:100%; } }
+        .half-canvas-wrapper { display:flex; gap:10px; width:100%; justify-content:center; flex-wrap:wrap; }
+        .half-canvas-wrapper > div { display:flex; flex-direction:column; align-items:center; justify-content:center; }
+        .half-canvas-wrapper canvas { max-width:100%; height:auto; }
+        @media(max-width:800px) { .main-panel { flex-direction:column; } }
     </style>
 </head>
 <body>
@@ -92,7 +93,7 @@
             <canvas id="bgResultCanvas"></canvas>
             <div class="note" id="bgNote">背景切除结果</div>
         </div>
-        <!-- 堆叠切除 -->
+        <!-- 堆叠切除（左右独立显示） -->
         <div class="canvas-panel">
             <h3>🌤️ 堆叠切除</h3>
             <div class="mode-group" style="margin-bottom:10px;">
@@ -109,11 +110,11 @@
                 <div class="control-item"><label>右敏感度：</label><input type="range" id="rightSensitivitySlider" min="0.1" max="0.9" step="0.05" value="0.35"><span id="rightSensitivityValue">0.35</span></div>
             </div>
             <div class="half-canvas-wrapper">
-                <div style="display:flex; flex-direction:column; align-items:center; width:48%;">
+                <div id="leftStackContainer" style="width:48%;">
                     <canvas id="leftStackCanvas"></canvas>
                     <div class="note">左侧切除结果</div>
                 </div>
-                <div style="display:flex; flex-direction:column; align-items:center; width:48%;">
+                <div id="rightStackContainer" style="width:48%;">
                     <canvas id="rightStackCanvas"></canvas>
                     <div class="note">右侧切除结果</div>
                 </div>
@@ -153,6 +154,9 @@ const leftStackCanvas = document.getElementById('leftStackCanvas');
 const leftStackCtx = leftStackCanvas.getContext('2d');
 const rightStackCanvas = document.getElementById('rightStackCanvas');
 const rightStackCtx = rightStackCanvas.getContext('2d');
+
+const leftStackContainer = document.getElementById('leftStackContainer');
+const rightStackContainer = document.getElementById('rightStackContainer');
 
 const pdfNav = document.getElementById('pdfNav');
 const totalPagesSpan = document.getElementById('totalPages');
@@ -261,7 +265,6 @@ window.onPdfBatch = function(jsonPaths, fileName) {
     showImage(0);
 };
 
-// PDF渲染进度回调
 window.onPdfRenderProgress = function(pageNum, total) {
     if (total > 0) {
         pdfRenderProgress.style.display = 'flex';
@@ -284,7 +287,7 @@ pageNumInput.onchange = function() {
     else this.value = currentIndex + 1;
 };
 
-// ────── 背景切除算法（同前） ──────
+// ────── 背景切除算法 ──────
 function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     const { data, width, height } = imageData;
     const edgePixels = [];
@@ -440,7 +443,7 @@ function detectMiddleFrameLine(imgData, startX, endX) {
     return bestX;
 }
 
-// ────── 综合处理 ──────
+// ────── 综合处理（包含左右独立显示逻辑） ──────
 function processAll() {
     if (!originalImage || !imageDataCache) return;
     originalCtx.putImageData(imageDataCache, 0, 0);
@@ -448,6 +451,7 @@ function processAll() {
     const bgParams = getBgParams();
     const stackParams = getStackParams();
 
+    // 1. 背景切除
     let cropRegion = null;
     if (bgParams.bgTol > 0) cropRegion = removeBackground(fullImgData, bgParams.bgTol, bgParams.lrMargin, bgParams.topMargin, bgParams.bottomMargin);
     let bgWorkData;
@@ -461,10 +465,11 @@ function processAll() {
         bgResultCtx.putImageData(fullImgData, 0, 0);
     }
 
+    // 2. 堆叠切割线
     const cuts = findCuts(bgWorkData, stackParams);
     const { leftCut, rightCut, bindLine } = cuts;
 
-    // 标注
+    // 3. 标注原图
     originalCtx.putImageData(fullImgData, 0, 0);
     if (cropRegion) {
         originalCtx.strokeStyle = '#2d6a4f'; originalCtx.lineWidth = 2;
@@ -484,22 +489,76 @@ function processAll() {
     });
     originalCtx.setLineDash([]);
 
+    // 4. 生成左右结果并控制显示
     const w = bgWorkData.width, h = bgWorkData.height;
-    // 左半
-    if (leftCut !== null && stackParams.mode !== 'right-only') {
-        let lw = bindLine ? bindLine - leftCut : (rightCut || w) - leftCut;
-        let leftData = new Uint8ClampedArray(bgWorkData.data.buffer.slice(leftCut*4, (leftCut+lw)*4 + h*w*4));
+    let showLeft = false, showRight = false;
+
+    // 根据模式和切割线决定哪一侧有效
+    if (stackParams.mode === 'combined' && bindLine !== null && leftCut !== null && rightCut !== null) {
+        showLeft = showRight = true;
+    } else if (stackParams.mode === 'left-only' && leftCut !== null) {
+        showLeft = true; showRight = false;
+    } else if (stackParams.mode === 'right-only' && rightCut !== null) {
+        showLeft = false; showRight = true;
+    } else if (stackParams.mode === 'auto-single') {
+        showLeft = (leftCut !== null);
+        showRight = (rightCut !== null);
+    }
+
+    // 如果两侧都不显示（例如 auto-single 都没有检测到切割），默认显示左侧整个图
+    if (!showLeft && !showRight) {
+        showLeft = true;
+        leftStackCtx.putImageData(bgWorkData, 0, 0);
+        leftStackCanvas.width = w; leftStackCanvas.height = h;
+    }
+
+    // 绘制左侧画布
+    if (showLeft) {
+        let lw, leftData;
+        if (stackParams.mode === 'combined' && bindLine !== null) {
+            lw = bindLine - (leftCut || 0);
+            leftData = new Uint8ClampedArray(bgWorkData.data.buffer.slice((leftCut||0)*4, bindLine*4 + h*w*4));
+        } else {
+            const lStart = leftCut !== null ? leftCut : 0;
+            lw = (rightCut !== null ? rightCut : w) - lStart;
+            leftData = new Uint8ClampedArray(bgWorkData.data.buffer.slice(lStart*4, (lStart+lw)*4 + h*w*4));
+        }
         leftStackCanvas.width = lw; leftStackCanvas.height = h;
         leftStackCtx.putImageData(new ImageData(leftData, lw, h), 0, 0);
-    } else { leftStackCanvas.width = 0; }
-    // 右半
-    if (rightCut !== null && stackParams.mode !== 'left-only') {
-        let rLeft = bindLine || (leftCut || 0);
-        let rw = rightCut - rLeft;
-        let rightData = new Uint8ClampedArray(bgWorkData.data.buffer.slice(rLeft*4, rightCut*4 + h*w*4));
+        leftStackContainer.style.display = 'flex';
+    } else {
+        leftStackContainer.style.display = 'none';
+    }
+
+    // 绘制右侧画布
+    if (showRight) {
+        let rw, rightData;
+        if (stackParams.mode === 'combined' && bindLine !== null) {
+            rw = (rightCut || w) - bindLine;
+            rightData = new Uint8ClampedArray(bgWorkData.data.buffer.slice(bindLine*4, (rightCut||w)*4 + h*w*4));
+        } else {
+            const rLeft = leftCut !== null ? leftCut : 0;
+            rw = (rightCut || w) - rLeft;
+            rightData = new Uint8ClampedArray(bgWorkData.data.buffer.slice(rLeft*4, (rightCut||w)*4 + h*w*4));
+        }
         rightStackCanvas.width = rw; rightStackCanvas.height = h;
         rightStackCtx.putImageData(new ImageData(rightData, rw, h), 0, 0);
-    } else { rightStackCanvas.width = 0; }
+        rightStackContainer.style.display = 'flex';
+    } else {
+        rightStackContainer.style.display = 'none';
+    }
+
+    // 当只有一侧显示时，让该容器占据全宽以便居中
+    if (showLeft && !showRight) {
+        leftStackContainer.style.width = '100%';
+        rightStackContainer.style.width = '0%';
+    } else if (!showLeft && showRight) {
+        rightStackContainer.style.width = '100%';
+        leftStackContainer.style.width = '0%';
+    } else {
+        leftStackContainer.style.width = '48%';
+        rightStackContainer.style.width = '48%';
+    }
 
     document.getElementById('leftCut').innerText = leftCut !== null ? leftCut.toFixed(1) : '无';
     document.getElementById('rightCut').innerText = rightCut !== null ? rightCut.toFixed(1) : '无';
@@ -518,7 +577,7 @@ function saveCanvas(canvas, suffix) {
 document.getElementById('saveLeftBtn').onclick = () => saveCanvas(leftStackCanvas, '左半');
 document.getElementById('saveRightBtn').onclick = () => saveCanvas(rightStackCanvas, '右半');
 
-// ────── 导出PDF（带独立进度条） ──────
+// ────── 导出PDF（同前，略加简化） ──────
 document.getElementById('generatePdfBtn').onclick = async () => {
     if (imagePaths.length === 0) { Android.showToast('没有图片'); return; }
     exportProgress.style.display = 'flex';
@@ -593,7 +652,7 @@ document.getElementById('generatePdfBtn').onclick = async () => {
     }
 };
 
-// 滑块事件
+// 滑块与模式事件
 [bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider, contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider].forEach(el => {
     el.addEventListener('input', () => { updateSliderLabels(); processAll(); });
 });
