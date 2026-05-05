@@ -4,9 +4,11 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
 import android.util.Base64;
+import android.util.Log;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
@@ -18,6 +20,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
 
 public class TianLangActivity extends AppCompatActivity {
 
@@ -25,7 +29,6 @@ public class TianLangActivity extends AppCompatActivity {
     private PdfRenderer pdfRenderer;
     private ParcelFileDescriptor fileDescriptor;
     private int totalPages = 0;
-    private int currentPage = 0;
     private String currentFileName = "未命名";
 
     private static final int PICK_IMAGE = 1;
@@ -42,6 +45,7 @@ public class TianLangActivity extends AppCompatActivity {
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
         settings.setDomStorageEnabled(true);
+        settings.setAllowFileAccessFromFileURLs(true);
 
         webView.addJavascriptInterface(new NativeBridge(), "Android");
 
@@ -58,18 +62,12 @@ public class TianLangActivity extends AppCompatActivity {
             Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
             if ("image".equals(type)) {
                 intent.setType("image/*");
+                intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true); // 多选
                 startActivityForResult(intent, PICK_IMAGE);
             } else if ("pdf".equals(type)) {
                 intent.setType("application/pdf");
                 startActivityForResult(intent, PICK_PDF);
             }
-        }
-
-        @JavascriptInterface
-        public void goToPage(int pageNum) {
-            if (pdfRenderer == null || pageNum < 0 || pageNum >= totalPages) return;
-            currentPage = pageNum;
-            renderAndSendPage();
         }
 
         @JavascriptInterface
@@ -96,68 +94,112 @@ public class TianLangActivity extends AppCompatActivity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode == RESULT_OK && data != null) {
-            Uri uri = data.getData();
-            if (uri == null) return;
-            try {
-                if (requestCode == PICK_IMAGE) {
-                    InputStream inputStream = getContentResolver().openInputStream(uri);
-                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    byte[] buffer = new byte[4096];
-                    int len;
-                    while ((len = inputStream.read(buffer)) != -1) baos.write(buffer, 0, len);
-                    inputStream.close();
-                    String base64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
-                    String fileName = getFileName(uri);
-                    // 安全传递 Base64 字符串
-                    String js = String.format("javascript:loadImage('%s', '%s')", escapeJsString(base64), escapeJsString(fileName));
-                    webView.evaluateJavascript(js, null);
-                } else if (requestCode == PICK_PDF) {
-                    if (pdfRenderer != null) pdfRenderer.close();
-                    if (fileDescriptor != null) try { fileDescriptor.close(); } catch (Exception e) {}
-                    fileDescriptor = getContentResolver().openFileDescriptor(uri, "r");
-                    pdfRenderer = new PdfRenderer(fileDescriptor);
-                    totalPages = pdfRenderer.getPageCount();
-                    currentPage = 0;
-                    currentFileName = getFileName(uri);
-                    webView.evaluateJavascript(String.format("javascript:onPdfOpened(%d, '%s')", totalPages, escapeJsString(currentFileName)), null);
-                    renderAndSendPage();
-                }
-            } catch (Exception e) {
-                Toast.makeText(this, "文件打开失败", Toast.LENGTH_SHORT).show();
+            if (requestCode == PICK_IMAGE) {
+                handleImageResult(data);
+            } else if (requestCode == PICK_PDF) {
+                Uri uri = data.getData();
+                if (uri != null) handlePdfUri(uri);
             }
         }
     }
 
-    private void renderAndSendPage() {
-        if (pdfRenderer == null) return;
-        try {
-            PdfRenderer.Page page = pdfRenderer.openPage(currentPage);
-            int w = page.getWidth(), h = page.getHeight();
-            Bitmap bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-            page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
-            page.close();
-            ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, baos);
-            String base64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
-            bitmap.recycle();
-            // 安全传递 Base64 字符串
-            String js = String.format("javascript:onPageRendered('%s', %d, %d)", escapeJsString(base64), currentPage, totalPages);
-            webView.evaluateJavascript(js, null);
-        } catch (Exception e) {
-            Toast.makeText(this, "页面渲染失败", Toast.LENGTH_SHORT).show();
-            // 发送错误通知，释放锁
-            webView.evaluateJavascript("javascript:onPageRenderError()", null);
+    private void handleImageResult(Intent data) {
+        List<Uri> uris = new ArrayList<>();
+        if (data.getClipData() != null) {
+            int count = data.getClipData().getItemCount();
+            for (int i = 0; i < count; i++) {
+                uris.add(data.getClipData().getItemAt(i).getUri());
+            }
+        } else if (data.getData() != null) {
+            uris.add(data.getData());
+        }
+
+        List<String> paths = new ArrayList<>();
+        for (Uri uri : uris) {
+            try {
+                InputStream in = getContentResolver().openInputStream(uri);
+                File tempFile = new File(getCacheDir(), "img_" + System.currentTimeMillis() + ".png");
+                try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+                    byte[] buf = new byte[4096];
+                    int len;
+                    while ((len = in.read(buf)) != -1) fos.write(buf, 0, len);
+                }
+                in.close();
+                paths.add(tempFile.getAbsolutePath());
+            } catch (Exception e) {
+                Log.e("TianLang", "图片读取失败", e);
+            }
+        }
+        if (!paths.isEmpty()) {
+            String json = new org.json.JSONArray(paths).toString();
+            webView.evaluateJavascript("javascript:onImageBatch('" + escapeJson(json) + "')", null);
         }
     }
 
-    // 转义 JavaScript 字符串中特殊字符
+    private void handlePdfUri(Uri uri) {
+        try {
+            closePdf();
+            fileDescriptor = getContentResolver().openFileDescriptor(uri, "r");
+            pdfRenderer = new PdfRenderer(fileDescriptor);
+            totalPages = pdfRenderer.getPageCount();
+            currentFileName = getFileName(uri);
+            renderAllPages();
+        } catch (Exception e) {
+            Log.e("TianLang", "PDF打开失败", e);
+            Toast.makeText(this, "PDF打开失败", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void renderAllPages() {
+        new AsyncTask<Void, Void, List<String>>() {
+            @Override
+            protected List<String> doInBackground(Void... voids) {
+                List<String> paths = new ArrayList<>();
+                for (int i = 0; i < totalPages; i++) {
+                    try {
+                        PdfRenderer.Page page = pdfRenderer.openPage(i);
+                        int w = page.getWidth(), h = page.getHeight();
+                        Bitmap bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                        page.close();
+
+                        File tempFile = new File(getCacheDir(), "pdf_page_" + i + ".png");
+                        try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+                            bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
+                        }
+                        bitmap.recycle();
+                        paths.add(tempFile.getAbsolutePath());
+                    } catch (Exception e) {
+                        Log.e("TianLang", "渲染第" + i + "页失败", e);
+                    }
+                }
+                return paths;
+            }
+
+            @Override
+            protected void onPostExecute(List<String> paths) {
+                if (!paths.isEmpty()) {
+                    String json = new org.json.JSONArray(paths).toString();
+                    webView.evaluateJavascript(
+                        String.format("javascript:onPdfBatch('%s', '%s', %d)",
+                            escapeJson(json),
+                            escapeJsString(currentFileName),
+                            paths.size()),
+                        null);
+                } else {
+                    Toast.makeText(TianLangActivity.this, "PDF渲染失败", Toast.LENGTH_SHORT).show();
+                }
+            }
+        }.execute();
+    }
+
+    private String escapeJson(String json) {
+        return json.replace("\\", "\\\\").replace("'", "\\'");
+    }
+
     private String escapeJsString(String s) {
         if (s == null) return "";
-        return s.replace("\\", "\\\\")
-                .replace("'", "\\'")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
+        return s.replace("\\", "\\\\").replace("'", "\\'");
     }
 
     private String getFileName(Uri uri) {
@@ -175,10 +217,26 @@ public class TianLangActivity extends AppCompatActivity {
         return name != null ? name : "file.txt";
     }
 
+    private void closePdf() {
+        if (pdfRenderer != null) {
+            pdfRenderer.close();
+            pdfRenderer = null;
+        }
+        if (fileDescriptor != null) {
+            try { fileDescriptor.close(); } catch (Exception e) {}
+            fileDescriptor = null;
+        }
+    }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (pdfRenderer != null) pdfRenderer.close();
-        if (fileDescriptor != null) try { fileDescriptor.close(); } catch (Exception e) {}
+        closePdf();
+        // 清理缓存图片
+        for (File f : getCacheDir().listFiles()) {
+            if (f.getName().startsWith("img_") || f.getName().startsWith("pdf_page_")) {
+                f.delete();
+            }
+        }
     }
 }
