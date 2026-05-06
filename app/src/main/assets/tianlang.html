@@ -93,9 +93,9 @@
             <h3>🧹 背景切除</h3>
             <div style="display:flex; flex-direction:column; align-items:center; width:100%;">
                 <div class="control-item"><label>背景容差：</label><input type="range" id="bgTolSlider" min="0" max="50" value="15"><span id="bgTolValue">15</span><span id="bgOffNote" class="off-note">背景切除已关闭</span></div>
-                <div class="control-item"><label>左右边距：</label><input type="range" id="lrMarginSlider" min="-200" max="50" value="0"><span id="lrMarginValue">0</span> px</div>
-                <div class="control-item"><label>上边距：</label><input type="range" id="topMarginSlider" min="-200" max="50" value="0"><span id="topMarginValue">0</span> px</div>
-                <div class="control-item"><label>下边距：</label><input type="range" id="bottomMarginSlider" min="-200" max="50" value="0"><span id="bottomMarginValue">0</span> px</div>
+                <div class="control-item"><label>左右边距：</label><input type="range" id="lrMarginSlider" min="-50" max="50" value="0"><span id="lrMarginValue">0</span> px</div>
+                <div class="control-item"><label>上边距：</label><input type="range" id="topMarginSlider" min="-50" max="50" value="0"><span id="topMarginValue">0</span> px</div>
+                <div class="control-item"><label>下边距：</label><input type="range" id="bottomMarginSlider" min="-50" max="50" value="0"><span id="bottomMarginValue">0</span> px</div>
             </div>
             <canvas id="bgResultCanvas"></canvas>
             <div class="note">背景切除结果</div>
@@ -114,6 +114,7 @@
                 <div class="control-item"><label>二值化：</label><input type="range" id="thresholdSlider" min="40" max="200" value="90"><span id="thresholdValue">90</span></div>
                 <div class="control-item"><label>左敏感度：</label><input type="range" id="leftSensitivitySlider" min="0.1" max="0.9" step="0.05" value="0.35"><span id="leftSensitivityValue">0.35</span></div>
                 <div class="control-item"><label>右敏感度：</label><input type="range" id="rightSensitivitySlider" min="0.1" max="0.9" step="0.05" value="0.35"><span id="rightSensitivityValue">0.35</span></div>
+                <div class="control-item"><label>装订调节：</label><input type="range" id="bindSlider" min="0" max="100" value="50"><span id="bindValue">50</span></div>
             </div>
             <div class="half-canvas-wrapper">
                 <div id="leftStackWrapper" style="display:flex; flex-direction:column; align-items:center; width:48%;">
@@ -150,6 +151,9 @@ let currentFileName = '未命名';
 let lastComputedResult = null;
 const PREVIEW_MAX_WIDTH = 1200;
 
+// 装订线调整标记（用户是否手动拖过滑块）
+let bindSliderUserAdjusted = false;
+
 // ── DOM 引用 ──
 const bgTolSlider = document.getElementById('bgTolSlider');
 const lrMarginSlider = document.getElementById('lrMarginSlider');
@@ -159,6 +163,7 @@ const contrastSlider = document.getElementById('contrastSlider');
 const thresholdSlider = document.getElementById('thresholdSlider');
 const leftSensitivitySlider = document.getElementById('leftSensitivitySlider');
 const rightSensitivitySlider = document.getElementById('rightSensitivitySlider');
+const bindSlider = document.getElementById('bindSlider');
 const bgTolValue = document.getElementById('bgTolValue');
 const lrMarginValue = document.getElementById('lrMarginValue');
 const topMarginValue = document.getElementById('topMarginValue');
@@ -167,6 +172,7 @@ const contrastValue = document.getElementById('contrastValue');
 const thresholdValue = document.getElementById('thresholdValue');
 const leftSensitivityValue = document.getElementById('leftSensitivityValue');
 const rightSensitivityValue = document.getElementById('rightSensitivityValue');
+const bindValue = document.getElementById('bindValue');
 const originalCanvas = document.getElementById('originalCanvas');
 const originalCtx = originalCanvas.getContext('2d');
 const bgResultCanvas = document.getElementById('bgResultCanvas');
@@ -202,7 +208,8 @@ function getStackParams() {
     return {
         contrast: +contrastSlider.value, thresh: +thresholdSlider.value,
         leftSensitivity: +leftSensitivitySlider.value, rightSensitivity: +rightSensitivitySlider.value,
-        mode: document.querySelector('input[name="pageMode"]:checked').value
+        mode: document.querySelector('input[name="pageMode"]:checked').value,
+        bindRatio: bindSlider.value / 100  // 装订线位置比例 0~1
     };
 }
 function updateSliderLabels() {
@@ -214,11 +221,15 @@ function updateSliderLabels() {
     thresholdValue.innerText = thresholdSlider.value;
     leftSensitivityValue.innerText = leftSensitivitySlider.value;
     rightSensitivityValue.innerText = rightSensitivitySlider.value;
+    bindValue.innerText = bindSlider.value;
     bgOffNote.style.display = (bgTolSlider.value == 0) ? 'inline' : 'none';
     contrastOffNote.style.display = (contrastSlider.value == 0) ? 'inline' : 'none';
 }
-[bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider, contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider]
+[bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider, contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider, bindSlider]
     .forEach(el => el.addEventListener('input', updateSliderLabels));
+
+// 装订滑块交互：标记为用户调整
+bindSlider.addEventListener('input', () => { bindSliderUserAdjusted = true; });
 
 function loadPageParams(index) {
     const params = pageParams[index];
@@ -231,6 +242,8 @@ function loadPageParams(index) {
         thresholdSlider.value = params.thresh;
         leftSensitivitySlider.value = params.leftSensitivity;
         rightSensitivitySlider.value = params.rightSensitivity;
+        // 装订线位置如已存储则恢复
+        if (params.bindSlider !== undefined) bindSlider.value = params.bindSlider;
         const modeRadio = document.querySelector(`input[name="pageMode"][value="${params.mode}"]`);
         if (modeRadio) modeRadio.checked = true;
         updateSliderLabels();
@@ -248,6 +261,7 @@ function getParamsForPage(index) {
         thresh: +thresholdSlider.value,
         leftSensitivity: +leftSensitivitySlider.value,
         rightSensitivity: +rightSensitivitySlider.value,
+        bindSlider: bindSlider.value,
         mode: document.querySelector('input[name="pageMode"]:checked').value
     };
 }
@@ -261,6 +275,7 @@ function showImage(index) {
     const img = new Image();
     img.onload = () => {
         originalImage = img;
+        bindSliderUserAdjusted = false;  // 新图片重置调整标记
         loadPageParams(index);
         processAll();
         updatePageNav();
@@ -328,7 +343,7 @@ pageNumInput.onchange = function() {
     else this.value = currentIndex + 1;
 };
 
-// ── 背景切除算法 ──
+// ── 背景切除算法（不变） ──
 function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     const { data, width, height } = imageData;
     const edgePixels = []; const ew = 2;
@@ -381,7 +396,7 @@ function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     return { left, top, width: right-left+1, height: bottom-top+1 };
 }
 
-// ── 堆叠检测与装订线 ──
+// ── 堆叠检测（含装订线综合调节） ──
 function findLeftCut(proj, w, th) {
     let start = -1; for (let x = 0; x < w*0.4; x++) if (proj[x] > th) { start = x; break; }
     if (start === -1) return null;
@@ -424,12 +439,31 @@ function detectFrameLineInRegion(imageData, xStart, xEnd, width, height) {
     for (let x = xStart + 5; x < xEnd - 5; x++) {
         if (proj[x] < minVal) { minVal = proj[x]; minX = x; }
     }
-    if (minX === null || minVal > 0.15) return Math.round((xStart + xEnd) / 2);
+    if (minX === null || minVal > 0.15) return null; // 返回null表示未找到
     let bestX = minX, bestVal = minVal;
     for (let x = Math.max(xStart, minX - 3); x <= Math.min(xEnd - 1, minX + 3); x++) {
         if (proj[x] < bestVal) { bestVal = proj[x]; bestX = x; }
     }
     return bestX;
+}
+// 自动计算建议的装订线比例（基于图像特征，不依赖滑块）
+function computeAutoBindRatio(imageData, mode, leftCut, rightCut, width) {
+    if (mode === 'left-only' || (mode === 'auto-single' && leftCut !== null && rightCut === null)) {
+        return 0; // 左单，装订线贴右边界
+    }
+    if (mode === 'right-only' || (mode === 'auto-single' && rightCut !== null && leftCut === null)) {
+        return 0; // 右单，装订线贴左边界
+    }
+    // 组合页或自动双页
+    const l = leftCut ?? 0;
+    const r = rightCut ?? (width - 1);
+    if (r - l <= 1) return 0.5;
+    // 尝试用投影法寻找装订线
+    const autoX = detectFrameLineInRegion(imageData, Math.floor(l + 2), Math.floor(r - 2), width, imageData.height);
+    if (autoX !== null && autoX > l && autoX < r) {
+        return (autoX - l) / (r - l);
+    }
+    return 0.5; // 默认中线
 }
 function processImageWithParams(imageData, params) {
     const { data, width, height } = imageData;
@@ -450,34 +484,49 @@ function processImageWithParams(imageData, params) {
     if (leftCut !== null && rightCut !== null && leftCut >= rightCut) {
         leftCut = rightCut = null;
     }
-    let bindLine = null;
 
+    // 根据模式设置切割线默认值
     if (params.mode === 'left-only') {
         if (leftCut === null) leftCut = 0;
         rightCut = null;
-        bindLine = null;
     } else if (params.mode === 'right-only') {
         if (rightCut === null) rightCut = width - 1;
         leftCut = null;
-        bindLine = null;
     } else if (params.mode === 'auto-single') {
         if (leftCut !== null && rightCut !== null) {
             const gap = rightCut - leftCut;
-            if (gap > width * 0.15) {
-                bindLine = detectFrameLineInRegion(imageData, Math.floor(leftCut + gap * 0.1), Math.floor(rightCut - gap * 0.1), width, height);
-                if (bindLine === null) bindLine = Math.round((leftCut + rightCut) / 2);
-            } else {
-                rightCut = null;
+            if (gap <= width * 0.15) {
+                rightCut = null; // 视为单页
             }
         }
-    } else if (params.mode === 'combined') {
-        bindLine = detectFrameLineInRegion(imageData, Math.floor(width*0.35), Math.floor(width*0.65), width, height);
-        if (bindLine === null) bindLine = Math.floor(width/2);
+        // 单页情况保持leftCut/rightCut中非null的一项
     }
+    // combined模式不强制，保持检测到的left/right
+
+    // 装订线计算（基于滑块bindRatio）
+    const bindRatio = params.bindRatio;
+    let bindLine = null;
+    const w = width;
+    
+    if (params.mode === 'left-only' || (params.mode === 'auto-single' && leftCut !== null && rightCut === null)) {
+        // 左单页
+        const l = leftCut ?? 0;
+        bindLine = l + (w - l) * (1 - bindRatio);
+    } else if (params.mode === 'right-only' || (params.mode === 'auto-single' && rightCut !== null && leftCut === null)) {
+        // 右单页
+        const r = rightCut ?? (w - 1);
+        bindLine = r * bindRatio;
+    } else {
+        // 双页情况（combined或auto-single有双线）
+        const l = leftCut ?? 0;
+        const r = rightCut ?? (w - 1);
+        bindLine = l + (r - l) * bindRatio;
+    }
+
     return { leftCut, rightCut, bindLine, proj };
 }
 
-// ── 核心预览（含左右显示/隐藏控制） ──
+// ── 核心预览（含装订自动初始化和左右隐藏） ──
 function processAll() {
     if (!originalImage) return;
     const origW = originalImage.width, origH = originalImage.height;
@@ -497,7 +546,7 @@ function processAll() {
     bgOffNote.style.display = bgOff ? 'inline' : 'none';
     contrastOffNote.style.display = stackOff ? 'inline' : 'none';
 
-    // 控制左右预览显示
+    // 左右预览显示/隐藏
     if (stackParams.mode === 'right-only') {
         leftStackWrapper.style.display = 'none';
         rightStackWrapper.style.display = '';
@@ -519,6 +568,23 @@ function processAll() {
     } else {
         bgWorkData = previewImgData;
         cropRegion = { left:0, top:0, width:prevW, height:prevH };
+    }
+
+    // 如果用户未调整滑块，先计算推荐装订线比例并更新滑块
+    if (!stackOff && !bindSliderUserAdjusted) {
+        // 临时检测左右切割线（用于自动建议）
+        const tempParams = { ...stackParams, bindRatio: 0.5 }; // 中间值不影响检测
+        const tempResult = processImageWithParams(bgWorkData, tempParams);
+        const autoRatio = computeAutoBindRatio(bgWorkData, stackParams.mode,
+            tempResult.leftCut, tempResult.rightCut, bgWorkData.width);
+        bindSlider.value = Math.round(autoRatio * 100);
+        updateSliderLabels();
+        // 这里设置后 stackParams.bindRatio 会使用新的滑块值吗？不会，因为getStackParams在之前已调用。
+        // 需要重新获取stackParams
+        stackParams.bindRatio = bindSlider.value / 100;
+        bindSliderUserAdjusted = false; // 保持false，以免下次被阻止更新
+    } else if (!stackOff) {
+        stackParams.bindRatio = bindSlider.value / 100;
     }
 
     let leftCut = null, rightCut = null, bindLine = null, proj = new Float32Array(prevW);
@@ -577,7 +643,7 @@ function processAll() {
     bgResultCanvas.height = cropRegion.height;
     bgResultCtx.putImageData(bgWorkData, 0, 0);
 
-    // 左右堆叠预览（仅绘制可见的）
+    // 左右堆叠预览
     const bgCanvas = document.createElement('canvas');
     bgCanvas.width = bgWorkData.width;
     bgCanvas.height = bgWorkData.height;
@@ -614,7 +680,6 @@ function processAll() {
             rightStackCanvas.width = 0;
         }
     } else {
-        // 堆叠切除关闭时，根据显示状态绘制全图
         if (leftStackWrapper.style.display !== 'none') {
             leftStackCanvas.width = bgWorkData.width; leftStackCanvas.height = bgWorkData.height;
             leftStackCtx.putImageData(bgWorkData, 0, 0);
@@ -636,7 +701,7 @@ function processAll() {
     let pageType = '未知';
     if (stackOff) pageType = '⚫ 堆叠切除关闭';
     else if (stackParams.mode === 'auto-single') {
-        if (hasLeft && hasRight && bindLine) pageType = '📖 组合页';
+        if (hasLeft && hasRight) pageType = '📖 组合页';
         else if (hasLeft && !hasRight) pageType = '⬅️ 左单页';
         else if (!hasLeft && hasRight) pageType = '➡️ 右单页';
     } else if (stackParams.mode === 'left-only') pageType = '⬅️ 指定左';
@@ -673,7 +738,7 @@ function drawProjectionPlot(proj, width, leftCut, rightCut, bindLine) {
     document.getElementById('projectionPlot').style.display = 'block';
 }
 
-// ── 保存 ──
+// ── 保存功能 ──
 function saveFullSize(suffix) {
     if (!originalImage || !lastComputedResult) return;
     const res = lastComputedResult;
@@ -691,12 +756,7 @@ function saveFullSize(suffix) {
 
     let leftCut = res.leftCut !== null ? Math.max(0, res.leftCut - cropLeft) : null;
     let rightCut = res.rightCut !== null ? Math.min(cropWidth, res.rightCut - cropLeft) : null;
-    let bindLine = null;
-    if (res.mode === 'combined' && res.bindLine) {
-        bindLine = res.bindLine - cropLeft;
-        bindLine = Math.max(0, Math.min(cropWidth, bindLine));
-        if ((leftCut !== null && bindLine <= leftCut + 10) || (rightCut !== null && bindLine >= rightCut - 10)) bindLine = null;
-    }
+    let bindLine = res.bindLine !== null ? Math.max(0, Math.min(cropWidth, res.bindLine - cropLeft)) : null;
 
     let x, w;
     if (suffix === 'z') {
@@ -745,7 +805,7 @@ document.getElementById('saveLeftBtn').onclick = () => saveFullSize('z');
 document.getElementById('saveRightBtn').onclick = () => saveFullSize('y');
 document.getElementById('saveBgBtn').onclick = saveFullBg;
 
-// ── 应用到本页 ──
+// ── 应用到本页（含装订滑块值） ──
 document.getElementById('applyParamsBtn').onclick = function() {
     if (imagePaths.length === 0) return;
     pageParams[currentIndex] = {
@@ -757,6 +817,7 @@ document.getElementById('applyParamsBtn').onclick = function() {
         thresh: +thresholdSlider.value,
         leftSensitivity: +leftSensitivitySlider.value,
         rightSensitivity: +rightSensitivitySlider.value,
+        bindSlider: bindSlider.value,
         mode: document.querySelector('input[name="pageMode"]:checked').value
     };
     Android.showToast('参数已应用到第' + (currentIndex+1) + '页');
@@ -784,7 +845,8 @@ document.getElementById('generatePdfBtn').onclick = async () => {
             const bgTol = params.bgTol, lrMargin = params.lrMargin, topMargin = params.topMargin,
                   bottomMargin = params.bottomMargin, contrast = params.contrast,
                   thresh = params.thresh, leftSensitivity = params.leftSensitivity,
-                  rightSensitivity = params.rightSensitivity, mode = params.mode;
+                  rightSensitivity = params.rightSensitivity, mode = params.mode,
+                  bindRatio = (params.bindSlider !== undefined ? params.bindSlider / 100 : 0.5);
 
             let cropRegion = null;
             if (bgTol > 0) cropRegion = removeBackground(fullImgData, bgTol, lrMargin, topMargin, bottomMargin);
@@ -800,7 +862,7 @@ document.getElementById('generatePdfBtn').onclick = async () => {
 
             let leftCut = null, rightCut = null, bindLine = null;
             if (contrast > 0) {
-                const result = processImageWithParams(bgWorkData, { contrast, thresh, leftSensitivity, rightSensitivity, mode });
+                const result = processImageWithParams(bgWorkData, { contrast, thresh, leftSensitivity, rightSensitivity, mode, bindRatio });
                 leftCut = result.leftCut; rightCut = result.rightCut; bindLine = result.bindLine;
             }
             let l = leftCut ?? 0, r = rightCut ?? bgWorkData.width;
@@ -811,14 +873,18 @@ document.getElementById('generatePdfBtn').onclick = async () => {
             const bgCtx = bgCanvas.getContext('2d');
             bgCtx.putImageData(bgWorkData, 0, 0);
 
-            if (mode === 'combined' && bindLine && l < bindLine && bindLine < r) {
+            if (mode === 'combined' || (mode === 'auto-single' && bindLine !== null && l < bindLine && bindLine < r)) {
                 const lw = bindLine - l, rw = r - bindLine;
-                const leftCanvas = document.createElement('canvas'); leftCanvas.width = lw; leftCanvas.height = bgWorkData.height;
-                leftCanvas.getContext('2d').putImageData(bgCtx.getImageData(l, 0, lw, bgWorkData.height), 0, 0);
-                const rightCanvas = document.createElement('canvas'); rightCanvas.width = rw; rightCanvas.height = bgWorkData.height;
-                rightCanvas.getContext('2d').putImageData(bgCtx.getImageData(bindLine, 0, rw, bgWorkData.height), 0, 0);
-                Android.addPageToPdf(encodeURIComponent(leftCanvas.toDataURL('image/png').split(',')[1]));
-                Android.addPageToPdf(encodeURIComponent(rightCanvas.toDataURL('image/png').split(',')[1]));
+                if (lw > 0) {
+                    const leftCanvas = document.createElement('canvas'); leftCanvas.width = lw; leftCanvas.height = bgWorkData.height;
+                    leftCanvas.getContext('2d').putImageData(bgCtx.getImageData(l, 0, lw, bgWorkData.height), 0, 0);
+                    Android.addPageToPdf(encodeURIComponent(leftCanvas.toDataURL('image/png').split(',')[1]));
+                }
+                if (rw > 0) {
+                    const rightCanvas = document.createElement('canvas'); rightCanvas.width = rw; rightCanvas.height = bgWorkData.height;
+                    rightCanvas.getContext('2d').putImageData(bgCtx.getImageData(bindLine, 0, rw, bgWorkData.height), 0, 0);
+                    Android.addPageToPdf(encodeURIComponent(rightCanvas.toDataURL('image/png').split(',')[1]));
+                }
             } else {
                 const cropW = r - l;
                 if (cropW > 0) {
@@ -842,9 +908,12 @@ document.getElementById('generatePdfBtn').onclick = async () => {
 // 防抖
 let debounceTimer;
 const debouncedProcess = () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(processAll, 200); };
-[bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider, contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider]
+[bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider, contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider, bindSlider]
     .forEach(el => el.addEventListener('input', () => { updateSliderLabels(); debouncedProcess(); }));
-document.querySelectorAll('input[name="pageMode"]').forEach(r => r.addEventListener('change', processAll));
+document.querySelectorAll('input[name="pageMode"]').forEach(r => r.addEventListener('change', () => {
+    bindSliderUserAdjusted = false; // 切换模式重置调整标记
+    processAll();
+}));
 
 // 夜间模式
 function toggleDarkMode() {
