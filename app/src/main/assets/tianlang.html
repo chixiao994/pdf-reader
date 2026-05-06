@@ -138,7 +138,6 @@
 
 <script>
 // ── 全局状态 ──
-// DEFAULT_PARAMS 仅用作初始默认，翻页时未定制页不再重置滑块
 const DEFAULT_PARAMS = {
     bgTol: 15, lrMargin: 0, topMargin: 0, bottomMargin: 0,
     contrast: 1.8, thresh: 90, leftSensitivity: 0.35, rightSensitivity: 0.35,
@@ -153,6 +152,7 @@ let lastComputedResult = null;
 const PREVIEW_MAX_WIDTH = 1200;
 
 // ── DOM 引用 ──
+// ... (所有 getElementById 保留不变，为简洁略去，但实际完整代码中均存在)
 const bgTolSlider = document.getElementById('bgTolSlider');
 const lrMarginSlider = document.getElementById('lrMarginSlider');
 const topMarginSlider = document.getElementById('topMarginSlider');
@@ -223,11 +223,9 @@ function updateSliderLabels() {
 [bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider, contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider]
     .forEach(el => el.addEventListener('input', updateSliderLabels));
 
-// 加载页参数：有定制则用定制值，否则保持当前滑块值（默认行为）
 function loadPageParams(index) {
     const params = pageParams[index];
     if (params) {
-        // 该页有定制，恢复到定制值
         bgTolSlider.value = params.bgTol;
         lrMarginSlider.value = params.lrMargin;
         topMarginSlider.value = params.topMargin;
@@ -240,14 +238,10 @@ function loadPageParams(index) {
         if (modeRadio) modeRadio.checked = true;
         updateSliderLabels();
     }
-    // 未定制：什么都不做，使用当前滑块值（用户调整后的一组参数）
 }
-
-// 获取某页参数用于导出
 function getParamsForPage(index) {
     const p = pageParams[index];
     if (p) return p;
-    // 未定制：使用当前界面滑块值
     return {
         bgTol: +bgTolSlider.value,
         lrMargin: +lrMarginSlider.value,
@@ -266,11 +260,13 @@ function showImage(index) {
     if (imagePaths.length === 0) return;
     if (index < 0 || index >= imagePaths.length) return;
     currentIndex = index;
+    updatePageNav();   // 立即更新页码
+
     const img = new Image();
     img.onload = () => {
         originalImage = img;
-        loadPageParams(index);   // 定制页恢复，未定制页保持现有滑块
-        processAll();            // 用当前滑块自动检测
+        loadPageParams(index);
+        processAll();
         updatePageNav();
     };
     img.onerror = () => alert('图片加载失败');
@@ -400,7 +396,7 @@ function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     return { left, top, width: right-left+1, height: bottom-top+1 };
 }
 
-// ── 堆叠检测与装订线（投影法） ──
+// ── 堆叠检测与装订线（投影法，已优化阈值） ──
 function findLeftCut(proj, w, th) {
     let start = -1; for (let x = 0; x < w*0.4; x++) if (proj[x] > th) { start = x; break; }
     if (start === -1) return null;
@@ -465,10 +461,15 @@ function processImageWithParams(imageData, params) {
     const proj = new Float32Array(width);
     for (let x=0; x<width; x++) { let s=0; for (let y=0; y<height; y++) s+=binary[y*width+x]; proj[x] = s/height; }
     const avgDensity = proj.reduce((a,b)=>a+b,0)/width;
-    const baseTh = Math.max(0.25, avgDensity*1.8);
+    // 关键调整：降低绝对下限，使浅内容也能检测
+    const baseTh = Math.max(0.08, avgDensity * 2.0);
     const leftEff = baseTh*(1+params.leftSensitivity), rightEff = baseTh*(1+params.rightSensitivity);
     let leftCut = findLeftCut(proj, width, leftEff);
     let rightCut = findRightCut(proj, width, rightEff);
+    // 保证切割线不交叉
+    if (leftCut !== null && rightCut !== null && leftCut >= rightCut) {
+        leftCut = rightCut = null;
+    }
     let bindLine = null;
 
     if (params.mode === 'left-only') {
@@ -489,7 +490,7 @@ function processImageWithParams(imageData, params) {
         bindLine = detectFrameLineInRegion(imageData, Math.floor(width*0.35), Math.floor(width*0.65), width, height);
         if (bindLine === null) bindLine = Math.floor(width/2);
     }
-    return { leftCut, rightCut, bindLine, proj };
+    return { leftCut, rightCut, bindLine, proj, baseTh };
 }
 
 // ── 核心预览计算 ──
@@ -524,13 +525,14 @@ function processAll() {
         cropRegion = { left:0, top:0, width:prevW, height:prevH };
     }
 
-    let leftCut = null, rightCut = null, bindLine = null, proj = new Float32Array(prevW);
+    let leftCut = null, rightCut = null, bindLine = null, proj = new Float32Array(prevW), baseTh = 0;
     if (!stackOff) {
         const result = processImageWithParams(bgWorkData, stackParams);
         leftCut = result.leftCut;
         rightCut = result.rightCut;
         bindLine = result.bindLine;
         proj = result.proj;
+        baseTh = result.baseTh;
     }
 
     const invScale = 1 / previewScale;
@@ -580,30 +582,54 @@ function processAll() {
     bgResultCanvas.height = cropRegion.height;
     bgResultCtx.putImageData(bgWorkData, 0, 0);
 
-    // 左右堆叠预览
+    // 左右堆叠预览（关键修复：无有效切割线时显示完整背景图）
     const bgCanvas = document.createElement('canvas');
     bgCanvas.width = bgWorkData.width;
     bgCanvas.height = bgWorkData.height;
     const bgCtx = bgCanvas.getContext('2d');
     bgCtx.putImageData(bgWorkData, 0, 0);
 
-    if (!stackOff && leftCut !== null && stackParams.mode !== 'right-only') {
-        const bind = (bindLine && stackParams.mode === 'combined') ? bindLine : (rightCut || bgWorkData.width);
-        const lw = bind - leftCut;
-        if (lw > 0) {
-            leftStackCanvas.width = lw; leftStackCanvas.height = bgWorkData.height;
-            leftStackCtx.putImageData(bgCtx.getImageData(leftCut, 0, lw, bgWorkData.height), 0, 0);
-        } else leftStackCanvas.width = 0;
-    } else leftStackCanvas.width = 0;
+    if (!stackOff) {
+        // 左半部分
+        if (leftCut !== null && stackParams.mode !== 'right-only') {
+            const bind = (bindLine && stackParams.mode === 'combined') ? bindLine : (rightCut || bgWorkData.width);
+            let lw = bind - leftCut;
+            if (lw > 0) {
+                leftStackCanvas.width = lw; leftStackCanvas.height = bgWorkData.height;
+                leftStackCtx.putImageData(bgCtx.getImageData(leftCut, 0, lw, bgWorkData.height), 0, 0);
+            } else {
+                // 回退到全图
+                leftStackCanvas.width = bgWorkData.width; leftStackCanvas.height = bgWorkData.height;
+                leftStackCtx.putImageData(bgWorkData, 0, 0);
+            }
+        } else {
+            // 没有左切割线，显示完整背景图（方便观察）
+            leftStackCanvas.width = bgWorkData.width; leftStackCanvas.height = bgWorkData.height;
+            leftStackCtx.putImageData(bgWorkData, 0, 0);
+        }
 
-    if (!stackOff && rightCut !== null && stackParams.mode !== 'left-only') {
-        const bind = (bindLine && stackParams.mode === 'combined') ? bindLine : (leftCut || 0);
-        const rw = rightCut - bind;
-        if (rw > 0) {
-            rightStackCanvas.width = rw; rightStackCanvas.height = bgWorkData.height;
-            rightStackCtx.putImageData(bgCtx.getImageData(bind, 0, rw, bgWorkData.height), 0, 0);
-        } else rightStackCanvas.width = 0;
-    } else rightStackCanvas.width = 0;
+        // 右半部分
+        if (rightCut !== null && stackParams.mode !== 'left-only') {
+            const bind = (bindLine && stackParams.mode === 'combined') ? bindLine : (leftCut || 0);
+            let rw = rightCut - bind;
+            if (rw > 0) {
+                rightStackCanvas.width = rw; rightStackCanvas.height = bgWorkData.height;
+                rightStackCtx.putImageData(bgCtx.getImageData(bind, 0, rw, bgWorkData.height), 0, 0);
+            } else {
+                rightStackCanvas.width = bgWorkData.width; rightStackCanvas.height = bgWorkData.height;
+                rightStackCtx.putImageData(bgWorkData, 0, 0);
+            }
+        } else {
+            rightStackCanvas.width = bgWorkData.width; rightStackCanvas.height = bgWorkData.height;
+            rightStackCtx.putImageData(bgWorkData, 0, 0);
+        }
+    } else {
+        // 堆叠关闭，左右均显示完整图
+        leftStackCanvas.width = bgWorkData.width; leftStackCanvas.height = bgWorkData.height;
+        leftStackCtx.putImageData(bgWorkData, 0, 0);
+        rightStackCanvas.width = bgWorkData.width; rightStackCanvas.height = bgWorkData.height;
+        rightStackCtx.putImageData(bgWorkData, 0, 0);
+    }
 
     // 按钮状态
     const hasLeft = (leftCut !== null);
@@ -619,6 +645,7 @@ function processAll() {
         if (hasLeft && hasRight && bindLine) pageType = '📖 组合页';
         else if (hasLeft && !hasRight) pageType = '⬅️ 左单页';
         else if (!hasLeft && hasRight) pageType = '➡️ 右单页';
+        else if (hasLeft && hasRight) pageType = '⚠️ 双线无装订线';
     }
     document.getElementById('leftCut').innerText = stackOff ? '已关闭' : (fullLeftCut !== null ? fullLeftCut + ' (原图)' : '无');
     document.getElementById('rightCut').innerText = stackOff ? '已关闭' : (fullRightCut !== null ? fullRightCut + ' (原图)' : '无');
@@ -628,13 +655,13 @@ function processAll() {
         `类型：${pageType}`;
 
     if (!stackOff && proj.length > 0) {
-        drawProjectionPlot(proj, bgWorkData.width, leftCut, rightCut, bindLine);
+        drawProjectionPlot(proj, bgWorkData.width, leftCut, rightCut, bindLine, baseTh);
     } else {
         document.getElementById('projectionPlot').style.display = 'none';
     }
 }
 
-function drawProjectionPlot(proj, width, leftCut, rightCut, bindLine) {
+function drawProjectionPlot(proj, width, leftCut, rightCut, bindLine, baseTh) {
     const pw = projCanvas.width, ph = projCanvas.height;
     projCtx.clearRect(0, 0, pw, ph);
     projCtx.fillStyle = '#faf6f0'; projCtx.fillRect(0, 0, pw, ph);
@@ -645,13 +672,20 @@ function drawProjectionPlot(proj, width, leftCut, rightCut, bindLine) {
         if (i === 0) projCtx.moveTo(i, y); else projCtx.lineTo(i, y);
     }
     projCtx.stroke();
+    // 绘制基础阈值参考线
+    if (baseTh !== undefined) {
+        const thY = ph - baseTh * scaleY;
+        projCtx.strokeStyle = '#888'; projCtx.lineWidth = 1; projCtx.setLineDash([4,4]);
+        projCtx.beginPath(); projCtx.moveTo(0, thY); projCtx.lineTo(pw, thY); projCtx.stroke();
+        projCtx.setLineDash([]);
+    }
     if (leftCut !== null) { const lx = (leftCut / width) * pw; projCtx.strokeStyle = '#d63447'; projCtx.beginPath(); projCtx.moveTo(lx,0); projCtx.lineTo(lx,ph); projCtx.stroke(); }
     if (rightCut !== null) { const rx = (rightCut / width) * pw; projCtx.strokeStyle = '#d63447'; projCtx.beginPath(); projCtx.moveTo(rx,0); projCtx.lineTo(rx,ph); projCtx.stroke(); }
     if (bindLine !== null) { const bx = (bindLine / width) * pw; projCtx.strokeStyle = '#1e5f9e'; projCtx.setLineDash([8,6]); projCtx.beginPath(); projCtx.moveTo(bx,0); projCtx.lineTo(bx,ph); projCtx.stroke(); projCtx.setLineDash([]); }
     document.getElementById('projectionPlot').style.display = 'block';
 }
 
-// ── 保存功能 ──
+// ── 保存功能（不变） ──
 function saveFullSize(suffix) {
     if (!originalImage || !lastComputedResult) return;
     const res = lastComputedResult;
@@ -755,7 +789,7 @@ document.getElementById('applyParamsBtn').onclick = function() {
     Android.showToast('参数已应用到第' + (currentIndex+1) + '页');
 };
 
-// ── PDF导出（使用每页定制参数或当前滑块值） ──
+// ── PDF导出（不变） ──
 document.getElementById('generatePdfBtn').onclick = async () => {
     if (imagePaths.length === 0) { Android.showToast('没有图片'); return; }
     Android.beginPdf(imagePaths.length, currentFileName);
@@ -844,7 +878,7 @@ document.getElementById('generatePdfBtn').onclick = async () => {
     }
 };
 
-// ── 防抖预览 ──
+// ── 防抖 ──
 let debounceTimer;
 const debouncedProcess = () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(processAll, 200); };
 [bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider, contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider]
