@@ -8,26 +8,26 @@
         * { margin:0; padding:0; box-sizing:border-box; }
         body { font-family:'Segoe UI','Noto Serif SC',serif; background:#f5f0e8; color:#3e2c1b; padding:15px; transition: background 0.3s, color 0.3s; }
         .container { max-width:1500px; margin:0 auto; }
-        h1 { text-align:center; font-size:2.2em; font-weight:400; color:#5d3e1f; transition: color 0.3s; }
-        .subtitle { text-align:center; font-style:italic; margin-bottom:20px; color:#7a5a3a; transition: color 0.3s; }
+        h1 { text-align:center; font-size:2.2em; font-weight:400; color:#5d3e1f; }
+        .subtitle { text-align:center; font-style:italic; margin-bottom:20px; color:#7a5a3a; }
         .main-panel { display:flex; gap:15px; flex-wrap:wrap; justify-content:center; }
-        .canvas-panel { background:#fff7ed; border:1px solid #d6b89b; border-radius:16px; padding:15px; box-shadow:0 4px 12px rgba(0,0,0,0.05); flex:1 1 350px; display:flex; flex-direction:column; align-items:center; transition: background 0.3s, border-color 0.3s, box-shadow 0.3s; }
-        .canvas-panel h3 { margin-bottom:10px; font-weight:400; border-bottom:1px solid #d6b89b; padding-bottom:5px; width:100%; text-align:center; transition: border-color 0.3s, color 0.3s; }
+        .canvas-panel { background:#fff7ed; border:1px solid #d6b89b; border-radius:16px; padding:15px; box-shadow:0 4px 12px rgba(0,0,0,0.05); flex:1 1 350px; display:flex; flex-direction:column; align-items:center; }
+        .canvas-panel h3 { margin-bottom:10px; font-weight:400; border-bottom:1px solid #d6b89b; padding-bottom:5px; width:100%; text-align:center; }
         canvas { max-width:100%; border:1px solid #aaa; border-radius:8px; background:#fff; }
-        .controls { background:#fff7ed; border:1px solid #d6b89b; border-radius:16px; padding:20px; margin-top:20px; box-shadow:0 4px 12px rgba(0,0,0,0.05); transition: background 0.3s, border-color 0.3s; }
+        .controls { background:#fff7ed; border:1px solid #d6b89b; border-radius:16px; padding:20px; margin-top:20px; box-shadow:0 4px 12px rgba(0,0,0,0.05); }
         .control-row { display:flex; flex-wrap:wrap; gap:15px; align-items:center; margin-bottom:15px; }
         .control-item { display:flex; align-items:center; gap:8px; }
         label { font-weight:500; }
         input[type="range"] { width:150px; }
-        .button { background:#9b7653; border:none; color:white; padding:10px 25px; border-radius:30px; font-size:1em; cursor:pointer; white-space:nowrap; transition: background 0.3s; }
+        .button { background:#9b7653; border:none; color:white; padding:10px 25px; border-radius:30px; font-size:1em; cursor:pointer; white-space:nowrap; }
         .button:disabled { background:#aaa; cursor:not-allowed; }
         .upload-btn { background:#5d4a3a; }
         .save-btn { background:#2d6a4f; }
-        .mode-group { display:flex; flex-wrap:wrap; gap:12px; background:#ede0ce; padding:8px 15px; border-radius:30px; align-items:center; transition: background 0.3s; }
+        .mode-group { display:flex; flex-wrap:wrap; gap:12px; background:#ede0ce; padding:8px 15px; border-radius:30px; align-items:center; }
         .mode-group label { display:flex; align-items:center; gap:5px; cursor:pointer; font-size:0.9em; }
-        .cut-line-info { display:flex; gap:20px; font-family:monospace; margin-top:10px; flex-wrap:wrap; justify-content:center; transition: color 0.3s; }
-        .projection-plot { width:100%; height:120px; background:#faf6f0; border:1px solid #d6b89b; border-radius:8px; margin-top:10px; transition: background 0.3s, border-color 0.3s; }
-        .note { margin-top:10px; font-size:0.8em; color:#8b6b4f; transition: color 0.3s; }
+        .cut-line-info { display:flex; gap:20px; font-family:monospace; margin-top:10px; flex-wrap:wrap; justify-content:center; }
+        .projection-plot { width:100%; height:120px; background:#faf6f0; border:1px solid #d6b89b; border-radius:8px; margin-top:10px; }
+        .note { margin-top:10px; font-size:0.8em; color:#8b6b4f; }
         .pdf-page-nav { display:flex; align-items:center; gap:10px; margin-left:auto; }
         .pdf-page-nav input { width:60px; text-align:center; border:1px solid #d6b89b; border-radius:8px; padding:4px; }
         .progress-bar { width:150px; height:20px; background:#ddd; border-radius:10px; overflow:hidden; margin-left:10px; }
@@ -39,10 +39,9 @@
         /* 夜间模式 */
         body.dark-mode { background:#2b241b; color:#d4c5b2; }
         body.dark-mode .controls,
-        body.dark-mode .canvas-panel { background:#3e3529; border-color:#6b5843; box-shadow:0 4px 12px rgba(0,0,0,0.3); }
+        body.dark-mode .canvas-panel { background:#3e3529; border-color:#6b5843; }
         body.dark-mode .canvas-panel h3 { border-bottom-color:#6b5843; color:#e0d6c4; }
         body.dark-mode .mode-group { background:#4a3f30; }
-        body.dark-mode .button { background:#7a6548; }
         body.dark-mode .button:disabled { background:#5a5040; }
         body.dark-mode .upload-btn { background:#4a3b2f; }
         body.dark-mode .save-btn { background:#3d5a3e; }
@@ -99,7 +98,7 @@
                 <div class="control-item"><label>下边距：</label><input type="range" id="bottomMarginSlider" min="-50" max="50" value="0"><span id="bottomMarginValue">0</span> px</div>
             </div>
             <canvas id="bgResultCanvas"></canvas>
-            <div class="note" id="bgNote">背景切除结果</div>
+            <div class="note">背景切除结果</div>
         </div>
         <div class="canvas-panel">
             <h3>🌤️ 堆叠切除</h3>
@@ -144,15 +143,14 @@ const DEFAULT_PARAMS = {
     mode: 'auto-single'
 };
 let imagePaths = [];
-let pageParams = [];                // 每页定制参数，null表示使用当前滑块值（自动检测）
+let pageParams = [];
 let currentIndex = 0;
 let originalImage = null;
 let currentFileName = '未命名';
 let lastComputedResult = null;
 const PREVIEW_MAX_WIDTH = 1200;
 
-// ── DOM 引用 ──
-// ... (所有 getElementById 保留不变，为简洁略去，但实际完整代码中均存在)
+// ── DOM 引用（全部保留） ──
 const bgTolSlider = document.getElementById('bgTolSlider');
 const lrMarginSlider = document.getElementById('lrMarginSlider');
 const topMarginSlider = document.getElementById('topMarginSlider');
@@ -161,7 +159,6 @@ const contrastSlider = document.getElementById('contrastSlider');
 const thresholdSlider = document.getElementById('thresholdSlider');
 const leftSensitivitySlider = document.getElementById('leftSensitivitySlider');
 const rightSensitivitySlider = document.getElementById('rightSensitivitySlider');
-
 const bgTolValue = document.getElementById('bgTolValue');
 const lrMarginValue = document.getElementById('lrMarginValue');
 const topMarginValue = document.getElementById('topMarginValue');
@@ -170,7 +167,6 @@ const contrastValue = document.getElementById('contrastValue');
 const thresholdValue = document.getElementById('thresholdValue');
 const leftSensitivityValue = document.getElementById('leftSensitivityValue');
 const rightSensitivityValue = document.getElementById('rightSensitivityValue');
-
 const originalCanvas = document.getElementById('originalCanvas');
 const originalCtx = originalCanvas.getContext('2d');
 const bgResultCanvas = document.getElementById('bgResultCanvas');
@@ -181,7 +177,6 @@ const rightStackCanvas = document.getElementById('rightStackCanvas');
 const rightStackCtx = rightStackCanvas.getContext('2d');
 const projCanvas = document.getElementById('projCanvas');
 const projCtx = projCanvas.getContext('2d');
-
 const pdfNav = document.getElementById('pdfNav');
 const totalPagesSpan = document.getElementById('totalPages');
 const pageNumInput = document.getElementById('pageNumInput');
@@ -197,7 +192,7 @@ const exportProgressText = document.getElementById('exportProgressText');
 const bgOffNote = document.getElementById('bgOffNote');
 const contrastOffNote = document.getElementById('contrastOffNote');
 
-// ── 工具函数 ──
+// ── 工具函数（同前） ──
 function getBgParams() {
     return { bgTol: +bgTolSlider.value, lrMargin: +lrMarginSlider.value, topMargin: +topMarginSlider.value, bottomMargin: +bottomMarginSlider.value };
 }
@@ -255,13 +250,12 @@ function getParamsForPage(index) {
     };
 }
 
-// ── 图片加载与页数管理 ──
+// ── 图片加载与页数（立即更新页码） ──
 function showImage(index) {
     if (imagePaths.length === 0) return;
     if (index < 0 || index >= imagePaths.length) return;
     currentIndex = index;
-    updatePageNav();   // 立即更新页码
-
+    updatePageNav();
     const img = new Image();
     img.onload = () => {
         originalImage = img;
@@ -272,7 +266,6 @@ function showImage(index) {
     img.onerror = () => alert('图片加载失败');
     img.src = 'file://' + imagePaths[index];
 }
-
 function updatePageNav() {
     if (imagePaths.length > 1) {
         pdfNav.style.display = 'flex';
@@ -286,7 +279,6 @@ function updatePageNav() {
         pdfNav.style.display = 'none';
     }
 }
-
 window.onImageBatch = function(jsonPaths) {
     try {
         const parsed = JSON.parse(jsonPaths);
@@ -300,10 +292,7 @@ window.onImageBatch = function(jsonPaths) {
             Android.showToast('图片列表解析异常');
             imagePaths = [];
         }
-    } catch(e) {
-        Android.showToast('图片数据解析失败: ' + e.message);
-        imagePaths = [];
-    }
+    } catch(e) { Android.showToast('图片数据解析失败'); }
 };
 window.onPdfBatch = function(jsonPaths, fileName) {
     try {
@@ -315,13 +304,9 @@ window.onPdfBatch = function(jsonPaths, fileName) {
             pageNumInput.max = imagePaths.length;
             showImage(0);
         } else {
-            Android.showToast('PDF 解析异常：未获得有效页路径');
-            imagePaths = [];
+            Android.showToast('PDF 解析异常');
         }
-    } catch(e) {
-        Android.showToast('PDF 数据解析失败: ' + e.message);
-        imagePaths = [];
-    }
+    } catch(e) { Android.showToast('PDF 数据解析失败'); }
 };
 window.onPdfRenderProgress = function(pageNum, total) {
     if (total > 0) {
@@ -332,9 +317,7 @@ window.onPdfRenderProgress = function(pageNum, total) {
 };
 window.hidePdfRenderProgress = function() {
     pdfRenderProgress.style.display = 'none';
-    pdfRenderFill.style.width = '0%';
 };
-
 prevPageBtn.onclick = () => showImage(currentIndex - 1);
 nextPageBtn.onclick = () => showImage(currentIndex + 1);
 pageNumInput.onchange = function() {
@@ -343,7 +326,7 @@ pageNumInput.onchange = function() {
     else this.value = currentIndex + 1;
 };
 
-// ── 背景切除算法 ──
+// ── 背景切除算法（不变） ──
 function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     const { data, width, height } = imageData;
     const edgePixels = []; const ew = 2;
@@ -396,7 +379,7 @@ function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     return { left, top, width: right-left+1, height: bottom-top+1 };
 }
 
-// ── 堆叠检测与装订线（投影法，已优化阈值） ──
+// ── 堆叠检测（改进阈值 + 按模式处理） ──
 function findLeftCut(proj, w, th) {
     let start = -1; for (let x = 0; x < w*0.4; x++) if (proj[x] > th) { start = x; break; }
     if (start === -1) return null;
@@ -420,10 +403,7 @@ function detectFrameLineInRegion(imageData, xStart, xEnd, width, height) {
     }
     let sumGray = 0, count = 0;
     for (let y = 0; y < height; y++) {
-        for (let x = xStart; x < xEnd; x++) {
-            sumGray += gray[y * width + x];
-            count++;
-        }
+        for (let x = xStart; x < xEnd; x++) { sumGray += gray[y * width + x]; count++; }
     }
     const avgGray = sumGray / count;
     const binary = new Uint8Array(width * height);
@@ -461,21 +441,23 @@ function processImageWithParams(imageData, params) {
     const proj = new Float32Array(width);
     for (let x=0; x<width; x++) { let s=0; for (let y=0; y<height; y++) s+=binary[y*width+x]; proj[x] = s/height; }
     const avgDensity = proj.reduce((a,b)=>a+b,0)/width;
-    // 关键调整：降低绝对下限，使浅内容也能检测
     const baseTh = Math.max(0.08, avgDensity * 2.0);
     const leftEff = baseTh*(1+params.leftSensitivity), rightEff = baseTh*(1+params.rightSensitivity);
     let leftCut = findLeftCut(proj, width, leftEff);
     let rightCut = findRightCut(proj, width, rightEff);
-    // 保证切割线不交叉
     if (leftCut !== null && rightCut !== null && leftCut >= rightCut) {
         leftCut = rightCut = null;
     }
     let bindLine = null;
 
     if (params.mode === 'left-only') {
+        if (leftCut === null) leftCut = 0;
         rightCut = null;
+        bindLine = null;
     } else if (params.mode === 'right-only') {
+        if (rightCut === null) rightCut = width - 1;
         leftCut = null;
+        bindLine = null;
     } else if (params.mode === 'auto-single') {
         if (leftCut !== null && rightCut !== null) {
             const gap = rightCut - leftCut;
@@ -490,10 +472,10 @@ function processImageWithParams(imageData, params) {
         bindLine = detectFrameLineInRegion(imageData, Math.floor(width*0.35), Math.floor(width*0.65), width, height);
         if (bindLine === null) bindLine = Math.floor(width/2);
     }
-    return { leftCut, rightCut, bindLine, proj, baseTh };
+    return { leftCut, rightCut, bindLine, proj };
 }
 
-// ── 核心预览计算 ──
+// ── 核心预览（左右预览严格按模式显示） ──
 function processAll() {
     if (!originalImage) return;
     const origW = originalImage.width, origH = originalImage.height;
@@ -525,14 +507,13 @@ function processAll() {
         cropRegion = { left:0, top:0, width:prevW, height:prevH };
     }
 
-    let leftCut = null, rightCut = null, bindLine = null, proj = new Float32Array(prevW), baseTh = 0;
+    let leftCut = null, rightCut = null, bindLine = null, proj = new Float32Array(prevW);
     if (!stackOff) {
         const result = processImageWithParams(bgWorkData, stackParams);
         leftCut = result.leftCut;
         rightCut = result.rightCut;
         bindLine = result.bindLine;
         proj = result.proj;
-        baseTh = result.baseTh;
     }
 
     const invScale = 1 / previewScale;
@@ -582,7 +563,7 @@ function processAll() {
     bgResultCanvas.height = cropRegion.height;
     bgResultCtx.putImageData(bgWorkData, 0, 0);
 
-    // 左右堆叠预览（关键修复：无有效切割线时显示完整背景图）
+    // 左右堆叠预览（按模式决定显示与否）
     const bgCanvas = document.createElement('canvas');
     bgCanvas.width = bgWorkData.width;
     bgCanvas.height = bgWorkData.height;
@@ -590,41 +571,35 @@ function processAll() {
     bgCtx.putImageData(bgWorkData, 0, 0);
 
     if (!stackOff) {
-        // 左半部分
-        if (leftCut !== null && stackParams.mode !== 'right-only') {
-            const bind = (bindLine && stackParams.mode === 'combined') ? bindLine : (rightCut || bgWorkData.width);
-            let lw = bind - leftCut;
-            if (lw > 0) {
-                leftStackCanvas.width = lw; leftStackCanvas.height = bgWorkData.height;
-                leftStackCtx.putImageData(bgCtx.getImageData(leftCut, 0, lw, bgWorkData.height), 0, 0);
+        // 左侧预览
+        if (stackParams.mode !== 'right-only') {
+            const l = leftCut ?? 0;
+            const r = bindLine ?? (rightCut ?? bgWorkData.width);
+            let w = r - l;
+            if (w > 0) {
+                leftStackCanvas.width = w; leftStackCanvas.height = bgWorkData.height;
+                leftStackCtx.putImageData(bgCtx.getImageData(l, 0, w, bgWorkData.height), 0, 0);
             } else {
-                // 回退到全图
-                leftStackCanvas.width = bgWorkData.width; leftStackCanvas.height = bgWorkData.height;
-                leftStackCtx.putImageData(bgWorkData, 0, 0);
+                leftStackCanvas.width = 0;
             }
         } else {
-            // 没有左切割线，显示完整背景图（方便观察）
-            leftStackCanvas.width = bgWorkData.width; leftStackCanvas.height = bgWorkData.height;
-            leftStackCtx.putImageData(bgWorkData, 0, 0);
+            leftStackCanvas.width = 0;   // 右单模式不显示左侧
         }
-
-        // 右半部分
-        if (rightCut !== null && stackParams.mode !== 'left-only') {
-            const bind = (bindLine && stackParams.mode === 'combined') ? bindLine : (leftCut || 0);
-            let rw = rightCut - bind;
-            if (rw > 0) {
-                rightStackCanvas.width = rw; rightStackCanvas.height = bgWorkData.height;
-                rightStackCtx.putImageData(bgCtx.getImageData(bind, 0, rw, bgWorkData.height), 0, 0);
+        // 右侧预览
+        if (stackParams.mode !== 'left-only') {
+            const l = bindLine ?? (leftCut ?? 0);
+            const r = rightCut ?? (bgWorkData.width - 1);
+            let w = r - l;
+            if (w > 0) {
+                rightStackCanvas.width = w; rightStackCanvas.height = bgWorkData.height;
+                rightStackCtx.putImageData(bgCtx.getImageData(l, 0, w, bgWorkData.height), 0, 0);
             } else {
-                rightStackCanvas.width = bgWorkData.width; rightStackCanvas.height = bgWorkData.height;
-                rightStackCtx.putImageData(bgWorkData, 0, 0);
+                rightStackCanvas.width = 0;
             }
         } else {
-            rightStackCanvas.width = bgWorkData.width; rightStackCanvas.height = bgWorkData.height;
-            rightStackCtx.putImageData(bgWorkData, 0, 0);
+            rightStackCanvas.width = 0;   // 左单模式不显示右侧
         }
     } else {
-        // 堆叠关闭，左右均显示完整图
         leftStackCanvas.width = bgWorkData.width; leftStackCanvas.height = bgWorkData.height;
         leftStackCtx.putImageData(bgWorkData, 0, 0);
         rightStackCanvas.width = bgWorkData.width; rightStackCanvas.height = bgWorkData.height;
@@ -645,8 +620,9 @@ function processAll() {
         if (hasLeft && hasRight && bindLine) pageType = '📖 组合页';
         else if (hasLeft && !hasRight) pageType = '⬅️ 左单页';
         else if (!hasLeft && hasRight) pageType = '➡️ 右单页';
-        else if (hasLeft && hasRight) pageType = '⚠️ 双线无装订线';
-    }
+    } else if (stackParams.mode === 'left-only') pageType = '⬅️ 指定左';
+    else if (stackParams.mode === 'right-only') pageType = '➡️ 指定右';
+    else if (stackParams.mode === 'combined') pageType = '📖 合拟面';
     document.getElementById('leftCut').innerText = stackOff ? '已关闭' : (fullLeftCut !== null ? fullLeftCut + ' (原图)' : '无');
     document.getElementById('rightCut').innerText = stackOff ? '已关闭' : (fullRightCut !== null ? fullRightCut + ' (原图)' : '无');
     document.getElementById('cutInfo').innerHTML = 
@@ -655,13 +631,13 @@ function processAll() {
         `类型：${pageType}`;
 
     if (!stackOff && proj.length > 0) {
-        drawProjectionPlot(proj, bgWorkData.width, leftCut, rightCut, bindLine, baseTh);
+        drawProjectionPlot(proj, bgWorkData.width, leftCut, rightCut, bindLine);
     } else {
         document.getElementById('projectionPlot').style.display = 'none';
     }
 }
 
-function drawProjectionPlot(proj, width, leftCut, rightCut, bindLine, baseTh) {
+function drawProjectionPlot(proj, width, leftCut, rightCut, bindLine) {
     const pw = projCanvas.width, ph = projCanvas.height;
     projCtx.clearRect(0, 0, pw, ph);
     projCtx.fillStyle = '#faf6f0'; projCtx.fillRect(0, 0, pw, ph);
@@ -672,20 +648,13 @@ function drawProjectionPlot(proj, width, leftCut, rightCut, bindLine, baseTh) {
         if (i === 0) projCtx.moveTo(i, y); else projCtx.lineTo(i, y);
     }
     projCtx.stroke();
-    // 绘制基础阈值参考线
-    if (baseTh !== undefined) {
-        const thY = ph - baseTh * scaleY;
-        projCtx.strokeStyle = '#888'; projCtx.lineWidth = 1; projCtx.setLineDash([4,4]);
-        projCtx.beginPath(); projCtx.moveTo(0, thY); projCtx.lineTo(pw, thY); projCtx.stroke();
-        projCtx.setLineDash([]);
-    }
     if (leftCut !== null) { const lx = (leftCut / width) * pw; projCtx.strokeStyle = '#d63447'; projCtx.beginPath(); projCtx.moveTo(lx,0); projCtx.lineTo(lx,ph); projCtx.stroke(); }
     if (rightCut !== null) { const rx = (rightCut / width) * pw; projCtx.strokeStyle = '#d63447'; projCtx.beginPath(); projCtx.moveTo(rx,0); projCtx.lineTo(rx,ph); projCtx.stroke(); }
     if (bindLine !== null) { const bx = (bindLine / width) * pw; projCtx.strokeStyle = '#1e5f9e'; projCtx.setLineDash([8,6]); projCtx.beginPath(); projCtx.moveTo(bx,0); projCtx.lineTo(bx,ph); projCtx.stroke(); projCtx.setLineDash([]); }
     document.getElementById('projectionPlot').style.display = 'block';
 }
 
-// ── 保存功能（不变） ──
+// ── 保存（保持原有逻辑，已适配 leftCut=0 等） ──
 function saveFullSize(suffix) {
     if (!originalImage || !lastComputedResult) return;
     const res = lastComputedResult;
@@ -694,12 +663,10 @@ function saveFullSize(suffix) {
     fullCanvas.height = originalImage.height;
     const fullCtx = fullCanvas.getContext('2d');
     fullCtx.drawImage(originalImage, 0, 0);
-
     const cropLeft = res.bgCrop.left;
     const cropTop = res.bgCrop.top;
     const cropWidth = res.bgCrop.width;
     const cropHeight = res.bgCrop.height;
-
     const workCanvas = document.createElement('canvas');
     workCanvas.width = cropWidth;
     workCanvas.height = cropHeight;
@@ -708,14 +675,12 @@ function saveFullSize(suffix) {
 
     let leftCut = res.leftCut !== null ? Math.max(0, res.leftCut - cropLeft) : null;
     let rightCut = res.rightCut !== null ? Math.min(cropWidth, res.rightCut - cropLeft) : null;
-
     let bindLine = null;
     if (res.mode === 'combined' && res.bindLine) {
         bindLine = res.bindLine - cropLeft;
         bindLine = Math.max(0, Math.min(cropWidth, bindLine));
         if ((leftCut !== null && bindLine <= leftCut + 10) || (rightCut !== null && bindLine >= rightCut - 10)) bindLine = null;
     }
-
     let x, w;
     if (suffix === 'z') {
         if (leftCut === null) return;
@@ -733,7 +698,6 @@ function saveFullSize(suffix) {
         w = rightCut - leftBorder;
     }
     if (w < 10) { Android.showToast('切割区域过小'); return; }
-
     const outData = workCtx.getImageData(x, 0, w, cropHeight);
     const outCanvas = document.createElement('canvas');
     outCanvas.width = w; outCanvas.height = cropHeight;
@@ -742,7 +706,6 @@ function saveFullSize(suffix) {
     const outName = currentFileName.replace(/\.[^.]+$/, '') + (suffix === 'z' ? '_z.png' : '_y.png');
     Android.saveFile(encodeURIComponent(base64), outName);
 }
-
 function saveFullBg() {
     if (!originalImage || !lastComputedResult) return;
     const res = lastComputedResult;
@@ -751,12 +714,10 @@ function saveFullBg() {
     fullCanvas.height = originalImage.height;
     const fullCtx = fullCanvas.getContext('2d');
     fullCtx.drawImage(originalImage, 0, 0);
-
     const cropLeft = res.bgCrop.left;
     const cropTop = res.bgCrop.top;
     const cropWidth = res.bgCrop.width;
     const cropHeight = res.bgCrop.height;
-
     const outCanvas = document.createElement('canvas');
     outCanvas.width = cropWidth;
     outCanvas.height = cropHeight;
@@ -767,7 +728,6 @@ function saveFullBg() {
     const outName = currentFileName.replace(/\.[^.]+$/, '') + '_bg.png';
     Android.saveFile(encodeURIComponent(base64), outName);
 }
-
 document.getElementById('saveLeftBtn').onclick = () => saveFullSize('z');
 document.getElementById('saveRightBtn').onclick = () => saveFullSize('y');
 document.getElementById('saveBgBtn').onclick = saveFullBg;
@@ -807,7 +767,6 @@ document.getElementById('generatePdfBtn').onclick = async () => {
             const fullCtx = fullCanvas.getContext('2d');
             fullCtx.drawImage(img, 0, 0);
             const fullImgData = fullCtx.getImageData(0, 0, fullCanvas.width, fullCanvas.height);
-
             const params = getParamsForPage(i);
             const bgTol = params.bgTol;
             const lrMargin = params.lrMargin;
@@ -820,9 +779,7 @@ document.getElementById('generatePdfBtn').onclick = async () => {
             const mode = params.mode;
 
             let cropRegion = null;
-            if (bgTol > 0) {
-                cropRegion = removeBackground(fullImgData, bgTol, lrMargin, topMargin, bottomMargin);
-            }
+            if (bgTol > 0) cropRegion = removeBackground(fullImgData, bgTol, lrMargin, topMargin, bottomMargin);
             let bgWorkData;
             if (cropRegion) {
                 const cropCanvas = document.createElement('canvas');
@@ -832,7 +789,6 @@ document.getElementById('generatePdfBtn').onclick = async () => {
             } else {
                 bgWorkData = fullImgData;
             }
-
             let leftCut = null, rightCut = null, bindLine = null;
             if (contrast > 0) {
                 const result = processImageWithParams(bgWorkData, { contrast, thresh, leftSensitivity, rightSensitivity, mode });
@@ -840,16 +796,13 @@ document.getElementById('generatePdfBtn').onclick = async () => {
                 rightCut = result.rightCut;
                 bindLine = result.bindLine;
             }
-
             let l = leftCut ?? 0, r = rightCut ?? bgWorkData.width;
             if (l >= r) { l = 0; r = bgWorkData.width; }
-
             const bgCanvas = document.createElement('canvas');
             bgCanvas.width = bgWorkData.width;
             bgCanvas.height = bgWorkData.height;
             const bgCtx = bgCanvas.getContext('2d');
             bgCtx.putImageData(bgWorkData, 0, 0);
-
             if (mode === 'combined' && bindLine && l < bindLine && bindLine < r) {
                 const lw = bindLine - l, rw = r - bindLine;
                 const leftCanvas = document.createElement('canvas'); leftCanvas.width = lw; leftCanvas.height = bgWorkData.height;
@@ -878,14 +831,14 @@ document.getElementById('generatePdfBtn').onclick = async () => {
     }
 };
 
-// ── 防抖 ──
+// 防抖
 let debounceTimer;
 const debouncedProcess = () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(processAll, 200); };
 [bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider, contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider]
     .forEach(el => el.addEventListener('input', () => { updateSliderLabels(); debouncedProcess(); }));
 document.querySelectorAll('input[name="pageMode"]').forEach(r => r.addEventListener('change', processAll));
 
-// ── 夜间模式 ──
+// 夜间模式
 function toggleDarkMode() {
     document.body.classList.toggle('dark-mode');
     const isDark = document.body.classList.contains('dark-mode');
