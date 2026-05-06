@@ -93,9 +93,9 @@
             <h3>🧹 背景切除</h3>
             <div style="display:flex; flex-direction:column; align-items:center; width:100%;">
                 <div class="control-item"><label>背景容差：</label><input type="range" id="bgTolSlider" min="0" max="50" value="15"><span id="bgTolValue">15</span><span id="bgOffNote" class="off-note">背景切除已关闭</span></div>
-                <div class="control-item"><label>左右边距：</label><input type="range" id="lrMarginSlider" min="-50" max="50" value="0"><span id="lrMarginValue">0</span> px</div>
-                <div class="control-item"><label>上边距：</label><input type="range" id="topMarginSlider" min="-50" max="50" value="0"><span id="topMarginValue">0</span> px</div>
-                <div class="control-item"><label>下边距：</label><input type="range" id="bottomMarginSlider" min="-50" max="50" value="0"><span id="bottomMarginValue">0</span> px</div>
+                <div class="control-item"><label>左右边距：</label><input type="range" id="lrMarginSlider" min="-200" max="50" value="0"><span id="lrMarginValue">0</span> px</div>
+                <div class="control-item"><label>上边距：</label><input type="range" id="topMarginSlider" min="-200" max="50" value="0"><span id="topMarginValue">0</span> px</div>
+                <div class="control-item"><label>下边距：</label><input type="range" id="bottomMarginSlider" min="-200" max="50" value="0"><span id="bottomMarginValue">0</span> px</div>
             </div>
             <canvas id="bgResultCanvas"></canvas>
             <div class="note">背景切除结果</div>
@@ -108,13 +108,14 @@
                 <label><input type="radio" name="pageMode" value="left-only"> 指定左</label>
                 <label><input type="radio" name="pageMode" value="right-only"> 指定右</label>
                 <label><input type="radio" name="pageMode" value="combined"> 📖 合拟面</label>
+                <label><input type="radio" name="pageMode" value="full-page"> 🪷 整拟面</label>
             </div>
             <div style="display:flex; flex-direction:column; align-items:center; width:100%;">
                 <div class="control-item"><label>对比度：</label><input type="range" id="contrastSlider" min="0" max="3.0" step="0.1" value="1.8"><span id="contrastValue">1.8</span><span id="contrastOffNote" class="off-note">堆叠切除已关闭</span></div>
                 <div class="control-item"><label>二值化：</label><input type="range" id="thresholdSlider" min="40" max="200" value="90"><span id="thresholdValue">90</span></div>
                 <div class="control-item"><label>左敏感度：</label><input type="range" id="leftSensitivitySlider" min="0.1" max="0.9" step="0.05" value="0.35"><span id="leftSensitivityValue">0.35</span></div>
                 <div class="control-item"><label>右敏感度：</label><input type="range" id="rightSensitivitySlider" min="0.1" max="0.9" step="0.05" value="0.35"><span id="rightSensitivityValue">0.35</span></div>
-                <div class="control-item"><label>装订调节：</label><input type="range" id="bindSlider" min="0" max="100" value="50"><span id="bindValue">50</span></div>
+                <div class="control-item"><label>装订调节：</label><input type="range" id="bindSlider" min="0" max="50" value="50"><span id="bindValue">50</span></div>
             </div>
             <div class="half-canvas-wrapper">
                 <div id="leftStackWrapper" style="display:flex; flex-direction:column; align-items:center; width:48%;">
@@ -151,7 +152,6 @@ let currentFileName = '未命名';
 let lastComputedResult = null;
 const PREVIEW_MAX_WIDTH = 1200;
 
-// 装订线调整标记（用户是否手动拖过滑块）
 let bindSliderUserAdjusted = false;
 
 // ── DOM 引用 ──
@@ -209,7 +209,7 @@ function getStackParams() {
         contrast: +contrastSlider.value, thresh: +thresholdSlider.value,
         leftSensitivity: +leftSensitivitySlider.value, rightSensitivity: +rightSensitivitySlider.value,
         mode: document.querySelector('input[name="pageMode"]:checked').value,
-        bindRatio: bindSlider.value / 100  // 装订线位置比例 0~1
+        bindRatio: bindSlider.value / 100
     };
 }
 function updateSliderLabels() {
@@ -228,7 +228,6 @@ function updateSliderLabels() {
 [bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider, contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider, bindSlider]
     .forEach(el => el.addEventListener('input', updateSliderLabels));
 
-// 装订滑块交互：标记为用户调整
 bindSlider.addEventListener('input', () => { bindSliderUserAdjusted = true; });
 
 function loadPageParams(index) {
@@ -242,7 +241,6 @@ function loadPageParams(index) {
         thresholdSlider.value = params.thresh;
         leftSensitivitySlider.value = params.leftSensitivity;
         rightSensitivitySlider.value = params.rightSensitivity;
-        // 装订线位置如已存储则恢复
         if (params.bindSlider !== undefined) bindSlider.value = params.bindSlider;
         const modeRadio = document.querySelector(`input[name="pageMode"][value="${params.mode}"]`);
         if (modeRadio) modeRadio.checked = true;
@@ -275,7 +273,7 @@ function showImage(index) {
     const img = new Image();
     img.onload = () => {
         originalImage = img;
-        bindSliderUserAdjusted = false;  // 新图片重置调整标记
+        bindSliderUserAdjusted = false;
         loadPageParams(index);
         processAll();
         updatePageNav();
@@ -396,7 +394,7 @@ function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     return { left, top, width: right-left+1, height: bottom-top+1 };
 }
 
-// ── 堆叠检测（含装订线综合调节） ──
+// ── 堆叠检测与装订 ──
 function findLeftCut(proj, w, th) {
     let start = -1; for (let x = 0; x < w*0.4; x++) if (proj[x] > th) { start = x; break; }
     if (start === -1) return null;
@@ -439,31 +437,12 @@ function detectFrameLineInRegion(imageData, xStart, xEnd, width, height) {
     for (let x = xStart + 5; x < xEnd - 5; x++) {
         if (proj[x] < minVal) { minVal = proj[x]; minX = x; }
     }
-    if (minX === null || minVal > 0.15) return null; // 返回null表示未找到
+    if (minX === null || minVal > 0.15) return null;
     let bestX = minX, bestVal = minVal;
     for (let x = Math.max(xStart, minX - 3); x <= Math.min(xEnd - 1, minX + 3); x++) {
         if (proj[x] < bestVal) { bestVal = proj[x]; bestX = x; }
     }
     return bestX;
-}
-// 自动计算建议的装订线比例（基于图像特征，不依赖滑块）
-function computeAutoBindRatio(imageData, mode, leftCut, rightCut, width) {
-    if (mode === 'left-only' || (mode === 'auto-single' && leftCut !== null && rightCut === null)) {
-        return 0; // 左单，装订线贴右边界
-    }
-    if (mode === 'right-only' || (mode === 'auto-single' && rightCut !== null && leftCut === null)) {
-        return 0; // 右单，装订线贴左边界
-    }
-    // 组合页或自动双页
-    const l = leftCut ?? 0;
-    const r = rightCut ?? (width - 1);
-    if (r - l <= 1) return 0.5;
-    // 尝试用投影法寻找装订线
-    const autoX = detectFrameLineInRegion(imageData, Math.floor(l + 2), Math.floor(r - 2), width, imageData.height);
-    if (autoX !== null && autoX > l && autoX < r) {
-        return (autoX - l) / (r - l);
-    }
-    return 0.5; // 默认中线
 }
 function processImageWithParams(imageData, params) {
     const { data, width, height } = imageData;
@@ -485,48 +464,75 @@ function processImageWithParams(imageData, params) {
         leftCut = rightCut = null;
     }
 
-    // 根据模式设置切割线默认值
-    if (params.mode === 'left-only') {
+    const mode = params.mode;
+    let bindLine = null;
+
+    // 整拟面模式或自动检测为整拟面（自动检测在调用前处理）
+    if (mode === 'full-page') {
+        leftCut = 0;
+        rightCut = width - 1;
+    } else if (mode === 'left-only') {
         if (leftCut === null) leftCut = 0;
         rightCut = null;
-    } else if (params.mode === 'right-only') {
+    } else if (mode === 'right-only') {
         if (rightCut === null) rightCut = width - 1;
         leftCut = null;
-    } else if (params.mode === 'auto-single') {
+    } else if (mode === 'auto-single') {
         if (leftCut !== null && rightCut !== null) {
             const gap = rightCut - leftCut;
             if (gap <= width * 0.15) {
-                rightCut = null; // 视为单页
+                rightCut = null;
+            } else {
+                // 检查是否接近整拟面：切割线非常靠近边缘
+                if (leftCut < width*0.02 && rightCut > width*0.98) {
+                    // 变为整拟面
+                    leftCut = 0;
+                    rightCut = width - 1;
+                    mode = 'full-page'; // 临时改变，用于装订线计算
+                }
             }
+        } else {
+            // 只有一侧切割线，保持单页
         }
-        // 单页情况保持leftCut/rightCut中非null的一项
     }
-    // combined模式不强制，保持检测到的left/right
 
-    // 装订线计算（基于滑块bindRatio）
+    // 计算装订线
     const bindRatio = params.bindRatio;
-    let bindLine = null;
-    const w = width;
-    
-    if (params.mode === 'left-only' || (params.mode === 'auto-single' && leftCut !== null && rightCut === null)) {
-        // 左单页
+    if (mode === 'full-page') {
+        // 整拟面，装订线在 0~width 之间
+        bindLine = Math.round(width * bindRatio);
+    } else if (mode === 'left-only' || (mode === 'auto-single' && leftCut !== null && rightCut === null)) {
         const l = leftCut ?? 0;
-        bindLine = l + (w - l) * (1 - bindRatio);
-    } else if (params.mode === 'right-only' || (params.mode === 'auto-single' && rightCut !== null && leftCut === null)) {
-        // 右单页
-        const r = rightCut ?? (w - 1);
+        bindLine = l + (width - l) * (1 - bindRatio);
+    } else if (mode === 'right-only' || (mode === 'auto-single' && rightCut !== null && leftCut === null)) {
+        const r = rightCut ?? (width - 1);
         bindLine = r * bindRatio;
     } else {
-        // 双页情况（combined或auto-single有双线）
         const l = leftCut ?? 0;
-        const r = rightCut ?? (w - 1);
+        const r = rightCut ?? (width - 1);
         bindLine = l + (r - l) * bindRatio;
     }
 
-    return { leftCut, rightCut, bindLine, proj };
+    return { leftCut, rightCut, bindLine, proj, mode };
 }
 
-// ── 核心预览（含装订自动初始化和左右隐藏） ──
+function computeAutoBindRatio(imageData, mode, leftCut, rightCut, width, height) {
+    if (mode === 'left-only') return 0;
+    if (mode === 'right-only') return 0;
+    if (mode === 'full-page') {
+        const autoX = detectFrameLineInRegion(imageData, Math.floor(width*0.35), Math.floor(width*0.65), width, height);
+        if (autoX !== null) return autoX / width;
+        return 0.5;
+    }
+    const l = leftCut ?? 0;
+    const r = rightCut ?? (width - 1);
+    if (r - l <= 1) return 0.5;
+    const autoX = detectFrameLineInRegion(imageData, Math.floor(l+2), Math.floor(r-2), width, height);
+    if (autoX !== null && autoX > l && autoX < r) return (autoX - l) / (r - l);
+    return 0.5;
+}
+
+// ── 核心预览 ──
 function processAll() {
     if (!originalImage) return;
     const origW = originalImage.width, origH = originalImage.height;
@@ -540,17 +546,18 @@ function processAll() {
     const previewImgData = previewCtx.getImageData(0, 0, prevW, prevH);
 
     const bgParams = getBgParams();
-    const stackParams = getStackParams();
+    let stackParams = getStackParams();
     const bgOff = (bgParams.bgTol === 0);
     const stackOff = (stackParams.contrast === 0);
     bgOffNote.style.display = bgOff ? 'inline' : 'none';
     contrastOffNote.style.display = stackOff ? 'inline' : 'none';
 
-    // 左右预览显示/隐藏
-    if (stackParams.mode === 'right-only') {
+    // 左右预览显示
+    const mode = stackParams.mode;
+    if (mode === 'right-only') {
         leftStackWrapper.style.display = 'none';
         rightStackWrapper.style.display = '';
-    } else if (stackParams.mode === 'left-only') {
+    } else if (mode === 'left-only') {
         leftStackWrapper.style.display = '';
         rightStackWrapper.style.display = 'none';
     } else {
@@ -570,30 +577,35 @@ function processAll() {
         cropRegion = { left:0, top:0, width:prevW, height:prevH };
     }
 
-    // 如果用户未调整滑块，先计算推荐装订线比例并更新滑块
+    // 自动检测装订线建议值
     if (!stackOff && !bindSliderUserAdjusted) {
-        // 临时检测左右切割线（用于自动建议）
-        const tempParams = { ...stackParams, bindRatio: 0.5 }; // 中间值不影响检测
-        const tempResult = processImageWithParams(bgWorkData, tempParams);
-        const autoRatio = computeAutoBindRatio(bgWorkData, stackParams.mode,
-            tempResult.leftCut, tempResult.rightCut, bgWorkData.width);
+        const tempParams = { ...stackParams, bindRatio: 0.5 };
+        // 如果自动检测可能转为整拟面，这里需要临时判断
+        let tempMode = stackParams.mode;
+        let tempLeft = null, tempRight = null;
+        if (tempMode === 'auto-single' || tempMode === 'full-page') {
+            const tempResult = processImageWithParams(bgWorkData, tempParams);
+            tempLeft = tempResult.leftCut;
+            tempRight = tempResult.rightCut;
+            if (tempResult.mode) tempMode = tempResult.mode;
+        }
+        const autoRatio = computeAutoBindRatio(bgWorkData, tempMode, tempLeft, tempRight, bgWorkData.width, bgWorkData.height);
         bindSlider.value = Math.round(autoRatio * 100);
         updateSliderLabels();
-        // 这里设置后 stackParams.bindRatio 会使用新的滑块值吗？不会，因为getStackParams在之前已调用。
-        // 需要重新获取stackParams
         stackParams.bindRatio = bindSlider.value / 100;
-        bindSliderUserAdjusted = false; // 保持false，以免下次被阻止更新
+        bindSliderUserAdjusted = false;
     } else if (!stackOff) {
         stackParams.bindRatio = bindSlider.value / 100;
     }
 
-    let leftCut = null, rightCut = null, bindLine = null, proj = new Float32Array(prevW);
+    let leftCut = null, rightCut = null, bindLine = null, proj = new Float32Array(prevW), usedMode = stackParams.mode;
     if (!stackOff) {
         const result = processImageWithParams(bgWorkData, stackParams);
         leftCut = result.leftCut;
         rightCut = result.rightCut;
         bindLine = result.bindLine;
         proj = result.proj;
+        if (result.mode) usedMode = result.mode;
     }
 
     const invScale = 1 / previewScale;
@@ -611,7 +623,7 @@ function processAll() {
         leftCut: fullLeftCut,
         rightCut: fullRightCut,
         bindLine: fullBindLine,
-        mode: stackParams.mode
+        mode: usedMode
     };
 
     // 原图标注
@@ -652,7 +664,7 @@ function processAll() {
 
     if (!stackOff) {
         // 左侧预览
-        if (stackParams.mode !== 'right-only') {
+        if (usedMode !== 'right-only') {
             const l = leftCut ?? 0;
             const r = bindLine ?? (rightCut ?? bgWorkData.width);
             let w = r - l;
@@ -666,7 +678,7 @@ function processAll() {
             leftStackCanvas.width = 0;
         }
         // 右侧预览
-        if (stackParams.mode !== 'left-only') {
+        if (usedMode !== 'left-only') {
             const l = bindLine ?? (leftCut ?? 0);
             const r = rightCut ?? (bgWorkData.width - 1);
             let w = r - l;
@@ -690,23 +702,24 @@ function processAll() {
         }
     }
 
-    // 按钮状态
+    // 按钮
     const hasLeft = (leftCut !== null);
     const hasRight = (rightCut !== null);
     document.getElementById('saveLeftBtn').disabled = !hasLeft || stackOff;
     document.getElementById('saveRightBtn').disabled = !hasRight || stackOff;
     document.getElementById('saveBgBtn').disabled = false;
 
-    // 信息显示
+    // 类型文字
     let pageType = '未知';
     if (stackOff) pageType = '⚫ 堆叠切除关闭';
-    else if (stackParams.mode === 'auto-single') {
+    else if (usedMode === 'full-page') pageType = '🪷 整拟面';
+    else if (usedMode === 'auto-single') {
         if (hasLeft && hasRight) pageType = '📖 组合页';
-        else if (hasLeft && !hasRight) pageType = '⬅️ 左单页';
-        else if (!hasLeft && hasRight) pageType = '➡️ 右单页';
-    } else if (stackParams.mode === 'left-only') pageType = '⬅️ 指定左';
-    else if (stackParams.mode === 'right-only') pageType = '➡️ 指定右';
-    else if (stackParams.mode === 'combined') pageType = '📖 合拟面';
+        else if (hasLeft) pageType = '⬅️ 左单页';
+        else if (hasRight) pageType = '➡️ 右单页';
+    } else if (usedMode === 'left-only') pageType = '⬅️ 指定左';
+    else if (usedMode === 'right-only') pageType = '➡️ 指定右';
+    else if (usedMode === 'combined') pageType = '📖 合拟面';
     document.getElementById('leftCut').innerText = stackOff ? '已关闭' : (fullLeftCut !== null ? fullLeftCut + ' (原图)' : '无');
     document.getElementById('rightCut').innerText = stackOff ? '已关闭' : (fullRightCut !== null ? fullRightCut + ' (原图)' : '无');
     document.getElementById('cutInfo').innerHTML = 
@@ -738,7 +751,7 @@ function drawProjectionPlot(proj, width, leftCut, rightCut, bindLine) {
     document.getElementById('projectionPlot').style.display = 'block';
 }
 
-// ── 保存功能 ──
+// ── 保存 ──
 function saveFullSize(suffix) {
     if (!originalImage || !lastComputedResult) return;
     const res = lastComputedResult;
@@ -781,7 +794,6 @@ function saveFullSize(suffix) {
     const outName = currentFileName.replace(/\.[^.]+$/, '') + (suffix === 'z' ? '_z.png' : '_y.png');
     Android.saveFile(encodeURIComponent(base64), outName);
 }
-
 function saveFullBg() {
     if (!originalImage || !lastComputedResult) return;
     const res = lastComputedResult;
@@ -800,12 +812,11 @@ function saveFullBg() {
     const outName = currentFileName.replace(/\.[^.]+$/, '') + '_bg.png';
     Android.saveFile(encodeURIComponent(base64), outName);
 }
-
 document.getElementById('saveLeftBtn').onclick = () => saveFullSize('z');
 document.getElementById('saveRightBtn').onclick = () => saveFullSize('y');
 document.getElementById('saveBgBtn').onclick = saveFullBg;
 
-// ── 应用到本页（含装订滑块值） ──
+// ── 应用到本页 ──
 document.getElementById('applyParamsBtn').onclick = function() {
     if (imagePaths.length === 0) return;
     pageParams[currentIndex] = {
@@ -859,11 +870,11 @@ document.getElementById('generatePdfBtn').onclick = async () => {
             } else {
                 bgWorkData = fullImgData;
             }
-
-            let leftCut = null, rightCut = null, bindLine = null;
+            let leftCut = null, rightCut = null, bindLine = null, usedMode = mode;
             if (contrast > 0) {
                 const result = processImageWithParams(bgWorkData, { contrast, thresh, leftSensitivity, rightSensitivity, mode, bindRatio });
                 leftCut = result.leftCut; rightCut = result.rightCut; bindLine = result.bindLine;
+                if (result.mode) usedMode = result.mode;
             }
             let l = leftCut ?? 0, r = rightCut ?? bgWorkData.width;
             if (l >= r) { l = 0; r = bgWorkData.width; }
@@ -873,7 +884,8 @@ document.getElementById('generatePdfBtn').onclick = async () => {
             const bgCtx = bgCanvas.getContext('2d');
             bgCtx.putImageData(bgWorkData, 0, 0);
 
-            if (mode === 'combined' || (mode === 'auto-single' && bindLine !== null && l < bindLine && bindLine < r)) {
+            // 整拟面或合页且有装订线：拆分为两页
+            if ((usedMode === 'full-page' || usedMode === 'combined' || (usedMode === 'auto-single' && bindLine && l < bindLine && bindLine < r))) {
                 const lw = bindLine - l, rw = r - bindLine;
                 if (lw > 0) {
                     const leftCanvas = document.createElement('canvas'); leftCanvas.width = lw; leftCanvas.height = bgWorkData.height;
@@ -911,7 +923,7 @@ const debouncedProcess = () => { clearTimeout(debounceTimer); debounceTimer = se
 [bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider, contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider, bindSlider]
     .forEach(el => el.addEventListener('input', () => { updateSliderLabels(); debouncedProcess(); }));
 document.querySelectorAll('input[name="pageMode"]').forEach(r => r.addEventListener('change', () => {
-    bindSliderUserAdjusted = false; // 切换模式重置调整标记
+    bindSliderUserAdjusted = false;
     processAll();
 }));
 
