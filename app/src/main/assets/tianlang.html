@@ -95,9 +95,9 @@
             <h3>🧹 背景切除</h3>
             <div style="display:flex; flex-direction:column; align-items:center; width:100%;">
                 <div class="control-item"><label>背景容差：</label><input type="range" id="bgTolSlider" min="0" max="50" value="15"><span id="bgTolValue">15</span><span id="bgOffNote" class="off-note">背景切除已关闭</span></div>
-                <div class="control-item"><label>左右边距：</label><input type="range" id="lrMarginSlider" min="-50" max="50" value="0"><span id="lrMarginValue">0</span> px</div>
-                <div class="control-item"><label>上边距：</label><input type="range" id="topMarginSlider" min="-50" max="50" value="0"><span id="topMarginValue">0</span> px</div>
-                <div class="control-item"><label>下边距：</label><input type="range" id="bottomMarginSlider" min="-50" max="50" value="0"><span id="bottomMarginValue">0</span> px</div>
+                <div class="control-item"><label>左右边距：</label><input type="range" id="lrMarginSlider" min="-200" max="50" value="0"><span id="lrMarginValue">0</span> px</div>
+                <div class="control-item"><label>上边距：</label><input type="range" id="topMarginSlider" min="-200" max="50" value="0"><span id="topMarginValue">0</span> px</div>
+                <div class="control-item"><label>下边距：</label><input type="range" id="bottomMarginSlider" min="-200" max="50" value="0"><span id="bottomMarginValue">0</span> px</div>
             </div>
             <canvas id="bgResultCanvas"></canvas>
             <div class="note">背景切除结果</div>
@@ -266,7 +266,7 @@ function getParamsForPage(index) {
     };
 }
 
-// ── 图片加载与页数 ──
+// ── 图片加载 ──
 function showImage(index) {
     if (imagePaths.length === 0) return;
     if (index < 0 || index >= imagePaths.length) return;
@@ -336,7 +336,7 @@ pageNumInput.onchange = function() {
     else this.value = currentIndex + 1;
 };
 
-// ── 背景切除算法 ──
+// ── 背景切除 ──
 function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     const { data, width, height } = imageData;
     const edgePixels = []; const ew = 2;
@@ -375,18 +375,18 @@ function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     return { left, top, width: right-left+1, height: bottom-top+1 };
 }
 
-// ── 堆叠检测（敏感度控制：0‑50 不裁到峰值，50‑100 过裁） ──
-function findLeftPeak(proj, w) {
+// ── 堆叠检测（敏感度为百分比位置） ──
+function findLeftCutInfo(proj, w) {
     let peak = 0, peakVal = 0;
     for (let x = 0; x < w * 0.5; x++) if (proj[x] > peakVal) { peakVal = proj[x]; peak = x; }
-    if (peakVal <= 0.01) return null;  // 无内容
-    return peak;  // 峰值坐标，也是默认最大裁切位置
-}
-function findRightPeak(proj, w) {
-    let peak = w - 1, peakVal = 0;
-    for (let x = w - 1; x > w * 0.5; x--) if (proj[x] > peakVal) { peakVal = proj[x]; peak = x; }
     if (peakVal <= 0.01) return null;
-    return peak;
+    return { peak, peakVal };
+}
+function findRightCutInfo(proj, w) {
+    let peak = w-1, peakVal = 0;
+    for (let x = w-1; x > w*0.5; x--) if (proj[x] > peakVal) { peakVal = proj[x]; peak = x; }
+    if (peakVal <= 0.01) return null;
+    return { peak, peakVal };
 }
 function detectFrameLineInRegion(imageData, xStart, xEnd, width, height) {
     const { data } = imageData;
@@ -421,65 +421,22 @@ function processImageWithParams(imageData, params) {
     const proj = new Float32Array(width);
     for (let x=0; x<width; x++) { let s=0; for (let y=0; y<height; y++) s+=binary[y*width+x]; proj[x] = s/height; }
 
-    // 寻找内容峰值
-    const leftPeak = findLeftPeak(proj, width);
-    const rightPeak = findRightPeak(proj, width);
-    const centerX = Math.floor(width / 2);
-
     let leftCut = null, rightCut = null;
-    const sL = params.leftSensitivity;   // 0..1
-    const sR = params.rightSensitivity;
-
-    if (leftPeak !== null) {
-        // 左切割线计算
-        if (sL <= 0.5) {
-            // 0~50: 从边缘(0)到 leftPeak
-            leftCut = Math.round((sL / 0.5) * leftPeak);
-        } else {
-            // 50~100: 从 leftPeak 向中心过裁，但不能超过中心或右切割线
-            const over = (sL - 0.5) / 0.5;  // 0..1
-            const maxOver = Math.min(centerX - leftPeak, width * 0.3); // 限制过裁量，防止切到对面去
-            if (maxOver > 0) {
-                leftCut = Math.round(leftPeak + over * maxOver);
-            } else {
-                leftCut = leftPeak;
-            }
-        }
-        leftCut = Math.max(0, Math.min(width - 1, leftCut));
-    } else {
-        leftCut = 0; // 无内容，不裁
+    const leftInfo = findLeftCutInfo(proj, width);
+    const rightInfo = findRightCutInfo(proj, width);
+    if (leftInfo) {
+        leftCut = Math.round(params.leftSensitivity * leftInfo.peak);
+        if (leftCut < 0) leftCut = 0;
     }
-
-    if (rightPeak !== null) {
-        if (sR <= 0.5) {
-            // 右切割线：从右边缘到 rightPeak
-            const distFromRight = (width - 1 - rightPeak);
-            const move = Math.round((sR / 0.5) * distFromRight);
-            rightCut = width - 1 - move;
-        } else {
-            const over = (sR - 0.5) / 0.5;
-            const distToCenter = rightPeak - centerX;
-            const maxOver = Math.min(distToCenter, width * 0.3);
-            if (maxOver > 0) {
-                rightCut = Math.round(rightPeak - over * maxOver);
-            } else {
-                rightCut = rightPeak;
-            }
-        }
-        rightCut = Math.max(0, Math.min(width - 1, rightCut));
-    } else {
-        rightCut = width - 1;
+    if (rightInfo) {
+        rightCut = Math.round(width - 1 - (params.rightSensitivity * (width - 1 - rightInfo.peak)));
+        if (rightCut > width - 1) rightCut = width - 1;
     }
-
-    // 防止左切割线 >= 右切割线
-    if (leftCut !== null && rightCut !== null && leftCut >= rightCut) {
-        leftCut = rightCut = null;
-    }
+    if (leftCut !== null && rightCut !== null && leftCut >= rightCut) leftCut = rightCut = null;
 
     const mode = params.mode;
     let bindLine = null;
 
-    // 模式强制值
     if (mode === 'full-page') {
         leftCut = 0;
         rightCut = width - 1;
@@ -493,7 +450,7 @@ function processImageWithParams(imageData, params) {
         if (leftCut !== null && rightCut !== null) {
             const gap = rightCut - leftCut;
             if (gap <= width * 0.15) {
-                rightCut = null; // 视为单页
+                rightCut = null;
             } else if (leftCut < width*0.02 && rightCut > width*0.98) {
                 leftCut = 0;
                 rightCut = width - 1;
@@ -502,28 +459,25 @@ function processImageWithParams(imageData, params) {
         }
     }
 
-    // 装订线计算
     const bindRatio = params.bindRatio;
-    if (mode === 'full-page' || (mode === 'auto-single' && leftCut !== null && rightCut !== null)) {
-        if (mode === 'full-page') {
-            bindLine = Math.round(width * bindRatio);
-        } else {
-            const l = leftCut ?? 0;
-            const r = rightCut ?? (width - 1);
-            bindLine = l + (r - l) * bindRatio;
-        }
+    if (mode === 'full-page') {
+        bindLine = Math.round(width * bindRatio);
     } else if (mode === 'left-only' || (mode === 'auto-single' && leftCut !== null && rightCut === null)) {
         const l = leftCut ?? 0;
         bindLine = l + (width - l) * (1 - bindRatio);
     } else if (mode === 'right-only' || (mode === 'auto-single' && rightCut !== null && leftCut === null)) {
         const r = rightCut ?? (width - 1);
         bindLine = r * bindRatio;
+    } else {
+        const l = leftCut ?? 0;
+        const r = rightCut ?? (width - 1);
+        bindLine = l + (r - l) * bindRatio;
     }
 
     return { leftCut, rightCut, bindLine, proj, mode };
 }
 
-// ── 核心预览（保持原有逻辑，仅调用新的 processImageWithParams） ──
+// ── 核心预览 ──
 function processAll() {
     if (!originalImage) return;
     const origW = originalImage.width, origH = originalImage.height;
@@ -678,7 +632,7 @@ function drawProjectionPlot(proj, width, leftCut, rightCut, bindLine) {
     document.getElementById('projectionPlot').style.display = 'block';
 }
 
-// ── 保存功能 ──
+// ── 保存 ──
 function saveFullSize(suffix) {
     if (!originalImage || !lastComputedResult) return;
     const res = lastComputedResult;
@@ -814,7 +768,7 @@ window.onProjectLoaded = function(jsonStr) {
 document.getElementById('saveProjectBtn').onclick = saveProject;
 document.getElementById('loadProjectBtn').onclick = loadProject;
 
-// ── PDF导出（_y在前，_z在后，无 encodeURIComponent） ──
+// ── PDF导出（_y 在前，_z 在后，无 encodeURIComponent） ──
 document.getElementById('generatePdfBtn').onclick = async () => {
     if (imagePaths.length === 0) { Android.showToast('没有图片'); return; }
     Android.beginPdf(imagePaths.length, currentFileName);
@@ -864,12 +818,12 @@ document.getElementById('generatePdfBtn').onclick = async () => {
                 if (rw > 0) {
                     const rightC = document.createElement('canvas'); rightC.width = rw; rightC.height = bgWorkData.height;
                     rightC.getContext('2d').putImageData(bgCtx.getImageData(bindLine, 0, rw, bgWorkData.height), 0, 0);
-                    Android.addPageToPdf(rightC.toDataURL('image/png').split(',')[1]);
+                    Android.addPageToPdf(rightC.toDataURL('image/png').split(',')[1]);   // _y 先
                 }
                 if (lw > 0) {
                     const leftC = document.createElement('canvas'); leftC.width = lw; leftC.height = bgWorkData.height;
                     leftC.getContext('2d').putImageData(bgCtx.getImageData(l, 0, lw, bgWorkData.height), 0, 0);
-                    Android.addPageToPdf(leftC.toDataURL('image/png').split(',')[1]);
+                    Android.addPageToPdf(leftC.toDataURL('image/png').split(',')[1]);   // _z 后
                 }
             } else {
                 const cropW = r - l;
