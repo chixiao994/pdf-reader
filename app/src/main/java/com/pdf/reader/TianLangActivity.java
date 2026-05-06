@@ -37,15 +37,14 @@ public class TianLangActivity extends AppCompatActivity {
     private int totalPages = 0;
     private String currentFileName = "未命名";
 
-    // 保存待写入数据（通过系统文件选择器）
     private byte[] pendingSaveData;
     private String pendingSaveFileName;
 
     private static final int PICK_IMAGE = 1;
     private static final int PICK_PDF = 2;
     private static final int CREATE_FILE = 3;
+    private static final int PICK_PROJECT = 4;   // 加载项目
 
-    // 原生 PDF 生成相关
     private final List<byte[]> pdfPagesData = new ArrayList<>();
     private String pdfOutputFileName = "output.pdf";
 
@@ -82,6 +81,9 @@ public class TianLangActivity extends AppCompatActivity {
             } else if ("pdf".equals(type)) {
                 intent.setType("application/pdf");
                 startActivityForResult(intent, PICK_PDF);
+            } else if ("project".equals(type)) {
+                intent.setType("application/json");
+                startActivityForResult(intent, PICK_PROJECT);
             }
         }
 
@@ -93,8 +95,8 @@ public class TianLangActivity extends AppCompatActivity {
         @JavascriptInterface
         public void saveFile(String safeBase64, String fileName) {
             try {
-                String base64 = URLDecoder.decode(safeBase64, "UTF-8");
-                pendingSaveData = Base64.decode(base64, Base64.DEFAULT);
+                // 前端已不再编码，直接解码
+                pendingSaveData = Base64.decode(safeBase64, Base64.DEFAULT);
                 pendingSaveFileName = fileName;
                 Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
@@ -107,7 +109,30 @@ public class TianLangActivity extends AppCompatActivity {
             }
         }
 
-        // ── 原生 PDF 生成 ──
+        @JavascriptInterface
+        public void saveProject(String safeJson) {
+            try {
+                String json = URLDecoder.decode(safeJson, "UTF-8");
+                pendingSaveData = json.getBytes("UTF-8");
+                String name = "天朗项目_" + System.currentTimeMillis() + ".tianlang";
+                Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("application/json");
+                intent.putExtra(Intent.EXTRA_TITLE, name);
+                startActivityForResult(intent, CREATE_FILE);
+            } catch (Exception e) {
+                showToast("保存项目失败: " + e.getMessage());
+            }
+        }
+
+        @JavascriptInterface
+        public void pickProject() {
+            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+            intent.setType("application/json");
+            startActivityForResult(intent, PICK_PROJECT);
+        }
+
+        // ── PDF 生成 ──
         @JavascriptInterface
         public void beginPdf(int totalPages, String originalName) {
             pdfPagesData.clear();
@@ -116,11 +141,13 @@ public class TianLangActivity extends AppCompatActivity {
         }
 
         @JavascriptInterface
-        public void addPageToPdf(String safeBase64) {
+        public void addPageToPdf(String base64) {
             try {
-                String base64 = URLDecoder.decode(safeBase64, "UTF-8");
+                // 直接解码，不再使用 URLDecoder
                 byte[] data = Base64.decode(base64, Base64.DEFAULT);
-                pdfPagesData.add(data);
+                if (data != null && data.length > 0) {
+                    pdfPagesData.add(data);
+                }
             } catch (Exception e) {
                 Log.e("TianLang", "添加PDF页面失败", e);
             }
@@ -132,73 +159,108 @@ public class TianLangActivity extends AppCompatActivity {
                 showToast("没有页面可生成PDF");
                 return;
             }
-            try {
-                File tempFile = new File(getCacheDir(), fileName);
-                android.graphics.pdf.PdfDocument document = new android.graphics.pdf.PdfDocument();
-                for (int i = 0; i < pdfPagesData.size(); i++) {
-                    byte[] pngData = pdfPagesData.get(i);
-                    Bitmap bitmap = BitmapFactory.decodeByteArray(pngData, 0, pngData.length);
-                    if (bitmap == null) continue;
-                    android.graphics.pdf.PdfDocument.PageInfo pageInfo =
-                            new android.graphics.pdf.PdfDocument.PageInfo.Builder(
-                                    bitmap.getWidth(), bitmap.getHeight(), i).create();
-                    android.graphics.pdf.PdfDocument.Page page = document.startPage(pageInfo);
-                    page.getCanvas().drawBitmap(bitmap, 0, 0, null);
-                    document.finishPage(page);
-                    bitmap.recycle();
+            showToast("PDF 生成中，请稍候…");
+
+            new AsyncTask<Void, Void, File>() {
+                @Override
+                protected File doInBackground(Void... voids) {
+                    try {
+                        File tempFile = new File(getCacheDir(), fileName);
+                        android.graphics.pdf.PdfDocument document = new android.graphics.pdf.PdfDocument();
+
+                        for (int i = 0; i < pdfPagesData.size(); i++) {
+                            byte[] pngData = pdfPagesData.get(i);
+                            if (pngData == null) continue;
+
+                            BitmapFactory.Options opts = new BitmapFactory.Options();
+                            opts.inJustDecodeBounds = true;
+                            BitmapFactory.decodeByteArray(pngData, 0, pngData.length, opts);
+                            int maxW = 2000;
+                            int scale = 1;
+                            if (opts.outWidth > maxW) {
+                                scale = Math.round((float) opts.outWidth / maxW);
+                            }
+                            opts.inJustDecodeBounds = false;
+                            opts.inSampleSize = scale;
+                            Bitmap bitmap = BitmapFactory.decodeByteArray(pngData, 0, pngData.length, opts);
+                            if (bitmap == null) continue;
+
+                            android.graphics.pdf.PdfDocument.PageInfo pageInfo =
+                                    new android.graphics.pdf.PdfDocument.PageInfo.Builder(
+                                            bitmap.getWidth(), bitmap.getHeight(), i).create();
+                            android.graphics.pdf.PdfDocument.Page page = document.startPage(pageInfo);
+                            page.getCanvas().drawBitmap(bitmap, 0, 0, null);
+                            document.finishPage(page);
+                            bitmap.recycle();
+                        }
+
+                        FileOutputStream fos = new FileOutputStream(tempFile);
+                        document.writeTo(fos);
+                        document.close();
+                        fos.close();
+                        return tempFile;
+
+                    } catch (Exception e) {
+                        Log.e("TianLang", "PDF生成失败", e);
+                        return null;
+                    }
                 }
-                FileOutputStream fos = new FileOutputStream(tempFile);
-                document.writeTo(fos);
-                document.close();
-                fos.close();
 
-                pendingSaveData = readFileToBytes(tempFile);
-                pendingSaveFileName = fileName;
-
-                Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-                intent.addCategory(Intent.CATEGORY_OPENABLE);
-                intent.setType("application/pdf");
-                intent.putExtra(Intent.EXTRA_TITLE, fileName);
-                startActivityForResult(intent, CREATE_FILE);
-
-                showToast("PDF已生成，请选择保存位置");
-            } catch (Exception e) {
-                Log.e("TianLang", "生成PDF失败", e);
-                showToast("PDF生成失败: " + e.getMessage());
-            } finally {
-                pdfPagesData.clear();
-            }
+                @Override
+                protected void onPostExecute(File tempFile) {
+                    if (tempFile == null) {
+                        showToast("PDF 生成失败");
+                        return;
+                    }
+                    try {
+                        pendingSaveData = readFileToBytes(tempFile);
+                        pendingSaveFileName = fileName;
+                        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                        intent.addCategory(Intent.CATEGORY_OPENABLE);
+                        intent.setType("application/pdf");
+                        intent.putExtra(Intent.EXTRA_TITLE, fileName);
+                        startActivityForResult(intent, CREATE_FILE);
+                        showToast("PDF已生成，请选择保存位置");
+                    } catch (Exception e) {
+                        showToast("准备保存失败: " + e.getMessage());
+                    } finally {
+                        pdfPagesData.clear();
+                    }
+                }
+            }.execute();
         }
     }
 
+    // ── Activity Result ──
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode == RESULT_OK && data != null) {
+            Uri uri = data.getData();
+            if (uri == null) return;
+
             if (requestCode == PICK_IMAGE) {
                 handleImageResult(data);
             } else if (requestCode == PICK_PDF) {
-                Uri uri = data.getData();
-                if (uri != null) {
-                    handlePdfUri(uri);
-                }
+                handlePdfUri(uri);
             } else if (requestCode == CREATE_FILE) {
-                Uri uri = data.getData();
-                if (uri != null && pendingSaveData != null) {
+                if (pendingSaveData != null) {
                     writeDataToUri(uri, pendingSaveData, pendingSaveFileName);
                     pendingSaveData = null;
                     pendingSaveFileName = null;
                 }
+            } else if (requestCode == PICK_PROJECT) {
+                loadProjectFromUri(uri);
             }
         }
     }
 
     private void writeDataToUri(Uri uri, byte[] data, String fileName) {
         try {
-            OutputStream outputStream = getContentResolver().openOutputStream(uri);
-            if (outputStream != null) {
-                outputStream.write(data);
-                outputStream.close();
+            OutputStream os = getContentResolver().openOutputStream(uri);
+            if (os != null) {
+                os.write(data);
+                os.close();
                 showToastSafe("已保存: " + fileName);
             } else {
                 showToastSafe("无法写入文件");
@@ -246,7 +308,7 @@ public class TianLangActivity extends AppCompatActivity {
         }
     }
 
-    // ── PDF 导入并预渲染所有页面 ──
+    // ── PDF 导入 ──
     private void handlePdfUri(Uri uri) {
         try {
             closePdf();
@@ -322,7 +384,26 @@ public class TianLangActivity extends AppCompatActivity {
         }.execute();
     }
 
-    // ── 工具方法 ──
+    // ── 项目加载 ──
+    private void loadProjectFromUri(Uri uri) {
+        try {
+            InputStream in = getContentResolver().openInputStream(uri);
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            byte[] buf = new byte[4096];
+            int len;
+            while ((len = in.read(buf)) != -1) baos.write(buf, 0, len);
+            in.close();
+            String json = new String(baos.toByteArray(), "UTF-8");
+            webView.evaluateJavascript(
+                    "javascript:onProjectLoaded('" + escapeJsString(json) + "')",
+                    null
+            );
+        } catch (Exception e) {
+            showToastSafe("读取项目文件失败: " + e.getMessage());
+        }
+    }
+
+    // ── 工具 ──
     private String escapeJson(String json) {
         if (json == null) return "";
         return json.replace("\\", "\\\\").replace("'", "\\'");
@@ -341,7 +422,7 @@ public class TianLangActivity extends AppCompatActivity {
         String name = null;
         if (uri.getScheme().equals("file")) {
             name = new File(uri.getPath()).getName();
-        } else if (uri.getScheme().equals("content")) {
+        } else {
             try (android.database.Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
                 if (cursor != null && cursor.moveToFirst()) {
                     int nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
@@ -381,7 +462,6 @@ public class TianLangActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         closePdf();
-        // 清理临时图片
         File[] files = getCacheDir().listFiles();
         if (files != null) {
             for (File f : files) {
