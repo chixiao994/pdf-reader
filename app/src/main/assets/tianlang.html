@@ -95,9 +95,9 @@
             <h3>🧹 背景切除</h3>
             <div style="display:flex; flex-direction:column; align-items:center; width:100%;">
                 <div class="control-item"><label>背景容差：</label><input type="range" id="bgTolSlider" min="0" max="50" value="15"><span id="bgTolValue">15</span><span id="bgOffNote" class="off-note">背景切除已关闭</span></div>
-                <div class="control-item"><label>左右边距：</label><input type="range" id="lrMarginSlider" min="-200" max="50" value="0"><span id="lrMarginValue">0</span> px</div>
-                <div class="control-item"><label>上边距：</label><input type="range" id="topMarginSlider" min="-200" max="50" value="0"><span id="topMarginValue">0</span> px</div>
-                <div class="control-item"><label>下边距：</label><input type="range" id="bottomMarginSlider" min="-200" max="50" value="0"><span id="bottomMarginValue">0</span> px</div>
+                <div class="control-item"><label>左右边距：</label><input type="range" id="lrMarginSlider" min="-50" max="50" value="0"><span id="lrMarginValue">0</span> px</div>
+                <div class="control-item"><label>上边距：</label><input type="range" id="topMarginSlider" min="-50" max="50" value="0"><span id="topMarginValue">0</span> px</div>
+                <div class="control-item"><label>下边距：</label><input type="range" id="bottomMarginSlider" min="-50" max="50" value="0"><span id="bottomMarginValue">0</span> px</div>
             </div>
             <canvas id="bgResultCanvas"></canvas>
             <div class="note">背景切除结果</div>
@@ -434,7 +434,7 @@ function processImageWithParams(imageData, params) {
     }
     if (leftCut !== null && rightCut !== null && leftCut >= rightCut) leftCut = rightCut = null;
 
-    const mode = params.mode;
+    let mode = params.mode;
     let bindLine = null;
 
     if (mode === 'full-page') {
@@ -497,10 +497,11 @@ function processAll() {
     bgOffNote.style.display = bgOff ? 'inline' : 'none';
     contrastOffNote.style.display = stackOff ? 'inline' : 'none';
 
-    if (stackParams.mode === 'right-only') {
+    const mode = stackParams.mode;
+    if (mode === 'right-only') {
         leftStackWrapper.style.display = 'none';
         rightStackWrapper.style.display = '';
-    } else if (stackParams.mode === 'left-only') {
+    } else if (mode === 'left-only') {
         leftStackWrapper.style.display = '';
         rightStackWrapper.style.display = 'none';
     } else {
@@ -768,81 +769,72 @@ window.onProjectLoaded = function(jsonStr) {
 document.getElementById('saveProjectBtn').onclick = saveProject;
 document.getElementById('loadProjectBtn').onclick = loadProject;
 
-// ── PDF导出（_y 在前，_z 在后，无 encodeURIComponent） ──
+// ── PDF导出（原生层读取缓存图片，传递裁剪坐标） ──
 document.getElementById('generatePdfBtn').onclick = async () => {
     if (imagePaths.length === 0) { Android.showToast('没有图片'); return; }
-    Android.beginPdf(imagePaths.length, currentFileName);
-    exportProgress.style.display = 'flex';
-    generatePdfBtn.disabled = true;
-    try {
-        for (let i = 0; i < imagePaths.length; i++) {
-            const img = await new Promise((resolve) => {
-                const el = new Image(); el.onload = () => resolve(el);
-                el.onerror = () => alert('加载失败: ' + imagePaths[i]);
-                el.src = 'file://' + imagePaths[i];
-            });
-            const fullCanvas = document.createElement('canvas');
-            fullCanvas.width = img.width; fullCanvas.height = img.height;
-            const fullCtx = fullCanvas.getContext('2d');
-            fullCtx.drawImage(img, 0, 0);
-            const fullImgData = fullCtx.getImageData(0, 0, fullCanvas.width, fullCanvas.height);
-            const params = getParamsForPage(i);
-            const bgTol = params.bgTol, lrMargin = params.lrMargin, topMargin = params.topMargin, bottomMargin = params.bottomMargin;
-            const contrast = params.contrast, thresh = params.thresh;
-            const leftSens = params.leftSensitivity / 100, rightSens = params.rightSensitivity / 100;
-            const mode = params.mode, bindRatio = (params.bindSlider !== undefined ? params.bindSlider / 100 : 0.5);
 
-            let cropRegion = null;
-            if (bgTol > 0) cropRegion = removeBackground(fullImgData, bgTol, lrMargin, topMargin, bottomMargin);
-            let bgWorkData;
-            if (cropRegion) {
-                const cropCanvas = document.createElement('canvas'); cropCanvas.width = cropRegion.width; cropCanvas.height = cropRegion.height;
-                cropCanvas.getContext('2d').putImageData(fullImgData, -cropRegion.left, -cropRegion.top);
-                bgWorkData = cropCanvas.getContext('2d').getImageData(0, 0, cropRegion.width, cropRegion.height);
-            } else bgWorkData = fullImgData;
+    const exportParams = [];
+    for (let i = 0; i < imagePaths.length; i++) {
+        const params = getParamsForPage(i);
+        // 加载全尺寸原图
+        const img = await new Promise((resolve) => {
+            const imgObj = new Image();
+            imgObj.onload = () => resolve(imgObj);
+            imgObj.onerror = () => resolve(null);
+            imgObj.src = 'file://' + imagePaths[i];
+        });
+        if (!img) continue;
 
-            let leftCut = null, rightCut = null, bindLine = null, usedMode = mode;
-            if (contrast > 0) {
-                const result = processImageWithParams(bgWorkData, { contrast, thresh, leftSensitivity: leftSens, rightSensitivity: rightSens, mode, bindRatio });
-                leftCut = result.leftCut; rightCut = result.rightCut; bindLine = result.bindLine;
-                if (result.mode) usedMode = result.mode;
-            }
-            let l = leftCut ?? 0, r = rightCut ?? bgWorkData.width;
-            if (l >= r) { l = 0; r = bgWorkData.width; }
-            const bgCanvas = document.createElement('canvas'); bgCanvas.width = bgWorkData.width; bgCanvas.height = bgWorkData.height;
-            const bgCtx = bgCanvas.getContext('2d'); bgCtx.putImageData(bgWorkData, 0, 0);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const fullImgData = ctx.getImageData(0, 0, img.width, img.height);
 
-            const shouldSplit = (usedMode === 'combined' || usedMode === 'full-page' || (bindLine && l < bindLine && bindLine < r));
-            if (shouldSplit && bindLine) {
-                const lw = bindLine - l, rw = r - bindLine;
-                if (rw > 0) {
-                    const rightC = document.createElement('canvas'); rightC.width = rw; rightC.height = bgWorkData.height;
-                    rightC.getContext('2d').putImageData(bgCtx.getImageData(bindLine, 0, rw, bgWorkData.height), 0, 0);
-                    Android.addPageToPdf(rightC.toDataURL('image/png').split(',')[1]);   // _y 先
-                }
-                if (lw > 0) {
-                    const leftC = document.createElement('canvas'); leftC.width = lw; leftC.height = bgWorkData.height;
-                    leftC.getContext('2d').putImageData(bgCtx.getImageData(l, 0, lw, bgWorkData.height), 0, 0);
-                    Android.addPageToPdf(leftC.toDataURL('image/png').split(',')[1]);   // _z 后
-                }
-            } else {
-                const cropW = r - l;
-                if (cropW > 0) {
-                    const cropC = document.createElement('canvas'); cropC.width = cropW; cropC.height = bgWorkData.height;
-                    cropC.getContext('2d').putImageData(bgCtx.getImageData(l, 0, cropW, bgWorkData.height), 0, 0);
-                    Android.addPageToPdf(cropC.toDataURL('image/png').split(',')[1]);
-                }
-            }
-            const pct = Math.round((i+1)/imagePaths.length * 100);
-            exportProgressFill.style.width = pct+'%';
-            exportProgressText.innerText = pct+'%';
+        let cropRegion = null;
+        if (params.bgTol > 0) {
+            cropRegion = removeBackground(fullImgData, params.bgTol, params.lrMargin, params.topMargin, params.bottomMargin);
         }
-        Android.finishPdf(currentFileName.replace(/\.[^.]+$/, '') + '_天朗.pdf');
-    } catch(e) { Android.showToast('导出失败: '+e.message); } finally {
-        exportProgress.style.display = 'none';
-        generatePdfBtn.disabled = false;
-        exportProgressFill.style.width = '0%';
+        let bgWorkData;
+        if (cropRegion) {
+            bgWorkData = ctx.getImageData(cropRegion.left, cropRegion.top, cropRegion.width, cropRegion.height);
+        } else {
+            bgWorkData = fullImgData;
+            cropRegion = { left:0, top:0, width:img.width, height:img.height };
+        }
+
+        let leftCut = null, rightCut = null, bindLine = null, usedMode = params.mode;
+        if (params.contrast > 0) {
+            const result = processImageWithParams(bgWorkData, {
+                contrast: params.contrast,
+                thresh: params.thresh,
+                leftSensitivity: params.leftSensitivity / 100,
+                rightSensitivity: params.rightSensitivity / 100,
+                mode: params.mode,
+                bindRatio: params.bindSlider ? params.bindSlider / 100 : 0.5
+            });
+            leftCut = result.leftCut;
+            rightCut = result.rightCut;
+            bindLine = result.bindLine;
+            if (result.mode) usedMode = result.mode;
+        }
+
+        exportParams.push({
+            index: i,
+            left: (cropRegion.left + (leftCut ?? 0)),
+            right: (cropRegion.left + (rightCut ?? bgWorkData.width)),
+            bind: bindLine ? (cropRegion.left + bindLine) : -1,
+            mode: usedMode
+        });
     }
+
+    if (exportParams.length === 0) {
+        Android.showToast('没有有效页面');
+        return;
+    }
+
+    Android.beginNativeExport(JSON.stringify(exportParams), currentFileName.replace(/\.[^.]+$/, '') + '_天朗.pdf');
 };
 
 // 防抖
