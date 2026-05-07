@@ -6,7 +6,7 @@
     <title>天朗·堆叠切除</title>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family:'Segoe UI','Noto Serif SC',serif; background:#f5f0e8; color:#3e2c1b; padding:15px; transition: background 0.3s, color 0.3s; }
+        body { font-family:'Segoe UI','Noto Serif SC',serif; background:#f5f0e8; color:#3e2c1b; padding:15px; }
         .container { max-width:1500px; margin:0 auto; }
         h1 { text-align:center; font-size:2.2em; font-weight:400; color:#5d3e1f; }
         .subtitle { text-align:center; font-style:italic; margin-bottom:20px; color:#7a5a3a; }
@@ -36,21 +36,6 @@
         .half-canvas-wrapper { display:flex; gap:10px; width:100%; justify-content:center; }
         .half-canvas-wrapper canvas { width:48%; }
         .off-note { color:#b22222; font-size:0.8em; margin-left:5px; display:none; }
-        /* 夜间模式 */
-        body.dark-mode { background:#2b241b; color:#d4c5b2; }
-        body.dark-mode .controls,
-        body.dark-mode .canvas-panel { background:#3e3529; border-color:#6b5843; }
-        body.dark-mode .canvas-panel h3 { border-bottom-color:#6b5843; color:#e0d6c4; }
-        body.dark-mode .mode-group { background:#4a3f30; }
-        body.dark-mode .button:disabled { background:#5a5040; }
-        body.dark-mode .upload-btn { background:#4a3b2f; }
-        body.dark-mode .save-btn { background:#3d5a3e; }
-        body.dark-mode h1 { color:#e0d6c4; }
-        body.dark-mode .subtitle { color:#c4b393; }
-        body.dark-mode .note { color:#b8a58b; }
-        body.dark-mode .cut-line-info { color:#cdbda4; }
-        body.dark-mode .projection-plot { background:#3e3529; border-color:#6b5843; }
-        body.dark-mode .off-note { color:#ff9080; }
         @media(max-width:800px) { .main-panel { flex-direction:column; } .half-canvas-wrapper { flex-direction:column; } .half-canvas-wrapper canvas { width:100%; } }
     </style>
 </head>
@@ -63,7 +48,6 @@
         <div class="control-row">
             <button class="button upload-btn" onclick="Android.pickFile('image')">📁 上传图片</button>
             <button class="button upload-btn" onclick="Android.pickFile('pdf')">📄 上传PDF</button>
-            <button class="button upload-btn" id="darkModeBtn" onclick="toggleDarkMode()" title="切换夜间模式">🌙</button>
             <div class="pdf-page-nav" id="pdfNav" style="display:none;">
                 <button class="button" id="prevPageBtn">◀</button>
                 <span>第 <input type="number" id="pageNumInput" value="1" min="1"> / <span id="totalPages">1</span> 页</span>
@@ -95,9 +79,9 @@
             <h3>🧹 背景切除</h3>
             <div style="display:flex; flex-direction:column; align-items:center; width:100%;">
                 <div class="control-item"><label>背景容差：</label><input type="range" id="bgTolSlider" min="0" max="50" value="15"><span id="bgTolValue">15</span><span id="bgOffNote" class="off-note">背景切除已关闭</span></div>
-                <div class="control-item"><label>左右边距：</label><input type="range" id="lrMarginSlider" min="-50" max="50" value="0"><span id="lrMarginValue">0</span> px</div>
-                <div class="control-item"><label>上边距：</label><input type="range" id="topMarginSlider" min="-50" max="50" value="0"><span id="topMarginValue">0</span> px</div>
-                <div class="control-item"><label>下边距：</label><input type="range" id="bottomMarginSlider" min="-50" max="50" value="0"><span id="bottomMarginValue">0</span> px</div>
+                <div class="control-item"><label>左右边距：</label><input type="range" id="lrMarginSlider" min="-200" max="50" value="0"><span id="lrMarginValue">0</span> px</div>
+                <div class="control-item"><label>上边距：</label><input type="range" id="topMarginSlider" min="-200" max="50" value="0"><span id="topMarginValue">0</span> px</div>
+                <div class="control-item"><label>下边距：</label><input type="range" id="bottomMarginSlider" min="-200" max="50" value="0"><span id="bottomMarginValue">0</span> px</div>
             </div>
             <canvas id="bgResultCanvas"></canvas>
             <div class="note">背景切除结果</div>
@@ -117,7 +101,7 @@
                 <div class="control-item"><label>二值化：</label><input type="range" id="thresholdSlider" min="40" max="200" value="90"><span id="thresholdValue">90</span></div>
                 <div class="control-item"><label>左敏感度：</label><input type="range" id="leftSensitivitySlider" min="0" max="100" value="50"><span id="leftSensitivityValue">50</span></div>
                 <div class="control-item"><label>右敏感度：</label><input type="range" id="rightSensitivitySlider" min="0" max="100" value="50"><span id="rightSensitivityValue">50</span></div>
-                <div class="control-item"><label>装订调节：</label><input type="range" id="bindSlider" min="0" max="100" value="50"><span id="bindValue">50</span></div>
+                <div class="control-item"><label>装订调节：</label><input type="range" id="bindSlider" min="0" max="1000" step="1" value="500"><span id="bindValue">50.0</span></div>
             </div>
             <div class="half-canvas-wrapper">
                 <div id="leftStackWrapper" style="display:flex; flex-direction:column; align-items:center; width:48%;">
@@ -211,7 +195,7 @@ function getStackParams() {
         leftSensitivity: leftSensitivitySlider.value / 100,
         rightSensitivity: rightSensitivitySlider.value / 100,
         mode: document.querySelector('input[name="pageMode"]:checked').value,
-        bindRatio: bindSlider.value / 100
+        bindRatio: bindSlider.value / 1000
     };
 }
 function updateSliderLabels() {
@@ -223,7 +207,7 @@ function updateSliderLabels() {
     thresholdValue.innerText = thresholdSlider.value;
     leftSensitivityValue.innerText = leftSensitivitySlider.value;
     rightSensitivityValue.innerText = rightSensitivitySlider.value;
-    bindValue.innerText = bindSlider.value;
+    bindValue.innerText = (bindSlider.value / 10).toFixed(1);
     bgOffNote.style.display = (bgTolSlider.value == 0) ? 'inline' : 'none';
     contrastOffNote.style.display = (contrastSlider.value == 0) ? 'inline' : 'none';
 }
@@ -243,7 +227,11 @@ function loadPageParams(index) {
         thresholdSlider.value = params.thresh;
         leftSensitivitySlider.value = params.leftSensitivity;
         rightSensitivitySlider.value = params.rightSensitivity;
-        if (params.bindSlider !== undefined) bindSlider.value = params.bindSlider;
+        let bindVal = params.bindSlider;
+        if (bindVal !== undefined) {
+            if (bindVal <= 100) bindVal = bindVal * 10;   // 兼容旧版
+            bindSlider.value = Math.round(bindVal);
+        }
         const modeRadio = document.querySelector(`input[name="pageMode"][value="${params.mode}"]`);
         if (modeRadio) modeRadio.checked = true;
         updateSliderLabels();
@@ -305,8 +293,8 @@ window.onImageBatch = function(jsonPaths) {
             pageParams = new Array(imagePaths.length).fill(null);
             pageNumInput.max = imagePaths.length;
             showImage(0);
-        } else { Android.showToast('图片列表解析异常'); }
-    } catch(e) { Android.showToast('图片数据解析失败'); }
+        } else { alert('图片列表解析异常'); }
+    } catch(e) { alert('图片数据解析失败'); }
 };
 window.onPdfBatch = function(jsonPaths, fileName) {
     try {
@@ -317,8 +305,8 @@ window.onPdfBatch = function(jsonPaths, fileName) {
             pageParams = new Array(imagePaths.length).fill(null);
             pageNumInput.max = imagePaths.length;
             showImage(0);
-        } else { Android.showToast('PDF 解析异常'); }
-    } catch(e) { Android.showToast('PDF 数据解析失败'); }
+        } else { alert('PDF 解析异常'); }
+    } catch(e) { alert('PDF 数据解析失败'); }
 };
 window.onPdfRenderProgress = function(pageNum, total) {
     if (total > 0) {
@@ -336,7 +324,7 @@ pageNumInput.onchange = function() {
     else this.value = currentIndex + 1;
 };
 
-// ── 背景切除 ──
+// ── 背景切除算法 ──
 function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     const { data, width, height } = imageData;
     const edgePixels = []; const ew = 2;
@@ -375,7 +363,7 @@ function removeBackground(imageData, tol, lrMargin, topMargin, bottomMargin) {
     return { left, top, width: right-left+1, height: bottom-top+1 };
 }
 
-// ── 堆叠检测（敏感度为百分比位置） ──
+// ── 堆叠检测 ──
 function findLeftCutInfo(proj, w) {
     let peak = 0, peakVal = 0;
     for (let x = 0; x < w * 0.5; x++) if (proj[x] > peakVal) { peakVal = proj[x]; peak = x; }
@@ -478,6 +466,20 @@ function processImageWithParams(imageData, params) {
 }
 
 // ── 核心预览 ──
+function computeAutoBindRatio(imageData, mode, leftCut, rightCut, width) {
+    if (mode === 'full-page') {
+        const autoX = detectFrameLineInRegion(imageData, Math.floor(width*0.35), Math.floor(width*0.65), width, imageData.height);
+        return autoX !== null ? autoX / width : 0.5;
+    }
+    if (mode === 'left-only' || (mode === 'auto-single' && leftCut !== null && rightCut == null)) return 0;
+    if (mode === 'right-only' || (mode === 'auto-single' && rightCut !== null && leftCut == null)) return 0;
+    const l = leftCut ?? 0;
+    const r = rightCut ?? (width - 1);
+    if (r - l <= 1) return 0.5;
+    const autoX = detectFrameLineInRegion(imageData, Math.floor(l+2), Math.floor(r-2), width, imageData.height);
+    return (autoX !== null && autoX > l && autoX < r) ? (autoX - l) / (r - l) : 0.5;
+}
+
 function processAll() {
     if (!originalImage) return;
     const origW = originalImage.width, origH = originalImage.height;
@@ -515,6 +517,18 @@ function processAll() {
     if (cropRegion) bgWorkData = previewCtx.getImageData(cropRegion.left, cropRegion.top, cropRegion.width, cropRegion.height);
     else { bgWorkData = previewImgData; cropRegion = { left:0, top:0, width:prevW, height:prevH }; }
 
+    if (!stackOff && !bindSliderUserAdjusted) {
+        const tempParams = { ...stackParams, bindRatio: 0.5 };
+        const tempResult = processImageWithParams(bgWorkData, tempParams);
+        const autoRatio = computeAutoBindRatio(bgWorkData, tempResult.mode, tempResult.leftCut, tempResult.rightCut, bgWorkData.width);
+        bindSlider.value = Math.round(autoRatio * 1000);
+        updateSliderLabels();
+        stackParams.bindRatio = bindSlider.value / 1000;
+        bindSliderUserAdjusted = false;
+    } else if (!stackOff) {
+        stackParams.bindRatio = bindSlider.value / 1000;
+    }
+
     let leftCut = null, rightCut = null, bindLine = null, proj = new Float32Array(prevW), usedMode = stackParams.mode;
     if (!stackOff) {
         const result = processImageWithParams(bgWorkData, stackParams);
@@ -537,7 +551,7 @@ function processAll() {
     const fullBindLine = bindLine !== null ? Math.round(bindLine * invScale) : null;
     lastComputedResult = { bgCrop: fullBgCrop, leftCut: fullLeftCut, rightCut: fullRightCut, bindLine: fullBindLine, mode: usedMode };
 
-    // 原图标注
+    // 绘制原图
     originalCanvas.width = prevW; originalCanvas.height = prevH;
     originalCtx.drawImage(originalImage, 0, 0, prevW, prevH);
     if (!bgOff && cropRegion) {
@@ -633,7 +647,7 @@ function drawProjectionPlot(proj, width, leftCut, rightCut, bindLine) {
     document.getElementById('projectionPlot').style.display = 'block';
 }
 
-// ── 保存 ──
+// ── 保存单张图片 ──
 function saveFullSize(suffix) {
     if (!originalImage || !lastComputedResult) return;
     const res = lastComputedResult;
@@ -665,7 +679,7 @@ function saveFullSize(suffix) {
         else if (leftCut !== null) leftBorder = leftCut;
         x = leftBorder; w = rightCut - leftBorder;
     }
-    if (w < 10) { Android.showToast('切割区域过小'); return; }
+    if (w < 10) { alert('切割区域过小'); return; }
     const outData = workCtx.getImageData(x, 0, w, cropHeight);
     const outCanvas = document.createElement('canvas');
     outCanvas.width = w; outCanvas.height = cropHeight;
@@ -685,8 +699,7 @@ function saveFullBg() {
     const outCanvas = document.createElement('canvas');
     outCanvas.width = cropWidth; outCanvas.height = cropHeight;
     outCanvas.getContext('2d').putImageData(fullCtx.getImageData(cropLeft, cropTop, cropWidth, cropHeight), 0, 0);
-    const base64 = outCanvas.toDataURL('image/png').split(',')[1];
-    Android.saveFile(base64, currentFileName.replace(/\.[^.]+$/, '') + '_bg.png');
+    Android.saveFile(outCanvas.toDataURL('image/png').split(',')[1], currentFileName.replace(/\.[^.]+$/, '') + '_bg.png');
 }
 document.getElementById('saveLeftBtn').onclick = () => saveFullSize('z');
 document.getElementById('saveRightBtn').onclick = () => saveFullSize('y');
@@ -707,7 +720,7 @@ document.getElementById('applyParamsBtn').onclick = function() {
         bindSlider: bindSlider.value,
         mode: document.querySelector('input[name="pageMode"]:checked').value
     };
-    Android.showToast('参数已应用到第' + (currentIndex+1) + '页');
+    alert('参数已应用到第' + (currentIndex+1) + '页');
 };
 
 // ── 项目保存/加载 ──
@@ -730,8 +743,7 @@ function saveProject() {
             mode: document.querySelector('input[name="pageMode"]:checked').value
         }
     };
-    const json = JSON.stringify(project, null, 2);
-    Android.saveProject(encodeURIComponent(json));
+    Android.saveProject(encodeURIComponent(JSON.stringify(project)));
 }
 function loadProject() { Android.pickProject(); }
 window.onProjectLoaded = function(jsonStr) {
@@ -751,32 +763,26 @@ window.onProjectLoaded = function(jsonStr) {
             thresholdSlider.value = cp.thresh || 90;
             leftSensitivitySlider.value = cp.leftSensitivity || 50;
             rightSensitivitySlider.value = cp.rightSensitivity || 50;
-            bindSlider.value = cp.bindSlider || 50;
+            bindSlider.value = cp.bindSlider || 500;
             const modeRadio = document.querySelector(`input[name="pageMode"][value="${cp.mode || 'auto-single'}"]`);
             if (modeRadio) modeRadio.checked = true;
             updateSliderLabels();
             pageNumInput.max = imagePaths.length;
             showImage(currentIndex);
             updatePageNav();
-            Android.showToast('项目加载成功，已定位到第' + (currentIndex+1) + '页');
-        } else {
-            Android.showToast('项目文件无效，没有图片路径');
-        }
-    } catch(e) {
-        Android.showToast('项目文件解析失败: ' + e.message);
-    }
+            alert('项目加载成功，已定位到第' + (currentIndex+1) + '页');
+        } else alert('项目无效');
+    } catch(e) { alert('解析失败'); }
 };
 document.getElementById('saveProjectBtn').onclick = saveProject;
 document.getElementById('loadProjectBtn').onclick = loadProject;
 
-// ── PDF导出（原生层读取缓存图片，传递裁剪坐标） ──
+// ── PDF原生导出 ──
 document.getElementById('generatePdfBtn').onclick = async () => {
-    if (imagePaths.length === 0) { Android.showToast('没有图片'); return; }
-
+    if (imagePaths.length === 0) { alert('没有图片'); return; }
     const exportParams = [];
     for (let i = 0; i < imagePaths.length; i++) {
         const params = getParamsForPage(i);
-        // 加载全尺寸原图
         const img = await new Promise((resolve) => {
             const imgObj = new Image();
             imgObj.onload = () => resolve(imgObj);
@@ -784,60 +790,42 @@ document.getElementById('generatePdfBtn').onclick = async () => {
             imgObj.src = 'file://' + imagePaths[i];
         });
         if (!img) continue;
-
         const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
+        canvas.width = img.width; canvas.height = img.height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0);
         const fullImgData = ctx.getImageData(0, 0, img.width, img.height);
-
         let cropRegion = null;
-        if (params.bgTol > 0) {
-            cropRegion = removeBackground(fullImgData, params.bgTol, params.lrMargin, params.topMargin, params.bottomMargin);
-        }
+        if (params.bgTol > 0) cropRegion = removeBackground(fullImgData, params.bgTol, params.lrMargin, params.topMargin, params.bottomMargin);
         let bgWorkData;
-        if (cropRegion) {
-            bgWorkData = ctx.getImageData(cropRegion.left, cropRegion.top, cropRegion.width, cropRegion.height);
-        } else {
-            bgWorkData = fullImgData;
-            cropRegion = { left:0, top:0, width:img.width, height:img.height };
-        }
-
+        if (cropRegion) bgWorkData = ctx.getImageData(cropRegion.left, cropRegion.top, cropRegion.width, cropRegion.height);
+        else { bgWorkData = fullImgData; cropRegion = {left:0, top:0, width:img.width, height:img.height}; }
         let leftCut = null, rightCut = null, bindLine = null, usedMode = params.mode;
         if (params.contrast > 0) {
             const result = processImageWithParams(bgWorkData, {
-                contrast: params.contrast,
-                thresh: params.thresh,
+                contrast: params.contrast, thresh: params.thresh,
                 leftSensitivity: params.leftSensitivity / 100,
                 rightSensitivity: params.rightSensitivity / 100,
                 mode: params.mode,
-                bindRatio: params.bindSlider ? params.bindSlider / 100 : 0.5
+                bindRatio: (params.bindSlider || 500) / 1000
             });
-            leftCut = result.leftCut;
-            rightCut = result.rightCut;
-            bindLine = result.bindLine;
+            leftCut = result.leftCut; rightCut = result.rightCut; bindLine = result.bindLine;
             if (result.mode) usedMode = result.mode;
         }
-
         exportParams.push({
             index: i,
-            left: (cropRegion.left + (leftCut ?? 0)),
-            right: (cropRegion.left + (rightCut ?? bgWorkData.width)),
+            left: cropRegion.left + (leftCut ?? 0),
+            right: cropRegion.left + (rightCut ?? bgWorkData.width),
             bind: bindLine ? (cropRegion.left + bindLine) : -1,
             mode: usedMode
         });
     }
-
-    if (exportParams.length === 0) {
-        Android.showToast('没有有效页面');
-        return;
-    }
-
-    Android.beginNativeExport(JSON.stringify(exportParams), currentFileName.replace(/\.[^.]+$/, '') + '_天朗.pdf');
+    if (exportParams.length > 0) {
+        Android.beginNativeExport(JSON.stringify(exportParams), currentFileName.replace(/\.[^.]+$/, '') + '_天朗.pdf');
+    } else alert('没有有效页面');
 };
 
-// 防抖
+// 防抖与模式切换
 let debounceTimer;
 const debouncedProcess = () => { clearTimeout(debounceTimer); debounceTimer = setTimeout(processAll, 200); };
 [bgTolSlider, lrMarginSlider, topMarginSlider, bottomMarginSlider, contrastSlider, thresholdSlider, leftSensitivitySlider, rightSensitivitySlider, bindSlider]
@@ -846,17 +834,6 @@ document.querySelectorAll('input[name="pageMode"]').forEach(r => r.addEventListe
     bindSliderUserAdjusted = false;
     processAll();
 }));
-
-// 夜间模式
-function toggleDarkMode() {
-    document.body.classList.toggle('dark-mode');
-    const isDark = document.body.classList.contains('dark-mode');
-    document.getElementById('darkModeBtn').innerHTML = isDark ? '☀️' : '🌙';
-    try { localStorage.setItem('tianlang-dark-mode', isDark ? '1' : '0'); } catch(e) {}
-}
-(function() {
-    try { if (localStorage.getItem('tianlang-dark-mode') === '1') { document.body.classList.add('dark-mode'); document.getElementById('darkModeBtn').innerHTML = '☀️'; } } catch(e) {}
-})();
 </script>
 </body>
 </html>
