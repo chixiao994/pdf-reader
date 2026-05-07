@@ -3,11 +3,11 @@ package com.pdf.reader;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.ParcelFileDescriptor;
 import android.util.Base64;
 import android.util.Log;
@@ -19,6 +19,7 @@ import android.webkit.WebViewClient;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import org.json.JSONArray;
+import org.json.JSONObject;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -39,14 +40,15 @@ public class TianLangActivity extends AppCompatActivity {
 
     private byte[] pendingSaveData;
     private String pendingSaveFileName;
+    private String tempPdfForSave = null;  // 原生导出的临时文件路径
 
     private static final int PICK_IMAGE = 1;
     private static final int PICK_PDF = 2;
     private static final int CREATE_FILE = 3;
-    private static final int PICK_PROJECT = 4;   // 加载项目
+    private static final int PICK_PROJECT = 4;
+    private static final int CREATE_PDF_FILE = 5;   // 原生 PDF 保存
 
-    private final List<byte[]> pdfPagesData = new ArrayList<>();
-    private String pdfOutputFileName = "output.pdf";
+    private final List<byte[]> pdfPagesData = new ArrayList<>();   // 保留，但原生导出不再使用
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -92,11 +94,11 @@ public class TianLangActivity extends AppCompatActivity {
             runOnUiThread(() -> Toast.makeText(TianLangActivity.this, message, Toast.LENGTH_SHORT).show());
         }
 
+        // 保存单张图片（保留）
         @JavascriptInterface
-        public void saveFile(String safeBase64, String fileName) {
+        public void saveFile(String base64, String fileName) {
             try {
-                // 前端已不再编码，直接解码
-                pendingSaveData = Base64.decode(safeBase64, Base64.DEFAULT);
+                pendingSaveData = Base64.decode(base64, Base64.DEFAULT);
                 pendingSaveFileName = fileName;
                 Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
                 intent.addCategory(Intent.CATEGORY_OPENABLE);
@@ -104,11 +106,11 @@ public class TianLangActivity extends AppCompatActivity {
                 intent.putExtra(Intent.EXTRA_TITLE, fileName);
                 startActivityForResult(intent, CREATE_FILE);
             } catch (Exception e) {
-                Log.e("TianLang", "保存准备失败", e);
                 showToast("保存失败: " + e.getMessage());
             }
         }
 
+        // 项目保存/加载
         @JavascriptInterface
         public void saveProject(String safeJson) {
             try {
@@ -132,106 +134,131 @@ public class TianLangActivity extends AppCompatActivity {
             startActivityForResult(intent, PICK_PROJECT);
         }
 
-        // ── PDF 生成 ──
+        // ─── 原生 PDF 导出（新） ───
         @JavascriptInterface
-        public void beginPdf(int totalPages, String originalName) {
-            pdfPagesData.clear();
-            pdfOutputFileName = originalName;
-            showToast("开始生成PDF，共 " + totalPages + " 页");
-        }
-
-        @JavascriptInterface
-        public void addPageToPdf(String base64) {
+        public void beginNativeExport(String cropInfoJson, String outputName) {
             try {
-                // 直接解码，不再使用 URLDecoder
-                byte[] data = Base64.decode(base64, Base64.DEFAULT);
-                if (data != null && data.length > 0) {
-                    pdfPagesData.add(data);
-                }
-            } catch (Exception e) {
-                Log.e("TianLang", "添加PDF页面失败", e);
-            }
-        }
+                final JSONArray array = new JSONArray(cropInfoJson);
+                showToast("开始原生导出，保持原始分辨率...");
 
-        @JavascriptInterface
-        public void finishPdf(String fileName) {
-            if (pdfPagesData.isEmpty()) {
-                showToast("没有页面可生成PDF");
-                return;
-            }
-            showToast("PDF 生成中，请稍候…");
+                new AsyncTask<Void, Void, File>() {
+                    @Override
+                    protected File doInBackground(Void... voids) {
+                        File tempFile = new File(getCacheDir(), outputName + "_temp.pdf");
+                        FileOutputStream fos = null;
+                        try {
+                            fos = new FileOutputStream(tempFile);
+                            android.graphics.pdf.PdfDocument document = new android.graphics.pdf.PdfDocument();
 
-            new AsyncTask<Void, Void, File>() {
-                @Override
-                protected File doInBackground(Void... voids) {
-                    try {
-                        File tempFile = new File(getCacheDir(), fileName);
-                        android.graphics.pdf.PdfDocument document = new android.graphics.pdf.PdfDocument();
+                            for (int i = 0; i < array.length(); i++) {
+                                JSONObject obj = array.getJSONObject(i);
+                                int index = obj.getInt("index");
+                                int left = obj.getInt("left");
+                                int right = obj.getInt("right");
+                                int bind = obj.optInt("bind", -1);
+                                // 可选模式，但裁剪逻辑已包含所有情况
+                                // String mode = obj.optString("mode");
 
-                        for (int i = 0; i < pdfPagesData.size(); i++) {
-                            byte[] pngData = pdfPagesData.get(i);
-                            if (pngData == null) continue;
+                                File imgFile = new File(getCacheDir(), "pdf_page_" + index + ".png");
+                                if (!imgFile.exists()) {
+                                    Log.e("TianLang", "图片不存在: " + imgFile.getPath());
+                                    continue;
+                                }
 
-                            BitmapFactory.Options opts = new BitmapFactory.Options();
-                            opts.inJustDecodeBounds = true;
-                            BitmapFactory.decodeByteArray(pngData, 0, pngData.length, opts);
-                            int maxW = 2000;
-                            int scale = 1;
-                            if (opts.outWidth > maxW) {
-                                scale = Math.round((float) opts.outWidth / maxW);
+                                Bitmap src = BitmapFactory.decodeFile(imgFile.getAbsolutePath());
+                                if (src == null) {
+                                    Log.e("TianLang", "解码失败: " + imgFile.getPath());
+                                    continue;
+                                }
+
+                                // 裁剪并添加页面
+                                if (bind > 0 && bind > left && bind < right) {
+                                    // 先右半页，后左半页
+                                    Bitmap rightPart = Bitmap.createBitmap(src, bind, 0, right - bind, src.getHeight());
+                                    Bitmap leftPart = Bitmap.createBitmap(src, left, 0, bind - left, src.getHeight());
+                                    addBitmapToPdf(document, rightPart);
+                                    addBitmapToPdf(document, leftPart);
+                                    rightPart.recycle();
+                                    leftPart.recycle();
+                                } else {
+                                    Bitmap crop = Bitmap.createBitmap(src, left, 0, right - left, src.getHeight());
+                                    addBitmapToPdf(document, crop);
+                                    crop.recycle();
+                                }
+                                src.recycle();
                             }
-                            opts.inJustDecodeBounds = false;
-                            opts.inSampleSize = scale;
-                            Bitmap bitmap = BitmapFactory.decodeByteArray(pngData, 0, pngData.length, opts);
-                            if (bitmap == null) continue;
 
-                            android.graphics.pdf.PdfDocument.PageInfo pageInfo =
-                                    new android.graphics.pdf.PdfDocument.PageInfo.Builder(
-                                            bitmap.getWidth(), bitmap.getHeight(), i).create();
-                            android.graphics.pdf.PdfDocument.Page page = document.startPage(pageInfo);
-                            page.getCanvas().drawBitmap(bitmap, 0, 0, null);
-                            document.finishPage(page);
-                            bitmap.recycle();
+                            document.writeTo(fos);
+                            document.close();
+                            return tempFile;
+                        } catch (Exception e) {
+                            Log.e("TianLang", "原生导出失败", e);
+                            if (tempFile.exists()) tempFile.delete();
+                            return null;
+                        } finally {
+                            if (fos != null) {
+                                try { fos.close(); } catch (Exception ignored) {}
+                            }
                         }
-
-                        FileOutputStream fos = new FileOutputStream(tempFile);
-                        document.writeTo(fos);
-                        document.close();
-                        fos.close();
-                        return tempFile;
-
-                    } catch (Exception e) {
-                        Log.e("TianLang", "PDF生成失败", e);
-                        return null;
                     }
-                }
 
-                @Override
-                protected void onPostExecute(File tempFile) {
-                    if (tempFile == null) {
-                        showToast("PDF 生成失败");
-                        return;
-                    }
-                    try {
-                        pendingSaveData = readFileToBytes(tempFile);
-                        pendingSaveFileName = fileName;
+                    @Override
+                    protected void onPostExecute(File pdfFile) {
+                        if (pdfFile == null || !pdfFile.exists()) {
+                            showToast("PDF 生成失败，请检查日志");
+                            return;
+                        }
+                        // 启动系统文件选择器
+                        tempPdfForSave = pdfFile.getAbsolutePath();
                         Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
                         intent.addCategory(Intent.CATEGORY_OPENABLE);
                         intent.setType("application/pdf");
-                        intent.putExtra(Intent.EXTRA_TITLE, fileName);
-                        startActivityForResult(intent, CREATE_FILE);
-                        showToast("PDF已生成，请选择保存位置");
-                    } catch (Exception e) {
-                        showToast("准备保存失败: " + e.getMessage());
-                    } finally {
-                        pdfPagesData.clear();
+                        intent.putExtra(Intent.EXTRA_TITLE, outputName);
+                        startActivityForResult(intent, CREATE_PDF_FILE);
                     }
-                }
-            }.execute();
+                }.execute();
+
+            } catch (Exception e) {
+                showToast("参数解析错误: " + e.getMessage());
+            }
+        }
+
+        private void addBitmapToPdf(android.graphics.pdf.PdfDocument doc, Bitmap bitmap) {
+            if (bitmap == null || bitmap.isRecycled()) return;
+            android.graphics.pdf.PdfDocument.PageInfo info =
+                    new android.graphics.pdf.PdfDocument.PageInfo.Builder(
+                            bitmap.getWidth(), bitmap.getHeight(), doc.getPages().size()).create();
+            android.graphics.pdf.PdfDocument.Page page = doc.startPage(info);
+            page.getCanvas().drawBitmap(bitmap, 0, 0, null);
+            doc.finishPage(page);
+        }
+
+        // 保留旧接口兼容，但不再使用（可空实现）
+        @JavascriptInterface public void beginPdf(int totalPages, String originalName) {}
+        @JavascriptInterface public void addPageToPdf(String base64) {}
+        @JavascriptInterface public void finishPdf(String fileName) {}
+    }
+
+    // ── 文件复制与保存 ──
+    private void copyTempPdfToUri(String tempPath, Uri targetUri) {
+        try {
+            FileInputStream fis = new FileInputStream(tempPath);
+            OutputStream os = getContentResolver().openOutputStream(targetUri);
+            byte[] buf = new byte[8192];
+            int len;
+            while ((len = fis.read(buf)) != -1) {
+                os.write(buf, 0, len);
+            }
+            fis.close();
+            os.close();
+            new File(tempPath).delete();
+            showToastSafe("PDF 已保存");
+        } catch (Exception e) {
+            showToastSafe("保存失败: " + e.getMessage());
         }
     }
 
-    // ── Activity Result ──
+    // ── ActivityResult ──
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -251,6 +278,11 @@ public class TianLangActivity extends AppCompatActivity {
                 }
             } else if (requestCode == PICK_PROJECT) {
                 loadProjectFromUri(uri);
+            } else if (requestCode == CREATE_PDF_FILE) {
+                if (tempPdfForSave != null) {
+                    copyTempPdfToUri(tempPdfForSave, uri);
+                    tempPdfForSave = null;
+                }
             }
         }
     }
@@ -266,7 +298,6 @@ public class TianLangActivity extends AppCompatActivity {
                 showToastSafe("无法写入文件");
             }
         } catch (Exception e) {
-            Log.e("TianLang", "写入失败", e);
             showToastSafe("保存失败: " + e.getMessage());
         }
     }
@@ -308,7 +339,7 @@ public class TianLangActivity extends AppCompatActivity {
         }
     }
 
-    // ── PDF 导入 ──
+    // ── PDF 导入并渲染所有页面为 PNG ──
     private void handlePdfUri(Uri uri) {
         try {
             closePdf();
@@ -335,23 +366,53 @@ public class TianLangActivity extends AppCompatActivity {
             @Override
             protected List<String> doInBackground(Void... voids) {
                 List<String> paths = new ArrayList<>();
+                final int MAX_DIM = 3000; // 限制长边最大尺寸，避免 OOM
+
                 for (int i = 0; i < totalPages; i++) {
                     try {
                         PdfRenderer.Page page = pdfRenderer.openPage(i);
-                        int w = page.getWidth(), h = page.getHeight();
-                        Bitmap bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                        int w = page.getWidth();
+                        int h = page.getHeight();
+
+                        float scale = 1.0f;
+                        if (Math.max(w, h) > MAX_DIM) {
+                            scale = (float) MAX_DIM / Math.max(w, h);
+                        }
+                        int newW = Math.round(w * scale);
+                        int newH = Math.round(h * scale);
+
+                        Bitmap bitmap = Bitmap.createBitmap(newW, newH, Bitmap.Config.ARGB_8888);
+                        Matrix matrix = new Matrix();
+                        matrix.postScale(scale, scale);
+                        page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
                         page.close();
+
+                        if (!isBitmapValid(bitmap)) {
+                            bitmap.recycle();
+                            Log.e("TianLang", "第" + (i+1) + "页渲染无效（可能JPEG2000），已跳过");
+                            continue;
+                        }
 
                         File tempFile = new File(getCacheDir(), "pdf_page_" + i + ".png");
                         try (FileOutputStream fos = new FileOutputStream(tempFile)) {
                             bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
                         }
                         bitmap.recycle();
+
+                        // 校验 PNG 有效性
+                        Bitmap testBmp = BitmapFactory.decodeFile(tempFile.getAbsolutePath());
+                        if (testBmp == null) {
+                            tempFile.delete();
+                            Log.e("TianLang", "第" + (i+1) + "页PNG写入失败，跳过");
+                            continue;
+                        } else {
+                            testBmp.recycle();
+                        }
+
                         paths.add(tempFile.getAbsolutePath());
                         publishProgress(i + 1);
                     } catch (Exception e) {
-                        Log.e("TianLang", "渲染第" + i + "页失败", e);
+                        Log.e("TianLang", "渲染第" + (i+1) + "页异常: " + e.getMessage());
                     }
                 }
                 return paths;
@@ -378,10 +439,26 @@ public class TianLangActivity extends AppCompatActivity {
                             null
                     );
                 } else {
-                    showToastSafe("PDF渲染失败");
+                    showToastSafe("PDF渲染失败（所有页均无效）");
                 }
             }
         }.execute();
+    }
+
+    // Bitmap 有效性简单检测
+    private boolean isBitmapValid(Bitmap bitmap) {
+        if (bitmap == null || bitmap.getWidth() < 5 || bitmap.getHeight() < 5) return false;
+        int[] colors = new int[5];
+        int w = bitmap.getWidth(), h = bitmap.getHeight();
+        colors[0] = bitmap.getPixel(0, 0);
+        colors[1] = bitmap.getPixel(w-1, 0);
+        colors[2] = bitmap.getPixel(0, h-1);
+        colors[3] = bitmap.getPixel(w-1, h-1);
+        colors[4] = bitmap.getPixel(w/2, h/2);
+        for (int i = 1; i < colors.length; i++) {
+            if (colors[i] != colors[0]) return true;
+        }
+        return false;
     }
 
     // ── 项目加载 ──
@@ -403,7 +480,7 @@ public class TianLangActivity extends AppCompatActivity {
         }
     }
 
-    // ── 工具 ──
+    // ── 工具方法 ──
     private String escapeJson(String json) {
         if (json == null) return "";
         return json.replace("\\", "\\\\").replace("'", "\\'");
@@ -442,16 +519,6 @@ public class TianLangActivity extends AppCompatActivity {
             try { fileDescriptor.close(); } catch (Exception e) { /* ignore */ }
             fileDescriptor = null;
         }
-    }
-
-    private byte[] readFileToBytes(File file) throws Exception {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        FileInputStream fis = new FileInputStream(file);
-        byte[] buf = new byte[4096];
-        int len;
-        while ((len = fis.read(buf)) != -1) baos.write(buf, 0, len);
-        fis.close();
-        return baos.toByteArray();
     }
 
     private void showToastSafe(final String msg) {
