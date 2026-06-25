@@ -5,9 +5,7 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import android.Manifest;
-import android.animation.ValueAnimator;
 import android.content.ContentResolver;
-import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -24,7 +22,6 @@ import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.pdf.PdfRenderer;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -44,6 +41,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -57,7 +55,6 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayout mainLayout, fileListLayout;
     private FrameLayout readerContainer;
     private ImageView pdfImageView;
-    private TextView pageTextView;
     private Button nightModeBtn, halfPageBtn, pageModeBtn, openFileBtn, refreshBtn, rotateBtn, flipModeBtn;
 
     // PDF相关
@@ -135,7 +132,6 @@ public class MainActivity extends AppCompatActivity {
     private static final int ANCIENT_BROWN = Color.parseColor("#5D4037");
     private static final int ANCIENT_BEIGE = Color.parseColor("#D7CCC8");
     private static final int ANCIENT_GREEN = Color.parseColor("#4E342E");
-    private static final int ANCIENT_PAPER = Color.parseColor("#FFF8F0");
     private static final int DAY_STATUS_BAR_COLOR = Color.parseColor("#5D4037");
     private static final int NIGHT_STATUS_BAR_COLOR = Color.parseColor("#2C2C2C");
 
@@ -217,7 +213,7 @@ public class MainActivity extends AppCompatActivity {
     private int getBackgroundColor() { return nightMode ? NIGHT_MODE_BG : DAY_MODE_BG; }
     private int getButtonBackgroundColor() { return nightMode ? ANCIENT_GREEN : ANCIENT_BROWN; }
     private int getButtonTextColor() { return nightMode ? ANCIENT_BEIGE : ANCIENT_GOLD; }
-    private int getSpecialButtonBackgroundColor() { return nightMode ? ANCIENT_RED : ANCIENT_RED; }
+    private int getSpecialButtonBackgroundColor() { return ANCIENT_RED; }
     private int getSpecialButtonTextColor() { return Color.WHITE; }
 
     private void requestPermissionsOnFirstRun() {
@@ -462,7 +458,6 @@ public class MainActivity extends AppCompatActivity {
         setupButtonStyle(scanAllBtn, true);
         optionsLayout.addView(scanAllBtn);
 
-        // 天朗裁切入口
         Button tianlangBtn = new Button(this);
         tianlangBtn.setText("天朗裁切");
         tianlangBtn.setBackgroundColor(getButtonBackgroundColor());
@@ -474,7 +469,6 @@ public class MainActivity extends AppCompatActivity {
         setupButtonStyle(tianlangBtn, true);
         optionsLayout.addView(tianlangBtn);
 
-        // 合矩入口
         Button hejuBtn = new Button(this);
         hejuBtn.setText("合矩");
         hejuBtn.setBackgroundColor(getButtonBackgroundColor());
@@ -594,8 +588,22 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private String getRealPathFromUri(Uri uri) {
-        // 省略，实际应保留原有实现
-        return null;
+        String filePath = null;
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT && DocumentsContract.isDocumentUri(this, uri)) {
+                String wholeID = DocumentsContract.getDocumentId(uri);
+                String[] split = wholeID.split(":");
+                if (split.length > 1) {
+                    String type = split[0], id = split[1];
+                    if ("primary".equalsIgnoreCase(type)) filePath = Environment.getExternalStorageDirectory() + "/" + id;
+                } else filePath = Environment.getExternalStorageDirectory() + "/" + wholeID;
+            } else if ("content".equalsIgnoreCase(uri.getScheme())) {
+                try (Cursor cursor = getContentResolver().query(uri, new String[]{MediaStore.Files.FileColumns.DATA}, null, null, null)) {
+                    if (cursor != null && cursor.moveToFirst()) filePath = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.DATA));
+                }
+            } else if ("file".equalsIgnoreCase(uri.getScheme())) filePath = uri.getPath();
+        } catch (Exception e) { /* ignore */ }
+        return filePath;
     }
 
     // ==================== 阅读器视图构建 ====================
@@ -1316,6 +1324,28 @@ public class MainActivity extends AppCompatActivity {
     private void closePdf() {
         if (pdfRenderer != null) { pdfRenderer.close(); pdfRenderer = null; }
         if (fileDescriptor != null) { try { fileDescriptor.close(); } catch (IOException e) {} }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode == RESULT_OK && data != null) {
+            Uri uri = data.getData();
+            if (uri != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+                    try {
+                        final int takeFlags = data.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                        getContentResolver().takePersistableUriPermission(uri, takeFlags);
+                    } catch (SecurityException e) {}
+                }
+                String filePath = getRealPathFromUri(uri);
+                if (filePath != null && new File(filePath).exists()) {
+                    openPdfFile(filePath);
+                } else {
+                    openPdfFromUri(uri);
+                }
+            }
+        }
     }
 
     @Override
